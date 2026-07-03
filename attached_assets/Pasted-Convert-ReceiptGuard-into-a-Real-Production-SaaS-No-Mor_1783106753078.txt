@@ -1,0 +1,496 @@
+Convert ReceiptGuard into a Real Production SaaS (No More Demo Data)
+
+The current project is only a UI prototype with placeholder/demo data.
+
+From this point forward, DO NOT generate any fake data, mock statistics, placeholder receipts, demo subscriptions, sample charts, fake users, or hardcoded values.
+
+Every page must use real backend data from Supabase.
+
+ReceiptGuard should now become a production-ready SaaS.
+
+⸻
+
+Phase 1 — Real Authentication
+
+Configure Supabase Authentication completely.
+
+Implement:
+	•	Google OAuth
+	•	Email & Password
+	•	Email Verification
+	•	Password Reset
+	•	Persistent Sessions
+	•	Protected Routes
+	•	Logout
+
+Users must not be logged in automatically.
+
+Google login must redirect to Google’s official consent screen.
+
+If authentication fails, show proper error handling.
+
+⸻
+
+Phase 2 — Gmail Integration
+
+Implement Google’s Gmail OAuth properly.
+
+Request ONLY Gmail Read-Only permission.
+
+After Gmail authorization:
+
+Store OAuth tokens securely server-side.
+
+Never expose tokens to the client.
+
+Never store Gmail passwords.
+
+Never request unnecessary permissions.
+
+⸻
+
+ReceiptGuard should ONLY scan purchase-related emails.
+
+Detect:
+
+• Receipts
+• Orders
+• Invoices
+• Subscription confirmations
+• Subscription renewals
+• Trial expiration emails
+• Payment confirmations
+• Warranty confirmations
+• Shipping confirmations
+
+Never scan personal conversations.
+
+Never analyze private chat emails.
+
+Store only metadata required for ReceiptGuard.
+
+⸻
+
+Phase 3 — Real Email Scanner
+
+Build a real receipt extraction pipeline.
+
+The scanner should:
+
+Download Gmail messages
+
+Detect merchants
+
+Extract:
+
+Merchant
+
+Amount
+
+Currency
+
+Purchase Date
+
+Order Number
+
+Invoice Number
+
+Tax
+
+Items (when available)
+
+Payment Method (when available)
+
+Subscription Frequency
+
+Renewal Date
+
+Warranty End Date
+
+Category
+
+Store all extracted data inside Supabase.
+
+⸻
+
+Phase 4 — Database
+
+Use Supabase PostgreSQL.
+
+Implement production database tables:
+
+profiles
+
+email_accounts
+
+receipts
+
+receipt_items
+
+subscriptions
+
+renewals
+
+warranties
+
+notifications
+
+plans
+
+user_subscriptions
+
+payments
+
+activity_logs
+
+feedback
+
+feature_requests
+
+support_tickets
+
+audit_logs
+
+Enable Row Level Security for every table.
+
+⸻
+
+Phase 5 — Real Dashboard
+
+Remove every hardcoded statistic.
+
+Dashboard must display real user data.
+
+Hero
+
+Welcome back, {First Name}
+
+Subtitle
+
+“You’ve tracked $X this month.”
+
+Cards
+
+Monthly Spending
+
+Money Saved
+
+Receipts Stored
+
+Upcoming Renewals
+
+Active Subscriptions
+
+Warranty Expirations
+
+Charts
+
+Monthly Spending
+
+Category Breakdown
+
+Top Merchants
+
+Latest Receipts
+
+Recent Activity
+
+Upcoming Renewals Timeline
+
+Quick Actions
+
+Connect Gmail
+
+Scan Inbox
+
+Export CSV
+
+Export PDF
+
+Manage Reminders
+
+Upgrade to Pro
+
+⸻
+
+Phase 6 — Receipts
+
+Load real receipts from Supabase.
+
+Implement:
+
+Search
+
+Filters
+
+Sorting
+
+Pagination
+
+Receipt Preview
+
+Download
+
+Merchant Logos
+
+Categories
+
+⸻
+
+Phase 7 — Subscriptions
+
+Detect recurring subscriptions automatically.
+
+Show:
+
+Logo
+
+Merchant
+
+Monthly Cost
+
+Yearly Cost
+
+Billing Cycle
+
+Renewal Date
+
+Status
+
+Cancel Guide Placeholder
+
+Search
+
+Filters
+
+Sorting
+
+⸻
+
+Phase 8 — Warranty Tracker
+
+Use actual purchase information.
+
+Display:
+
+Purchase Date
+
+Warranty Expiration
+
+Remaining Days
+
+Reminder Toggle
+
+Status
+
+⸻
+
+Phase 9 — Notifications
+
+Implement reminder scheduling.
+
+Support:
+
+30 days
+
+14 days
+
+7 days
+
+3 days
+
+1 day
+
+Renewal reminders
+
+Warranty reminders
+
+Trial ending reminders
+
+Return window reminders
+
+Email notifications
+
+Browser notifications
+
+⸻
+
+Phase 10 — Plans
+
+Free
+
+• 1 Gmail account
+• Up to 50 receipts
+• Up to 5 active subscriptions
+• Basic dashboard
+• Basic reminders
+• Search
+
+Pro
+
+• Unlimited Gmail accounts
+• Unlimited receipts
+• Unlimited subscriptions
+• Unlimited reminders
+• Warranty tracking
+• Return tracking
+• CSV export
+• PDF export
+• Spending reports
+• Advanced filters
+• Custom categories
+• Priority support
+
+Enterprise
+
+Coming Soon
+
+⸻
+
+Phase 11 — Paystack
+
+Implement Paystack completely.
+
+Do NOT hardcode keys.
+
+Create secure environment variables.
+
+Ask me for:
+
+PAYSTACK_SECRET_KEY
+
+PAYSTACK_PUBLIC_KEY
+
+PAYSTACK_WEBHOOK_SECRET
+
+Implement:
+
+Subscription checkout
+
+Webhook verification
+
+Payment history
+
+Upgrade
+
+Downgrade
+
+Cancellation
+
+Invoice history
+
+Failed payment handling
+
+Automatic plan updates
+
+Database synchronization
+
+Prepare architecture for Stripe later.
+
+⸻
+
+Phase 12 — Admin Dashboard
+
+Create a protected Admin Dashboard.
+
+Only administrators can access it.
+
+Features:
+
+Total Users
+
+New Users
+
+Active Users
+
+Paying Users
+
+MRR
+
+ARR
+
+Churn
+
+Conversion Rate
+
+Revenue
+
+Recent Payments
+
+Subscriptions
+
+Failed Payments
+
+Support Tickets
+
+Feedback
+
+Feature Requests
+
+Reported Bugs
+
+Email Accounts Connected
+
+Daily Gmail Scans
+
+System Health
+
+Recent Activity
+
+Search Users
+
+Suspend User
+
+Delete User
+
+Refund Placeholder
+
+Analytics Charts
+
+⸻
+
+Phase 13 — User Feedback
+
+Inside Settings create:
+
+Feedback
+
+Feature Requests
+
+Bug Reports
+
+Contact Support
+
+Store everything inside Supabase.
+
+Admin can view all submissions.
+
+⸻
+
+Phase 14 — Production Quality
+
+No fake data.
+
+No placeholder charts.
+
+No demo receipts.
+
+No mock subscriptions.
+
+No sample users.
+
+No hardcoded values.
+
+Everything must come from the database.
+
+If the database is empty, show beautiful onboarding empty states instead of demo content.
+
+⸻
+
+Phase 15 — Deployment
+
+Prepare the application for production deployment on Vercel.
+
+Generate a complete .env.example listing every required environment variable.
+
+If any API keys or OAuth credentials are required, stop and clearly ask me for them instead of using placeholders.
