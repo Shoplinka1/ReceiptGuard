@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "ReceiptGuard"
+version = "1.0.0"
+id = "artifacts/receipt-guard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23711
+
+[services.development]
+run = "pnpm --filter @workspace/receipt-guard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/receipt-guard", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/receipt-guard/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23711"
+BASE_PATH = "/"

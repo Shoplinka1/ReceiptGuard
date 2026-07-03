@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-border: var(--card-border);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover-border: var(--popover-border);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-border: var(--destructive-border);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary-border: var(--sidebar-primary-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent-border: var(--sidebar-accent-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 4%);
+  --border: hsl(0 0% 90%);
+  --input: hsl(0 0% 90%);
+  --ring: hsl(150 60% 50%);
+  
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 4%);
+  --card-border: hsl(0 0% 92%);
+  
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 4%);
+  --popover-border: hsl(0 0% 92%);
+  
+  --primary: hsl(150 60% 45%);
+  --primary-foreground: hsl(0 0% 100%);
+  
+  --secondary: hsl(0 0% 96%);
+  --secondary-foreground: hsl(0 0% 10%);
+  
+  --muted: hsl(0 0% 96%);
+  --muted-foreground: hsl(0 0% 45%);
+  
+  --accent: hsl(0 0% 96%);
+  --accent-foreground: hsl(0 0% 10%);
+  
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --chart-1: hsl(150 60% 45%);
+  --chart-2: hsl(210 100% 60%);
+  --chart-3: hsl(30 100% 60%);
+  --chart-4: hsl(280 100% 60%);
+  --chart-5: hsl(340 100% 60%);
+
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(0 0% 10%);
+  --sidebar-border: hsl(0 0% 90%);
+  --sidebar-primary: hsl(150 60% 45%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(0 0% 92%);
+  --sidebar-accent-foreground: hsl(0 0% 10%);
+  --sidebar-ring: hsl(150 60% 45%);
+
+  --radius: 0.75rem;
+
+  --app-font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --app-font-serif: Georgia, serif;
+  --app-font-mono: 'JetBrains Mono', monospace;
+}
+
+.dark {
+  --background: hsl(0 0% 3%);
+  --foreground: hsl(0 0% 98%);
+  --border: hsl(0 0% 12%);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(150 60% 50%);
+  
+  --card: hsl(0 0% 5%);
+  --card-foreground: hsl(0 0% 98%);
+  --card-border: hsl(0 0% 12%);
+  
+  --popover: hsl(0 0% 5%);
+  --popover-foreground: hsl(0 0% 98%);
+  --popover-border: hsl(0 0% 12%);
+  
+  --primary: hsl(150 60% 50%);
+  --primary-foreground: hsl(0 0% 0%);
+  
+  --secondary: hsl(0 0% 10%);
+  --secondary-foreground: hsl(0 0% 98%);
+  
+  --muted: hsl(0 0% 10%);
+  --muted-foreground: hsl(0 0% 60%);
+  
+  --accent: hsl(0 0% 12%);
+  --accent-foreground: hsl(0 0% 98%);
+  
+  --destructive: hsl(0 62% 30%);
+  --destructive-foreground: hsl(0 85% 96%);
+
+  --chart-1: hsl(150 60% 50%);
+  --chart-2: hsl(210 100% 60%);
+  --chart-3: hsl(30 100% 60%);
+  --chart-4: hsl(280 100% 60%);
+  --chart-5: hsl(340 100% 60%);
+
+  --sidebar: hsl(0 0% 4%);
+  --sidebar-foreground: hsl(0 0% 96%);
+  --sidebar-border: hsl(0 0% 12%);
+  --sidebar-primary: hsl(150 60% 50%);
+  --sidebar-primary-foreground: hsl(0 0% 0%);
+  --sidebar-accent: hsl(0 0% 12%);
+  --sidebar-accent-foreground: hsl(0 0% 96%);
+  --sidebar-ring: hsl(150 60% 50%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30;
+  }
+  /* Optional: Custom scrollbar for dark modern feel */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
