@@ -1,154 +1,99 @@
-import { Router, type IRouter } from "express";
-import { db, subscriptionsTable } from "@workspace/db";
-import { eq, sql, and, asc, desc } from "drizzle-orm";
-import {
-  CreateSubscriptionBody,
-  GetSubscriptionParams,
-  UpdateSubscriptionParams,
-  UpdateSubscriptionBody,
-  DeleteSubscriptionParams,
-  ListSubscriptionsQueryParams,
-} from "@workspace/api-zod";
+import { Router, type IRouter } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
-function mapSub(s: typeof subscriptionsTable.$inferSelect) {
+function mapSub(s: any) {
   return {
-    id: s.id,
-    companyName: s.companyName,
-    companyLogoUrl: s.companyLogoUrl ?? null,
-    monthlyPrice: parseFloat(s.monthlyPrice),
-    yearlyPrice: s.yearlyPrice ? parseFloat(s.yearlyPrice) : null,
-    billingCycle: s.billingCycle as "monthly" | "yearly" | "quarterly",
-    renewalDate: s.renewalDate,
-    status: s.status as "active" | "cancelled" | "paused" | "trial",
-    category: s.category,
-    reminderEnabled: s.reminderEnabled,
-    notes: s.notes ?? null,
-    createdAt: s.createdAt.toISOString(),
+    id: s.id, companyName: s.company_name, companyLogoUrl: s.company_logo_url ?? null,
+    monthlyPrice: Number(s.monthly_price), yearlyPrice: s.yearly_price ? Number(s.yearly_price) : null,
+    billingCycle: s.billing_cycle, renewalDate: s.renewal_date, status: s.status,
+    category: s.category, reminderEnabled: s.reminder_enabled, notes: s.notes ?? null,
+    createdAt: s.created_at,
   };
 }
 
-router.get("/subscriptions", async (req, res): Promise<void> => {
-  const params = ListSubscriptionsQueryParams.safeParse(req.query);
-  const userId = 1;
+router.get('/api/subscriptions', requireAuth, async (req, res): Promise<void> => {
+  const { search, status, category, billingCycle, sortBy = 'renewal_date', sortDir = 'asc' } = req.query as Record<string, string>;
 
-  let subs = await db.select().from(subscriptionsTable).where(sql`${subscriptionsTable.userId} = ${userId}`);
+  let query = supabaseAdmin.from('subscriptions').select('*').eq('user_id', req.userId);
+  if (status) query = query.eq('status', status);
+  if (category) query = query.eq('category', category);
+  if (billingCycle) query = query.eq('billing_cycle', billingCycle);
+  query = query.order(sortBy as any, { ascending: sortDir === 'asc' });
 
-  if (params.success) {
-    const { search, status, category, billingCycle } = params.data;
-    if (search) subs = subs.filter((s) => s.companyName.toLowerCase().includes(search.toLowerCase()));
-    if (status) subs = subs.filter((s) => s.status === status);
-    if (category) subs = subs.filter((s) => s.category === category);
-    if (billingCycle) subs = subs.filter((s) => s.billingCycle === billingCycle);
+  const { data, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
 
-    const sortBy = params.data.sortBy ?? "renewalDate";
-    const sortDir = params.data.sortDir ?? "asc";
-
-    subs.sort((a, b) => {
-      let aVal: string | number = a[sortBy as keyof typeof a] as string | number ?? "";
-      let bVal: string | number = b[sortBy as keyof typeof b] as string | number ?? "";
-      if (typeof aVal === "string") aVal = aVal.toLowerCase();
-      if (typeof bVal === "string") bVal = bVal.toLowerCase();
-      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }
-
-  res.json(subs.map(mapSub));
+  let items = (data ?? []).map(mapSub);
+  if (search) items = items.filter(s => s.companyName.toLowerCase().includes(search.toLowerCase()));
+  res.json(items);
 });
 
-router.post("/subscriptions", async (req, res): Promise<void> => {
-  const parsed = CreateSubscriptionBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [s] = await db.insert(subscriptionsTable).values({
-    userId: 1,
-    companyName: parsed.data.companyName,
-    companyLogoUrl: parsed.data.companyLogoUrl ?? null,
-    monthlyPrice: String(parsed.data.monthlyPrice),
-    yearlyPrice: parsed.data.yearlyPrice != null ? String(parsed.data.yearlyPrice) : null,
-    billingCycle: parsed.data.billingCycle ?? "monthly",
-    renewalDate: parsed.data.renewalDate,
-    status: parsed.data.status ?? "active",
-    category: parsed.data.category,
-    reminderEnabled: parsed.data.reminderEnabled ?? true,
-    notes: parsed.data.notes ?? null,
-  }).returning();
-  res.status(201).json(mapSub(s));
+router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> => {
+  const { companyName, companyLogoUrl, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
+  if (!companyName || !monthlyPrice || !renewalDate || !category) { res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' }); return; }
+
+  const { data, error } = await supabaseAdmin.from('subscriptions').insert({
+    user_id: req.userId, company_name: companyName, company_logo_url: companyLogoUrl ?? null,
+    monthly_price: monthlyPrice, yearly_price: yearlyPrice ?? null, billing_cycle: billingCycle ?? 'monthly',
+    renewal_date: renewalDate, status: status ?? 'active', category,
+    reminder_enabled: reminderEnabled ?? true, notes: notes ?? null,
+  }).select().single();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(mapSub(data));
 });
 
-router.get("/subscriptions/breakdown", async (req, res): Promise<void> => {
-  const userId = 1;
-  const subs = await db.select().from(subscriptionsTable).where(
-    and(sql`${subscriptionsTable.userId} = ${userId}`, sql`${subscriptionsTable.status} = 'active'`)
-  );
-
-  const monthly = subs.filter((s) => s.billingCycle === "monthly");
-  const yearly = subs.filter((s) => s.billingCycle === "yearly");
-  const monthlyTotal = monthly.reduce((sum, s) => sum + parseFloat(s.monthlyPrice), 0);
-  const yearlyTotal = yearly.reduce((sum, s) => sum + (s.yearlyPrice ? parseFloat(s.yearlyPrice) : parseFloat(s.monthlyPrice) * 12), 0);
-  const grandMonthlyEquivalent = monthlyTotal + yearlyTotal / 12;
-
+router.get('/api/subscriptions/breakdown', requireAuth, async (req, res): Promise<void> => {
+  const { data: subs } = await supabaseAdmin.from('subscriptions').select('*').eq('user_id', req.userId).eq('status', 'active');
+  const monthly = (subs ?? []).filter(s => s.billing_cycle === 'monthly');
+  const yearly = (subs ?? []).filter(s => s.billing_cycle === 'yearly');
+  const monthlyTotal = monthly.reduce((sum, s) => sum + Number(s.monthly_price), 0);
+  const yearlyTotal = yearly.reduce((sum, s) => sum + (s.yearly_price ? Number(s.yearly_price) : Number(s.monthly_price) * 12), 0);
   const catMap = new Map<string, { total: number; count: number }>();
-  for (const s of subs) {
-    const price = s.billingCycle === "yearly" && s.yearlyPrice
-      ? parseFloat(s.yearlyPrice) / 12
-      : parseFloat(s.monthlyPrice);
+  for (const s of subs ?? []) {
+    const price = s.billing_cycle === 'yearly' && s.yearly_price ? Number(s.yearly_price) / 12 : Number(s.monthly_price);
     const ex = catMap.get(s.category);
-    if (ex) { ex.total += price; ex.count++; }
-    else catMap.set(s.category, { total: price, count: 1 });
+    if (ex) { ex.total += price; ex.count++; } else catMap.set(s.category, { total: price, count: 1 });
   }
-
   res.json({
-    monthlyCount: monthly.length,
-    yearlyCount: yearly.length,
-    monthlyTotal: Math.round(monthlyTotal * 100) / 100,
-    yearlyTotal: Math.round(yearlyTotal * 100) / 100,
-    grandMonthlyEquivalent: Math.round(grandMonthlyEquivalent * 100) / 100,
-    categoryBreakdown: Array.from(catMap.entries()).map(([category, v]) => ({
-      category,
-      total: Math.round(v.total * 100) / 100,
-      count: v.count,
-    })),
+    monthlyCount: monthly.length, yearlyCount: yearly.length,
+    monthlyTotal: Math.round(monthlyTotal * 100) / 100, yearlyTotal: Math.round(yearlyTotal * 100) / 100,
+    grandMonthlyEquivalent: Math.round((monthlyTotal + yearlyTotal / 12) * 100) / 100,
+    categoryBreakdown: Array.from(catMap.entries()).map(([category, v]) => ({ category, total: Math.round(v.total * 100) / 100, count: v.count })),
   });
 });
 
-router.get("/subscriptions/:id", async (req, res): Promise<void> => {
-  const params = GetSubscriptionParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [s] = await db.select().from(subscriptionsTable).where(and(eq(subscriptionsTable.id, params.data.id), sql`${subscriptionsTable.userId} = 1`));
-  if (!s) { res.status(404).json({ error: "Subscription not found" }); return; }
-  res.json(mapSub(s));
+router.get('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
+  const { data, error } = await supabaseAdmin.from('subscriptions').select('*').eq('id', req.params.id).eq('user_id', req.userId).single();
+  if (error || !data) { res.status(404).json({ error: 'Subscription not found' }); return; }
+  res.json(mapSub(data));
 });
 
-router.patch("/subscriptions/:id", async (req, res): Promise<void> => {
-  const params = UpdateSubscriptionParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const body = UpdateSubscriptionBody.safeParse(req.body);
-  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+router.patch('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
+  const { companyName, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
+  const updates: Record<string, any> = {};
+  if (companyName) updates.company_name = companyName;
+  if (monthlyPrice) updates.monthly_price = monthlyPrice;
+  if (yearlyPrice !== undefined) updates.yearly_price = yearlyPrice;
+  if (billingCycle) updates.billing_cycle = billingCycle;
+  if (renewalDate) updates.renewal_date = renewalDate;
+  if (status) updates.status = status;
+  if (category) updates.category = category;
+  if (reminderEnabled !== undefined) updates.reminder_enabled = reminderEnabled;
+  if (notes !== undefined) updates.notes = notes;
+  updates.updated_at = new Date().toISOString();
 
-  const updates: Partial<typeof subscriptionsTable.$inferInsert> = {};
-  if (body.data.companyName != null) updates.companyName = body.data.companyName;
-  if (body.data.monthlyPrice != null) updates.monthlyPrice = String(body.data.monthlyPrice);
-  if (body.data.yearlyPrice != null) updates.yearlyPrice = String(body.data.yearlyPrice);
-  if (body.data.billingCycle != null) updates.billingCycle = body.data.billingCycle;
-  if (body.data.renewalDate != null) updates.renewalDate = body.data.renewalDate;
-  if (body.data.status != null) updates.status = body.data.status;
-  if (body.data.category != null) updates.category = body.data.category;
-  if (body.data.reminderEnabled != null) updates.reminderEnabled = body.data.reminderEnabled;
-  if (body.data.notes != null) updates.notes = body.data.notes;
-
-  const [s] = await db.update(subscriptionsTable).set(updates).where(and(eq(subscriptionsTable.id, params.data.id), sql`${subscriptionsTable.userId} = 1`)).returning();
-  if (!s) { res.status(404).json({ error: "Subscription not found" }); return; }
-  res.json(mapSub(s));
+  const { data, error } = await supabaseAdmin.from('subscriptions').update(updates).eq('id', req.params.id).eq('user_id', req.userId).select().single();
+  if (error || !data) { res.status(404).json({ error: 'Subscription not found' }); return; }
+  res.json(mapSub(data));
 });
 
-router.delete("/subscriptions/:id", async (req, res): Promise<void> => {
-  const params = DeleteSubscriptionParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [s] = await db.delete(subscriptionsTable).where(and(eq(subscriptionsTable.id, params.data.id), sql`${subscriptionsTable.userId} = 1`)).returning();
-  if (!s) { res.status(404).json({ error: "Subscription not found" }); return; }
+router.delete('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
+  const { error } = await supabaseAdmin.from('subscriptions').delete().eq('id', req.params.id).eq('user_id', req.userId);
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.sendStatus(204);
 });
 

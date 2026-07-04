@@ -1,131 +1,85 @@
-import { Router, type IRouter } from "express";
-import { db, receiptsTable } from "@workspace/db";
-import { eq, sql, ilike, and, gte, lte, desc } from "drizzle-orm";
-import {
-  CreateReceiptBody,
-  GetReceiptParams,
-  UpdateReceiptParams,
-  UpdateReceiptBody,
-  DeleteReceiptParams,
-  ListReceiptsQueryParams,
-} from "@workspace/api-zod";
+import { Router, type IRouter } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
-function mapReceipt(r: typeof receiptsTable.$inferSelect) {
+function mapReceipt(r: any) {
   return {
-    id: r.id,
-    merchantName: r.merchantName,
-    merchantLogoUrl: r.merchantLogoUrl ?? null,
-    amount: parseFloat(r.amount),
-    currency: r.currency,
-    purchaseDate: r.purchaseDate,
-    category: r.category,
-    status: r.status as "detected" | "verified" | "manual",
-    invoiceNumber: r.invoiceNumber ?? null,
-    notes: r.notes ?? null,
-    createdAt: r.createdAt.toISOString(),
+    id: r.id, merchantName: r.merchant_name, merchantLogoUrl: r.merchant_logo_url ?? null,
+    amount: Number(r.amount), currency: r.currency, purchaseDate: r.purchase_date,
+    category: r.category, status: r.status, invoiceNumber: r.invoice_number ?? null,
+    notes: r.notes ?? null, createdAt: r.created_at,
   };
 }
 
-router.get("/receipts", async (req, res): Promise<void> => {
-  const params = ListReceiptsQueryParams.safeParse(req.query);
-  const userId = 1;
+router.get('/api/receipts', requireAuth, async (req, res): Promise<void> => {
+  const { search, category, dateFrom, dateTo, minAmount, maxAmount, page = '1', pageSize = '20', merchant } = req.query as Record<string, string>;
 
-  const conditions = [sql`${receiptsTable.userId} = ${userId}`];
+  let query = supabaseAdmin.from('receipts').select('*', { count: 'exact' }).eq('user_id', req.userId).order('purchase_date', { ascending: false });
 
-  if (params.success) {
-    const { merchant, category, dateFrom, dateTo } = params.data;
-    if (merchant) conditions.push(ilike(receiptsTable.merchantName, `%${merchant}%`));
-    if (category) conditions.push(sql`${receiptsTable.category} = ${category}`);
-    if (dateFrom) conditions.push(gte(receiptsTable.purchaseDate, dateFrom));
-    if (dateTo) conditions.push(lte(receiptsTable.purchaseDate, dateTo));
+  if (merchant) query = query.ilike('merchant_name', `%${merchant}%`);
+  if (category) query = query.eq('category', category);
+  if (dateFrom) query = query.gte('purchase_date', dateFrom);
+  if (dateTo) query = query.lte('purchase_date', dateTo);
+  if (minAmount) query = query.gte('amount', minAmount);
+  if (maxAmount) query = query.lte('amount', maxAmount);
+
+  const pageNum = parseInt(page) || 1;
+  const size = parseInt(pageSize) || 20;
+  query = query.range((pageNum - 1) * size, pageNum * size - 1);
+
+  const { data, count, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  let items = (data ?? []).map(mapReceipt);
+  if (search) {
+    const s = search.toLowerCase();
+    items = items.filter(r => r.merchantName.toLowerCase().includes(s) || r.category.toLowerCase().includes(s) || (r.invoiceNumber ?? '').toLowerCase().includes(s));
   }
 
-  const allReceipts = await db
-    .select()
-    .from(receiptsTable)
-    .where(and(...conditions))
-    .orderBy(desc(receiptsTable.purchaseDate));
-
-  let filtered = allReceipts;
-  if (params.success && params.data.search) {
-    const s = params.data.search.toLowerCase();
-    filtered = filtered.filter(
-      (r) =>
-        r.merchantName.toLowerCase().includes(s) ||
-        r.category.toLowerCase().includes(s) ||
-        (r.invoiceNumber ?? "").toLowerCase().includes(s)
-    );
-  }
-  if (params.success && params.data.minAmount != null) {
-    filtered = filtered.filter((r) => parseFloat(r.amount) >= params.data.minAmount!);
-  }
-  if (params.success && params.data.maxAmount != null) {
-    filtered = filtered.filter((r) => parseFloat(r.amount) <= params.data.maxAmount!);
-  }
-
-  const page = params.success && params.data.page ? params.data.page : 1;
-  const pageSize = params.success && params.data.pageSize ? params.data.pageSize : 20;
-  const total = filtered.length;
-  const items = filtered.slice((page - 1) * pageSize, page * pageSize).map(mapReceipt);
-
-  res.json({ items, total, page, pageSize });
+  res.json({ items, total: count ?? 0, page: pageNum, pageSize: size });
 });
 
-router.post("/receipts", async (req, res): Promise<void> => {
-  const parsed = CreateReceiptBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [r] = await db.insert(receiptsTable).values({
-    userId: 1,
-    merchantName: parsed.data.merchantName,
-    merchantLogoUrl: parsed.data.merchantLogoUrl ?? null,
-    amount: String(parsed.data.amount),
-    currency: parsed.data.currency ?? "USD",
-    purchaseDate: parsed.data.purchaseDate,
-    category: parsed.data.category,
-    status: "manual",
-    invoiceNumber: parsed.data.invoiceNumber ?? null,
-    notes: parsed.data.notes ?? null,
-  }).returning();
-  res.status(201).json(mapReceipt(r));
+router.post('/api/receipts', requireAuth, async (req, res): Promise<void> => {
+  const { merchantName, merchantLogoUrl, amount, currency, purchaseDate, category, invoiceNumber, notes } = req.body;
+  if (!merchantName || !amount || !purchaseDate || !category) { res.status(400).json({ error: 'merchantName, amount, purchaseDate, and category are required' }); return; }
+
+  const { data, error } = await supabaseAdmin.from('receipts').insert({
+    user_id: req.userId, merchant_name: merchantName, merchant_logo_url: merchantLogoUrl ?? null,
+    amount, currency: currency ?? 'USD', purchase_date: purchaseDate, category, status: 'manual',
+    invoice_number: invoiceNumber ?? null, notes: notes ?? null,
+  }).select().single();
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.status(201).json(mapReceipt(data));
 });
 
-router.get("/receipts/:id", async (req, res): Promise<void> => {
-  const params = GetReceiptParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [r] = await db.select().from(receiptsTable).where(and(eq(receiptsTable.id, params.data.id), sql`${receiptsTable.userId} = 1`));
-  if (!r) { res.status(404).json({ error: "Receipt not found" }); return; }
-  res.json(mapReceipt(r));
+router.get('/api/receipts/:id', requireAuth, async (req, res): Promise<void> => {
+  const { data, error } = await supabaseAdmin.from('receipts').select('*').eq('id', req.params.id).eq('user_id', req.userId).single();
+  if (error || !data) { res.status(404).json({ error: 'Receipt not found' }); return; }
+  res.json(mapReceipt(data));
 });
 
-router.patch("/receipts/:id", async (req, res): Promise<void> => {
-  const params = UpdateReceiptParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const body = UpdateReceiptBody.safeParse(req.body);
-  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+router.patch('/api/receipts/:id', requireAuth, async (req, res): Promise<void> => {
+  const { merchantName, amount, purchaseDate, category, invoiceNumber, notes } = req.body;
+  const updates: Record<string, any> = {};
+  if (merchantName) updates.merchant_name = merchantName;
+  if (amount) updates.amount = amount;
+  if (purchaseDate) updates.purchase_date = purchaseDate;
+  if (category) updates.category = category;
+  if (invoiceNumber !== undefined) updates.invoice_number = invoiceNumber;
+  if (notes !== undefined) updates.notes = notes;
+  updates.updated_at = new Date().toISOString();
 
-  const updates: Partial<typeof receiptsTable.$inferInsert> = {};
-  if (body.data.merchantName != null) updates.merchantName = body.data.merchantName;
-  if (body.data.amount != null) updates.amount = String(body.data.amount);
-  if (body.data.purchaseDate != null) updates.purchaseDate = body.data.purchaseDate;
-  if (body.data.category != null) updates.category = body.data.category;
-  if (body.data.invoiceNumber != null) updates.invoiceNumber = body.data.invoiceNumber;
-  if (body.data.notes != null) updates.notes = body.data.notes;
-
-  const [r] = await db.update(receiptsTable).set(updates).where(and(eq(receiptsTable.id, params.data.id), sql`${receiptsTable.userId} = 1`)).returning();
-  if (!r) { res.status(404).json({ error: "Receipt not found" }); return; }
-  res.json(mapReceipt(r));
+  const { data, error } = await supabaseAdmin.from('receipts').update(updates).eq('id', req.params.id).eq('user_id', req.userId).select().single();
+  if (error || !data) { res.status(404).json({ error: 'Receipt not found' }); return; }
+  res.json(mapReceipt(data));
 });
 
-router.delete("/receipts/:id", async (req, res): Promise<void> => {
-  const params = DeleteReceiptParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [r] = await db.delete(receiptsTable).where(and(eq(receiptsTable.id, params.data.id), sql`${receiptsTable.userId} = 1`)).returning();
-  if (!r) { res.status(404).json({ error: "Receipt not found" }); return; }
+router.delete('/api/receipts/:id', requireAuth, async (req, res): Promise<void> => {
+  const { error } = await supabaseAdmin.from('receipts').delete().eq('id', req.params.id).eq('user_id', req.userId);
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.sendStatus(204);
 });
 

@@ -1,169 +1,101 @@
-import { Router, type IRouter } from "express";
-import { db, receiptsTable, subscriptionsTable, warrantiesTable, activityLogsTable, usersTable } from "@workspace/db";
-import { sql, gte, lte, and } from "drizzle-orm";
-import {
-  GetDashboardSummaryResponse,
-  GetSpendingTrendResponse,
-  GetTopMerchantsResponse,
-  GetUpcomingRenewalsResponse,
-} from "@workspace/api-zod";
+import { Router, type IRouter } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (req, res): Promise<void> => {
-  const userId = 1;
-
-  const [user] = await db.select().from(usersTable).where(sql`${usersTable.id} = ${userId}`);
-
-  const receipts = await db.select().from(receiptsTable).where(sql`${receiptsTable.userId} = ${userId}`);
-  const subs = await db.select().from(subscriptionsTable).where(
-    and(sql`${subscriptionsTable.userId} = ${userId}`, sql`${subscriptionsTable.status} = 'active'`)
-  );
-
+router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
   const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const lastOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const today = now.toISOString().split('T')[0];
+  const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  const monthlyReceipts = receipts.filter(
-    (r) => r.purchaseDate >= firstOfMonth && r.purchaseDate <= lastOfMonth
-  );
-  const monthlySpending = monthlyReceipts.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+  const [
+    { data: profile },
+    { data: receipts },
+    { data: activeSubs },
+    { data: warranties },
+  ] = await Promise.all([
+    supabaseAdmin.from('profiles').select('full_name, plan_id').eq('id', userId).single(),
+    supabaseAdmin.from('receipts').select('amount, purchase_date').eq('user_id', userId),
+    supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
+    supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
+  ]);
 
-  const warranties = await db.select().from(warrantiesTable).where(sql`${warrantiesTable.userId} = ${userId}`);
-  const today = now.toISOString().split("T")[0];
-  const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const monthlySpending = (receipts ?? [])
+    .filter(r => r.purchase_date >= firstOfMonth)
+    .reduce((sum, r) => sum + Number(r.amount), 0);
 
-  const activeWarranties = warranties.filter((w) => w.warrantyEndDate >= today);
-  const upcomingRenewals = subs.filter((s) => s.renewalDate >= today && s.renewalDate <= thirtyDaysLater);
+  const upcomingRenewals = (activeSubs ?? []).filter(s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater).length;
+  const activeWarranties = (warranties ?? []).filter(w => w.warranty_end_date >= today).length;
 
-  const monthlySubTotal = subs.reduce((sum, s) => {
-    if (s.billingCycle === "yearly" && s.yearlyPrice) return sum + parseFloat(s.yearlyPrice) / 12;
-    return sum + parseFloat(s.monthlyPrice);
+  const monthlySubTotal = (activeSubs ?? []).reduce((sum, s) => {
+    if (s.billing_cycle === 'yearly' && s.yearly_price) return sum + Number(s.yearly_price) / 12;
+    return sum + Number(s.monthly_price);
   }, 0);
 
-  const summary = {
-    firstName: user?.name?.split(" ")[0] ?? "Alex",
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+
+  res.json({
+    firstName,
     monthlySpending: Math.round(monthlySpending * 100) / 100,
-    totalReceipts: receipts.length,
-    activeSubscriptions: subs.length,
-    upcomingRenewalsCount: upcomingRenewals.length,
-    activeWarranties: activeWarranties.length,
+    totalReceipts: (receipts ?? []).length,
+    activeSubscriptions: (activeSubs ?? []).length,
+    upcomingRenewalsCount: upcomingRenewals,
+    activeWarranties,
     moneySaved: Math.round(monthlySubTotal * 0.12 * 100) / 100,
     subscriptionsMonthlyTotal: Math.round(monthlySubTotal * 100) / 100,
-    gmailConnected: user?.gmailConnected ?? false,
-    plan: (user?.plan as "free" | "pro") ?? "free",
-  };
-
-  res.json(GetDashboardSummaryResponse.parse(summary));
+    gmailConnected: false,
+    plan: (profile?.plan_id ?? 'free') as 'free' | 'pro',
+  });
 });
 
-router.get("/dashboard/spending-trend", async (req, res): Promise<void> => {
-  const userId = 1;
-  const receipts = await db.select().from(receiptsTable).where(sql`${receiptsTable.userId} = ${userId}`);
-
+router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promise<void> => {
+  const { data: receipts } = await supabaseAdmin.from('receipts').select('amount, purchase_date').eq('user_id', req.userId);
   const now = new Date();
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const monthStr = String(month).padStart(2, "0");
-    const firstDay = `${year}-${monthStr}-01`;
-    const lastDay = new Date(year, month, 0);
-    const lastDayStr = `${year}-${monthStr}-${String(lastDay.getDate()).padStart(2, "0")}`;
-    const label = d.toLocaleString("en-US", { month: "short", year: "numeric" });
-
-    const total = receipts
-      .filter((r) => r.purchaseDate >= firstDay && r.purchaseDate <= lastDayStr)
-      .reduce((sum, r) => sum + parseFloat(r.amount), 0);
-
-    const prevD = new Date(year, month - 2, 1);
-    const prevYear = prevD.getFullYear();
-    const prevMonth = prevD.getMonth() + 1;
-    const prevMonthStr = String(prevMonth).padStart(2, "0");
-    const prevFirstDay = `${prevYear}-${prevMonthStr}-01`;
-    const prevLastDay = new Date(prevYear, prevMonth, 0);
-    const prevLastDayStr = `${prevYear}-${prevMonthStr}-${String(prevLastDay.getDate()).padStart(2, "0")}`;
-
-    const previousTotal = receipts
-      .filter((r) => r.purchaseDate >= prevFirstDay && r.purchaseDate <= prevLastDayStr)
-      .reduce((sum, r) => sum + parseFloat(r.amount), 0);
-
-    months.push({ month, year, label, total: Math.round(total * 100) / 100, previousTotal: Math.round(previousTotal * 100) / 100 });
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const ms = String(m).padStart(2, '0');
+    const first = `${y}-${ms}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const last = `${y}-${ms}-${String(lastDay).padStart(2, '0')}`;
+    const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    const total = (receipts ?? []).filter(r => r.purchase_date >= first && r.purchase_date <= last).reduce((s, r) => s + Number(r.amount), 0);
+    months.push({ month: m, year: y, label, total: Math.round(total * 100) / 100, previousTotal: 0 });
   }
-
-  res.json(GetSpendingTrendResponse.parse(months));
+  res.json(months);
 });
 
-router.get("/dashboard/top-merchants", async (req, res): Promise<void> => {
-  const userId = 1;
-  const receipts = await db.select().from(receiptsTable).where(sql`${receiptsTable.userId} = ${userId}`);
-
-  const merchantMap = new Map<string, { name: string; logoUrl: string | null; totalSpent: number; count: number; lastDate: string }>();
-  for (const r of receipts) {
-    const existing = merchantMap.get(r.merchantName);
-    if (existing) {
-      existing.totalSpent += parseFloat(r.amount);
-      existing.count++;
-      if (r.purchaseDate > existing.lastDate) existing.lastDate = r.purchaseDate;
-    } else {
-      merchantMap.set(r.merchantName, {
-        name: r.merchantName,
-        logoUrl: r.merchantLogoUrl ?? null,
-        totalSpent: parseFloat(r.amount),
-        count: 1,
-        lastDate: r.purchaseDate,
-      });
-    }
+router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promise<void> => {
+  const { data: receipts } = await supabaseAdmin.from('receipts').select('merchant_name, merchant_logo_url, amount, purchase_date').eq('user_id', req.userId);
+  const map = new Map<string, { name: string; logo: string | null; total: number; count: number; last: string }>();
+  for (const r of receipts ?? []) {
+    const ex = map.get(r.merchant_name);
+    if (ex) { ex.total += Number(r.amount); ex.count++; if (r.purchase_date > ex.last) ex.last = r.purchase_date; }
+    else map.set(r.merchant_name, { name: r.merchant_name, logo: r.merchant_logo_url, total: Number(r.amount), count: 1, last: r.purchase_date });
   }
-
-  const merchants = Array.from(merchantMap.values())
-    .sort((a, b) => b.totalSpent - a.totalSpent)
-    .slice(0, 8)
-    .map((m, i) => ({
-      id: i + 1,
-      name: m.name,
-      logoUrl: m.logoUrl,
-      totalSpent: Math.round(m.totalSpent * 100) / 100,
-      purchaseCount: m.count,
-      lastPurchaseDate: m.lastDate,
-    }));
-
-  res.json(GetTopMerchantsResponse.parse(merchants));
+  const result = Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 8).map((m, i) => ({
+    id: i + 1, name: m.name, logoUrl: m.logo, totalSpent: Math.round(m.total * 100) / 100, purchaseCount: m.count, lastPurchaseDate: m.last,
+  }));
+  res.json(result);
 });
 
-router.get("/dashboard/upcoming-renewals", async (req, res): Promise<void> => {
-  const userId = 1;
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-  const subs = await db.select().from(subscriptionsTable).where(
-    and(
-      sql`${subscriptionsTable.userId} = ${userId}`,
-      gte(subscriptionsTable.renewalDate, today),
-      lte(subscriptionsTable.renewalDate, thirtyDaysLater),
-      sql`${subscriptionsTable.status} = 'active'`
-    )
-  );
-
-  const renewals = subs.map((s, i) => {
-    const renewDate = new Date(s.renewalDate);
-    const daysUntil = Math.ceil((renewDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return {
-      id: i + 1,
-      subscriptionId: s.id,
-      companyName: s.companyName,
-      companyLogoUrl: s.companyLogoUrl ?? null,
-      amount: parseFloat(s.monthlyPrice),
-      renewalDate: s.renewalDate,
-      daysUntilRenewal: Math.max(0, daysUntil),
-      reminderEnabled: s.reminderEnabled,
-      reminderDaysBefore: 7,
-    };
-  });
-
-  res.json(GetUpcomingRenewalsResponse.parse(renewals));
+router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Promise<void> => {
+  const today = new Date().toISOString().split('T')[0];
+  const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const { data: subs } = await supabaseAdmin.from('subscriptions').select('*').eq('user_id', req.userId).eq('status', 'active').gte('renewal_date', today).lte('renewal_date', thirtyDaysLater);
+  const now = Date.now();
+  const result = (subs ?? []).map((s, i) => ({
+    id: i + 1, subscriptionId: s.id, companyName: s.company_name, companyLogoUrl: s.company_logo_url ?? null,
+    amount: Number(s.monthly_price), renewalDate: s.renewal_date,
+    daysUntilRenewal: Math.max(0, Math.ceil((new Date(s.renewal_date).getTime() - now) / 86400000)),
+    reminderEnabled: s.reminder_enabled, reminderDaysBefore: 7,
+  }));
+  res.json(result);
 });
 
 export default router;

@@ -1,114 +1,64 @@
-import { Router, type IRouter } from "express";
-import { db, subscriptionsTable } from "@workspace/db";
-import { eq, sql, gte, lte, and } from "drizzle-orm";
-import {
-  UpdateRenewalParams,
-  UpdateRenewalBody,
-  ListRenewalsQueryParams,
-} from "@workspace/api-zod";
+import { Router, type IRouter } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
-router.get("/renewals", async (req, res): Promise<void> => {
-  const params = ListRenewalsQueryParams.safeParse(req.query);
-  const userId = 1;
-  const now = new Date();
+router.get('/api/renewals', requireAuth, async (req, res): Promise<void> => {
+  const { period, month, year } = req.query as Record<string, string>;
+  const today = new Date().toISOString().split('T')[0];
+  let from = today;
+  let to = new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0];
 
-  let from: string;
-  let to: string;
-
-  if (params.success && params.data.period) {
-    switch (params.data.period) {
-      case "today":
-        from = to = now.toISOString().split("T")[0];
-        break;
-      case "this_week": {
-        const day = now.getDay();
-        const start = new Date(now); start.setDate(now.getDate() - day);
-        const end = new Date(now); end.setDate(now.getDate() + (6 - day));
-        from = start.toISOString().split("T")[0];
-        to = end.toISOString().split("T")[0];
+  if (period) {
+    const now = new Date();
+    switch (period) {
+      case 'today': from = to = today; break;
+      case 'this_week': {
+        const d = now.getDay();
+        from = new Date(now.getTime() - d * 86400000).toISOString().split('T')[0];
+        to = new Date(now.getTime() + (6 - d) * 86400000).toISOString().split('T')[0];
         break;
       }
-      case "this_month":
-        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-        to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+      case 'this_month':
+        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
         break;
-      case "next_month":
-        from = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split("T")[0];
-        to = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().split("T")[0];
+      case 'next_month':
+        from = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+        to = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().split('T')[0];
         break;
-      default:
-        from = now.toISOString().split("T")[0];
-        to = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     }
-  } else if (params.success && params.data.month && params.data.year) {
-    const y = params.data.year;
-    const m = params.data.month;
-    from = `${y}-${String(m).padStart(2, "0")}-01`;
-    to = new Date(y, m, 0).toISOString().split("T")[0];
-  } else {
-    from = now.toISOString().split("T")[0];
-    to = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  } else if (month && year) {
+    const m = parseInt(month), y = parseInt(year);
+    from = `${y}-${String(m).padStart(2, '0')}-01`;
+    to = new Date(y, m, 0).toISOString().split('T')[0];
   }
 
-  const subs = await db.select().from(subscriptionsTable).where(
-    and(
-      sql`${subscriptionsTable.userId} = ${userId}`,
-      sql`${subscriptionsTable.status} = 'active'`,
-      gte(subscriptionsTable.renewalDate, from),
-      lte(subscriptionsTable.renewalDate, to)
-    )
-  );
-
-  const renewals = subs.map((s, i) => {
-    const renewDate = new Date(s.renewalDate);
-    const daysUntil = Math.ceil((renewDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return {
-      id: i + 1,
-      subscriptionId: s.id,
-      companyName: s.companyName,
-      companyLogoUrl: s.companyLogoUrl ?? null,
-      amount: parseFloat(s.monthlyPrice),
-      renewalDate: s.renewalDate,
-      daysUntilRenewal: Math.max(0, daysUntil),
-      reminderEnabled: s.reminderEnabled,
-      reminderDaysBefore: 7,
-    };
-  });
-
-  res.json(renewals);
+  const { data: subs } = await supabaseAdmin.from('subscriptions').select('*').eq('user_id', req.userId).eq('status', 'active').gte('renewal_date', from).lte('renewal_date', to);
+  const now = Date.now();
+  const result = (subs ?? []).map((s, i) => ({
+    id: i + 1, subscriptionId: s.id, companyName: s.company_name, companyLogoUrl: s.company_logo_url ?? null,
+    amount: Number(s.monthly_price), renewalDate: s.renewal_date,
+    daysUntilRenewal: Math.max(0, Math.ceil((new Date(s.renewal_date).getTime() - now) / 86400000)),
+    reminderEnabled: s.reminder_enabled, reminderDaysBefore: 7,
+  }));
+  res.json(result);
 });
 
-router.patch("/renewals/:id", async (req, res): Promise<void> => {
-  const params = UpdateRenewalParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
-  const body = UpdateRenewalBody.safeParse(req.body);
-  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+router.patch('/api/renewals/:subscriptionId', requireAuth, async (req, res): Promise<void> => {
+  const { subscriptionId } = req.params;
+  const { reminderEnabled, reminderDaysBefore } = req.body;
 
-  // Renewals are derived from subscriptions; update reminderEnabled on the subscription
-  const subs = await db.select().from(subscriptionsTable).where(sql`${subscriptionsTable.userId} = 1`);
-  const sub = subs[params.data.id - 1]; // id is index-based
-  if (!sub) { res.status(404).json({ error: "Renewal not found" }); return; }
+  const { data, error } = await supabaseAdmin.from('subscriptions').update({ reminder_enabled: reminderEnabled, updated_at: new Date().toISOString() }).eq('id', subscriptionId).eq('user_id', req.userId).select().single();
+  if (error || !data) { res.status(404).json({ error: 'Subscription not found' }); return; }
 
-  if (body.data.reminderEnabled != null) {
-    await db.update(subscriptionsTable).set({ reminderEnabled: body.data.reminderEnabled }).where(eq(subscriptionsTable.id, sub.id));
-  }
-
-  const now = new Date();
-  const renewDate = new Date(sub.renewalDate);
-  const daysUntil = Math.ceil((renewDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
+  const now = Date.now();
   res.json({
-    id: params.data.id,
-    subscriptionId: sub.id,
-    companyName: sub.companyName,
-    companyLogoUrl: sub.companyLogoUrl ?? null,
-    amount: parseFloat(sub.monthlyPrice),
-    renewalDate: sub.renewalDate,
-    daysUntilRenewal: Math.max(0, daysUntil),
-    reminderEnabled: body.data.reminderEnabled ?? sub.reminderEnabled,
-    reminderDaysBefore: body.data.reminderDaysBefore ?? 7,
+    id: 1, subscriptionId: data.id, companyName: data.company_name, companyLogoUrl: data.company_logo_url ?? null,
+    amount: Number(data.monthly_price), renewalDate: data.renewal_date,
+    daysUntilRenewal: Math.max(0, Math.ceil((new Date(data.renewal_date).getTime() - now) / 86400000)),
+    reminderEnabled: data.reminder_enabled, reminderDaysBefore: reminderDaysBefore ?? 7,
   });
 });
 
