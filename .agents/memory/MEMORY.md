@@ -1,0 +1,3 @@
+- [Paystack webhook verification](paystack-webhook.md) — uses PAYSTACK_SECRET_KEY (not a separate webhook secret) with HMAC-SHA512 on x-paystack-signature header.
+- [Google OAuth for Supabase](supabase-google-auth.md) — Supabase Google sign-in requires manual config in Supabase Dashboard; redirect URLs must be allowlisted there.
+- [Email reminder scheduler](reminder-scheduler.md) — runs hourly in api-server, checks renewals table for items due in 3 days, creates notifications + sends email via nodemailer.

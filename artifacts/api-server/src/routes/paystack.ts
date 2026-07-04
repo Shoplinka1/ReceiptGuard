@@ -19,7 +19,6 @@ import { supabaseAdmin } from '../lib/supabase';
 const router: IRouter = Router();
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-const PAYSTACK_WEBHOOK_SECRET = process.env.PAYSTACK_WEBHOOK_SECRET;
 
 async function paystackRequest(path: string, options: RequestInit = {}): Promise<any> {
   if (!PAYSTACK_SECRET_KEY) throw new Error('PAYSTACK_SECRET_KEY not configured');
@@ -150,9 +149,10 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
 // ─── Webhook ────────────────────────────────────────────────────────────────
 
 router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
-  // Require webhook secret — fail closed if not configured to prevent forged events
-  if (!PAYSTACK_WEBHOOK_SECRET) {
-    res.status(503).json({ error: 'Webhook secret not configured' });
+  // Paystack signs webhook payloads with HMAC-SHA512 using your secret key.
+  // Verify using x-paystack-signature header against PAYSTACK_SECRET_KEY.
+  if (!PAYSTACK_SECRET_KEY) {
+    res.status(503).json({ error: 'PAYSTACK_SECRET_KEY not configured' });
     return;
   }
 
@@ -164,7 +164,7 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
     : Buffer.from(JSON.stringify(req.body));
 
   const hash = crypto
-    .createHmac('sha512', PAYSTACK_WEBHOOK_SECRET)
+    .createHmac('sha512', PAYSTACK_SECRET_KEY)
     .update(rawBody)
     .digest('hex');
 
