@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import {
   Users, DollarSign, TrendingUp, Activity, Mail, ShieldAlert,
   UserX, Search, MessageSquare, Bug, Lightbulb, LifeBuoy, RefreshCw,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, Sparkles, Calendar,
 } from 'lucide-react'
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -55,7 +55,7 @@ function useAdminFeedback() {
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback'>('overview')
+  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions'>('overview')
   const [search, setSearch] = useState('')
   const qc = useQueryClient()
 
@@ -83,16 +83,21 @@ export default function AdminPage() {
     { id: 'overview' as const, label: 'Overview' },
     { id: 'users' as const, label: 'Users' },
     { id: 'payments' as const, label: 'Payments' },
+    { id: 'subscriptions' as const, label: 'Subscriptions' },
     { id: 'feedback' as const, label: 'Feedback' },
   ]
 
-  // Backend stat keys: totalUsers, newUsers30d, payingUsers, mrr, arr, conversionRate,
-  // totalReceipts, connectedGmailAccounts, openFeedbackCount
   const statCards = [
     { label: 'Total Users', value: stats?.totalUsers, icon: Users },
-    { label: 'Paying Users', value: stats?.payingUsers, icon: CheckCircle2 },
+    { label: 'Users Today', value: stats?.usersToday, icon: Activity },
+    { label: 'Active Users', value: stats?.activeUsers, icon: CheckCircle2 },
+    { label: 'Free Users', value: stats?.freeUsers, icon: Users },
+    { label: 'Pro Users', value: stats?.payingUsers, icon: Sparkles },
+    { label: 'Monthly Revenue', value: stats?.mrr != null ? `$${(stats.mrr as number).toFixed(2)}` : null, icon: DollarSign },
+    { label: 'Total Revenue', value: stats?.totalRevenue != null ? `$${(stats.totalRevenue as number).toFixed(2)}` : null, icon: TrendingUp },
     { label: 'MRR', value: stats?.mrr != null ? `$${(stats.mrr as number).toFixed(2)}` : null, icon: DollarSign },
     { label: 'ARR', value: stats?.arr != null ? `$${(stats.arr as number).toFixed(2)}` : null, icon: TrendingUp },
+    { label: 'Failed Payments', value: stats?.failedPaymentsCount, icon: AlertTriangle },
     { label: 'New (30d)', value: stats?.newUsers30d, icon: Activity },
     { label: 'Conversion', value: stats?.conversionRate != null ? `${(stats.conversionRate as number).toFixed(1)}%` : null, icon: TrendingUp },
     { label: 'Gmail Accounts', value: stats?.connectedGmailAccounts, icon: Mail },
@@ -297,6 +302,55 @@ export default function AdminPage() {
           </Card>
         )}
 
+        {/* SUBSCRIPTIONS */}
+        {tab === 'subscriptions' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Active Pro subscriptions sorted by nearest expiry date.</p>
+            {loadingStats ? (
+              <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+            ) : !(stats?.upcomingExpiries as any[])?.length ? (
+              <div className="p-12 text-center text-muted-foreground">No active subscriptions found.</div>
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <th className="px-4 py-3">User ID</th>
+                          <th className="px-4 py-3">Plan</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Expires</th>
+                          <th className="px-4 py-3">Days Left</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(stats?.upcomingExpiries as any[] ?? []).map((sub: any) => {
+                          const expiry = new Date(sub.current_period_end)
+                          const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                          return (
+                            <tr key={sub.user_id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{String(sub.user_id).slice(0, 12)}…</td>
+                              <td className="px-4 py-3"><Badge variant="default" className="text-xs capitalize">{sub.plan_id}</Badge></td>
+                              <td className="px-4 py-3"><Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/30">Active</Badge></td>
+                              <td className="px-4 py-3 text-muted-foreground">{expiry.toLocaleDateString()}</td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs font-medium ${daysLeft <= 7 ? 'text-destructive' : daysLeft <= 30 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                  {daysLeft > 0 ? `${daysLeft}d` : 'Expired'}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* FEEDBACK */}
         {tab === 'feedback' && (
           <div className="space-y-4">
@@ -317,18 +371,14 @@ export default function AdminPage() {
                         <Icon className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-xs capitalize">
-                            {(f.type as string)?.replace('_', ' ')}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {f.profiles?.email ?? 'Unknown user'}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(f.created_at as string).toLocaleDateString()}
-                          </span>
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <Badge variant="outline" className="text-xs capitalize">{(f.type as string)?.replace(/_/g, ' ')}</Badge>
+                          <Badge variant={f.status === 'open' ? 'secondary' : 'outline'} className="text-xs">{f.status}</Badge>
+                          <span className="text-xs text-muted-foreground">{f.profiles?.email ?? f.profiles?.full_name ?? 'Unknown user'}</span>
+                          <span className="text-xs text-muted-foreground">{new Date(f.created_at as string).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-sm leading-relaxed">{f.message as string}</p>
+                        {f.subject && <p className="text-sm font-medium mb-1">{f.subject as string}</p>}
+                        <p className="text-sm text-muted-foreground leading-relaxed">{(f.body ?? f.message) as string}</p>
                       </div>
                     </CardContent>
                   </Card>

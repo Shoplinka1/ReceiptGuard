@@ -6,6 +6,7 @@
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
+import { sendEmail } from '../lib/email';
 
 const router: IRouter = Router();
 
@@ -38,6 +39,30 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     description: `${type.replace('_', ' ')} submitted: ${subject}`,
     metadata: { feedbackId: data.id, type },
   });
+
+  // Fire-and-forget email notification to admin
+  const { data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+  const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  sendEmail({
+    to: 'receiptguard01@gmail.com',
+    subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#1a1a1a">New ${typeLabel} Submitted</h2>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+          <tr><td style="padding:6px 0;color:#666;width:100px">From</td><td style="padding:6px 0;font-weight:500">${userProfile?.full_name || 'Unknown'}</td></tr>
+          <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${userProfile?.email || '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:#666">Type</td><td style="padding:6px 0">${typeLabel}</td></tr>
+          <tr><td style="padding:6px 0;color:#666">Subject</td><td style="padding:6px 0;font-weight:500">${subject.trim()}</td></tr>
+          <tr><td style="padding:6px 0;color:#666">Time</td><td style="padding:6px 0">${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} (WAT)</td></tr>
+        </table>
+        <div style="background:#f5f5f5;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin-bottom:24px">
+          <p style="margin:0;color:#333;white-space:pre-wrap">${body.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+        </div>
+        <p style="font-size:12px;color:#999">This is an automated notification from ReceiptGuard.</p>
+      </div>
+    `,
+  }).catch(() => {});
 
   res.status(201).json(data);
 });

@@ -52,9 +52,25 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
 
   const { planId, billingCycle = 'monthly' } = req.body as { planId: string; billingCycle?: 'monthly' | 'yearly' };
 
-  // Get the user's profile for their email
-  const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
-  if (!profile) { res.status(404).json({ error: 'Profile not found' }); return; }
+  // Get the user's profile for their email — auto-create if missing (new Google OAuth users)
+  let userEmail = '';
+  let userName = '';
+  const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+  if (!existingProfile) {
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(req.userId);
+    if (!authData?.user) { res.status(404).json({ error: 'User account not found' }); return; }
+    userEmail = authData.user.email ?? '';
+    userName = (authData.user.user_metadata?.full_name as string | undefined) ?? '';
+    await supabaseAdmin.from('profiles').upsert({
+      id: req.userId,
+      email: userEmail,
+      full_name: userName,
+      plan_id: 'free',
+    }, { onConflict: 'id' });
+  } else {
+    userEmail = existingProfile.email;
+    userName = existingProfile.full_name ?? '';
+  }
 
   const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).single();
   if (!plan || planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
@@ -73,7 +89,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   const data = await paystackRequest('/transaction/initialize', {
     method: 'POST',
     body: JSON.stringify({
-      email: profile.email,
+      email: userEmail,
       amount: amountKobo,
       currency: 'NGN',
       reference,

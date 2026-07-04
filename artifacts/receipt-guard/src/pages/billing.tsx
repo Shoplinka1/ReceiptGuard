@@ -50,8 +50,8 @@ const FREE_FEATURES = [
   'Search',
 ]
 
-const MONTHLY_USD = 9.99
-const YEARLY_USD = 99.99
+const MONTHLY_USD = 5.99
+const YEARLY_USD = 59.99
 const YEARLY_SAVINGS_PCT = Math.round((1 - YEARLY_USD / (MONTHLY_USD * 12)) * 100)
 
 export default function BillingPage() {
@@ -262,11 +262,11 @@ export default function BillingPage() {
                 </div>
                 {billingCycle === 'yearly' ? (
                   <div>
-                    <p className="text-2xl font-bold">$99.99 <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
+                    <p className="text-2xl font-bold">$59.99 <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
                     <p className="text-xs text-muted-foreground mt-0.5">${(YEARLY_USD / 12).toFixed(2)}/month · billed annually</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold">$9.99 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+                  <p className="text-2xl font-bold">$5.99 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
                 )}
               </CardHeader>
               <CardContent>

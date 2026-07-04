@@ -1,0 +1,159 @@
+There are still several important issues preventing ReceiptGuard from being production-ready. Please fix all of them before moving on.
+
+## 1. Create a Complete Settings Page
+
+There is currently no proper Settings page.
+
+Create a dedicated Settings page and move all account-related pages into it.
+
+Settings should include:
+
+- Profile
+- Account
+- Connected Gmail Accounts
+- Billing
+- Subscription
+- Pricing
+- Notifications
+- Appearance (Dark/Light Mode)
+- Language
+- Currency
+- Timezone
+- Security
+- Change Password
+- Delete Account
+- Send Feedback
+- Contact Support
+- Frequently Asked Questions
+- Privacy Policy
+- Terms of Service
+- Sign Out
+
+The sidebar should have a single Settings item instead of separate Billing, Subscription, Feedback and FAQ links.
+
+## 2. Correct Pro Pricing
+
+The current Pro Monthly price is incorrect.
+
+Change it to:
+
+- Pro Monthly — $5.99/month
+- Pro Yearly — $59.99/year (save about 17%)
+
+Show the savings badge on the yearly plan.
+
+Display all pricing in USD only.
+
+The backend must automatically convert USD to NGN before creating the Paystack transaction.
+
+Users should never see NGN.
+
+## 3. Upgrade Button
+
+Currently clicking Upgrade Now shows:
+
+"Profile not found"
+
+This is incorrect.
+
+Fix the upgrade flow.
+
+When Upgrade is clicked:
+
+- Verify the user's profile exists.
+- Automatically create the profile if missing.
+- Create the Paystack checkout session.
+- Redirect directly to Paystack Checkout.
+- After successful payment, automatically upgrade the user to Pro.
+- Save the payment in the database.
+- Create billing history.
+- Set subscription expiry date.
+
+Never show "Profile not found."
+
+## 4. Subscription Management
+
+Implement a complete subscription lifecycle.
+
+After successful payment:
+
+- Upgrade to Pro immediately.
+- Store the plan.
+- Store payment history.
+- Store renewal date.
+- Store expiry date.
+
+If the subscription:
+
+- expires,
+- is cancelled,
+- or payment renewal fails,
+
+automatically downgrade the account back to the Free plan.
+
+Premium features must immediately become unavailable after expiry.
+
+## 5. Support & Feedback
+
+When users submit:
+
+- Feedback
+- Bug reports
+- Feature requests
+- Contact Support
+
+Store everything in Supabase.
+
+In addition:
+
+- Send a notification email to my administrator email whenever a new submission is received.this is the email : receiptguard01@gmail.com
+- Include the user's name, email, subject, message, and submission time.
+
+Configure SMTP if required and tell me which environment variables are still needed.
+
+## 6. Admin Dashboard
+
+Tell me whether the Admin Dashboard has already been built.
+
+If not, build it now.
+
+Admin should be able to see:
+
+- Total Users
+- Users Today
+- Active Users
+- Free Users
+- Pro Users
+- Monthly Revenue
+- Total Revenue
+- Monthly Recurring Revenue (MRR)
+- Failed Payments
+- Recent Payments
+- Recent Signups
+- Subscription Expiry Dates
+- Search Users
+- View User Profiles
+- View Billing History
+- View Feedback
+- View Support Messages
+- View Gmail Connection Status
+- Basic Analytics
+
+Only administrators should be able to access this dashboard.
+
+## 7. Final Review
+
+Before marking this complete:
+
+- Verify all Paystack environment variables are detected.
+- Verify checkout redirects correctly.
+- Verify successful payments upgrade users.
+- Verify expired subscriptions downgrade users.
+- Verify Billing works.
+- Verify Pricing works.
+- Verify Settings works.
+- Verify Admin Dashboard works.
+- Verify Feedback emails work.
+- Verify Support emails work.
+
+If anything cannot be completed because of missing configuration, stop and tell me exactly what is missing instead of leaving placeholder functionality.

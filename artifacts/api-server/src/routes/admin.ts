@@ -27,40 +27,60 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   const [
     { count: totalUsers },
     { count: newUsers },
+    { count: usersToday },
     { count: payingUsers },
-    { data: payments },
+    { count: freeUsers },
+    { count: activeUsers },
+    { data: mrrPayments },
+    { data: totalPaymentsData },
+    { count: failedPaymentsCount },
     { data: recentActivity },
-    { data: feedback },
+    { count: openFeedbackCount },
     { count: totalReceipts },
     { count: gmailAccounts },
+    { data: expiryData },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
-    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).neq('plan_id', 'free'),
-    supabaseAdmin.from('payments').select('amount, status, created_at').eq('status', 'success').gte('created_at', thirtyDaysAgo),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayStart),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).neq('plan_id', 'free').neq('plan_id', null),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).or('plan_id.eq.free,plan_id.is.null'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_suspended', false),
+    supabaseAdmin.from('payments').select('amount').eq('status', 'success').gte('created_at', monthStart),
+    supabaseAdmin.from('payments').select('amount').eq('status', 'success'),
+    supabaseAdmin.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
     supabaseAdmin.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(20),
     supabaseAdmin.from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabaseAdmin.from('receipts').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('email_accounts').select('*', { count: 'exact', head: true }).eq('is_active', true),
+    supabaseAdmin.from('user_subscriptions').select('user_id, plan_id, current_period_end, status').eq('status', 'active').order('current_period_end', { ascending: true }).limit(20),
   ]);
 
-  const mrr = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const mrr = (mrrPayments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalRevenue = (totalPaymentsData ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
 
   res.json({
     totalUsers: totalUsers ?? 0,
     newUsers30d: newUsers ?? 0,
+    usersToday: usersToday ?? 0,
     payingUsers: payingUsers ?? 0,
+    freeUsers: freeUsers ?? 0,
+    activeUsers: activeUsers ?? 0,
     mrr: Math.round(mrr * 100) / 100,
     arr: Math.round(mrr * 12 * 100) / 100,
+    totalRevenue: Math.round(totalRevenue * 100) / 100,
+    failedPaymentsCount: failedPaymentsCount ?? 0,
     conversionRate: totalUsers ? Math.round(((payingUsers ?? 0) / (totalUsers ?? 1)) * 10000) / 100 : 0,
     totalReceipts: totalReceipts ?? 0,
     connectedGmailAccounts: gmailAccounts ?? 0,
-    openFeedbackCount: feedback ?? 0,
+    openFeedbackCount: openFeedbackCount ?? 0,
     recentActivity: recentActivity ?? [],
+    upcomingExpiries: expiryData ?? [],
   });
 });
 

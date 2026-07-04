@@ -9,11 +9,7 @@ import {
   Settings,
   Bell,
   LogOut,
-  CreditCard,
-  User as UserIcon,
-  MessageSquare,
   Search,
-  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -33,11 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   
   const bottomItems = [
     { name: "Reminders", href: "/reminders", icon: Bell },
-    { name: "Support", href: "/support", icon: HelpCircle },
-    { name: "Feedback", href: "/feedback", icon: MessageSquare },
-    { name: "Profile", href: "/profile", icon: UserIcon },
     { name: "Settings", href: "/settings", icon: Settings },
-    { name: "Billing", href: "/billing", icon: CreditCard },
   ]
 
   return (
