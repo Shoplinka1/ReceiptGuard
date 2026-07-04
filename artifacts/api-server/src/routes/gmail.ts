@@ -58,8 +58,17 @@ router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  // Embed userId in state so we can associate the account after callback
-  const state = Buffer.from(JSON.stringify({ userId: req.userId })).toString('base64url');
+  // Build a signed state parameter to prevent OAuth CSRF / account-linking attacks.
+  // We sign the payload with SESSION_SECRET (or GOOGLE_CLIENT_SECRET as fallback)
+  // so a forged state cannot be crafted without the server secret.
+  const signingKey = process.env.SESSION_SECRET ?? GOOGLE_CLIENT_SECRET!;
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const statePayload = JSON.stringify({ userId: req.userId, nonce });
+  const signature = crypto
+    .createHmac('sha256', signingKey)
+    .update(statePayload)
+    .digest('hex');
+  const state = Buffer.from(JSON.stringify({ p: statePayload, s: signature })).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -89,7 +98,27 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 
   let userId: string;
   try {
-    ({ userId } = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')));
+    const { p: statePayload, s: signature } = JSON.parse(
+      Buffer.from(state, 'base64url').toString('utf8'),
+    ) as { p: string; s: string };
+
+    // Verify HMAC signature to prevent forged state / account-linking CSRF
+    const signingKey = process.env.SESSION_SECRET ?? (GOOGLE_CLIENT_SECRET ?? '');
+    const expectedSig = crypto
+      .createHmac('sha256', signingKey)
+      .update(statePayload)
+      .digest('hex');
+
+    if (
+      !signature ||
+      expectedSig.length !== signature.length ||
+      !crypto.timingSafeEqual(Buffer.from(expectedSig, 'hex'), Buffer.from(signature, 'hex'))
+    ) {
+      res.status(400).json({ error: 'Invalid state signature' });
+      return;
+    }
+
+    ({ userId } = JSON.parse(statePayload) as { userId: string; nonce: string });
   } catch {
     res.status(400).json({ error: 'Invalid state' });
     return;

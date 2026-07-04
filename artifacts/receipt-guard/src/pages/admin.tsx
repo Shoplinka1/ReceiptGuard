@@ -31,6 +31,8 @@ async function apiFetch(path: string, opts?: RequestInit) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body?.error ?? `HTTP ${res.status}`)
   }
+  // 204 No Content — no body to parse
+  if (res.status === 204) return null
   return res.json()
 }
 
@@ -275,7 +277,7 @@ export default function AdminPage() {
                             {p.profiles?.email ?? String(p.user_id).slice(0, 8) + '…'}
                           </td>
                           <td className="px-4 py-3 capitalize">{p.plan_id || '—'}</td>
-                          <td className="px-4 py-3 font-medium">${(Number(p.amount) / 100).toFixed(2)}</td>
+                          <td className="px-4 py-3 font-medium">₦{Number(p.amount).toLocaleString()}</td>
                           <td className="px-4 py-3">
                             <Badge
                               variant={p.status === 'success' ? 'default' : p.status === 'failed' ? 'destructive' : 'outline'}

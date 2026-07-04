@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useGetUserProfile } from '@workspace/api-client-react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Sparkles, Loader2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -27,6 +27,8 @@ async function apiFetch(path: string, opts?: RequestInit) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body?.error ?? `HTTP ${res.status}`)
   }
+  // 204 No Content — no body to parse
+  if (res.status === 204) return null
   return res.json()
 }
 
@@ -52,9 +54,36 @@ const FREE_FEATURES = [
 ]
 
 export default function BillingPage() {
-  const { data: profile, isLoading: loadingProfile } = useGetUserProfile()
+  const { data: profile, isLoading: loadingProfile, refetch: refetchProfile } = useGetUserProfile()
   const isPro = profile?.plan === 'pro'
   const [initError, setInitError] = useState<string | null>(null)
+  const qc = useQueryClient()
+
+  // When Paystack redirects back with ?ref=<reference>, verify the payment
+  // so the plan is activated immediately without waiting for a webhook.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (!ref) return
+
+    // Remove the query param from URL without reloading
+    const cleanUrl = window.location.pathname
+    window.history.replaceState({}, '', cleanUrl)
+
+    apiFetch(`/api/paystack/verify/${encodeURIComponent(ref)}`)
+      .then((data) => {
+        if (data?.status === 'success') {
+          toast.success('Payment confirmed! Your plan has been upgraded.')
+          refetchProfile()
+          qc.invalidateQueries({ queryKey: ['payments', 'history'] })
+        } else {
+          toast.info('Payment is being processed. Your plan will update shortly.')
+        }
+      })
+      .catch(() => {
+        toast.error('Could not verify payment. Please contact support if your plan is not updated.')
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: paymentHistory, isLoading: loadingHistory } = useQuery({
     queryKey: ['payments', 'history'],
@@ -228,7 +257,7 @@ export default function BillingPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
-                      <span className="font-medium text-sm">₦{(Number(p.amount) / 100).toLocaleString()}</span>
+                      <span className="font-medium text-sm">₦{Number(p.amount).toLocaleString()}</span>
                     </div>
                   </div>
                 ))}

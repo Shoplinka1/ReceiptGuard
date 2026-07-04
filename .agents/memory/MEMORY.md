@@ -1,0 +1,7 @@
+- [Supabase + Express arch](supabase-express-arch.md) — Supabase auth-only on frontend; Express owns all DB via service-role client; JWT validated per-request.
+- [API route path strategy](api-route-paths.md) — Routes carry full /api/ prefix; app.ts mounts router at root (not at /api) to avoid double-prefix.
+- [Paystack integration](paystack-integration.md) — authorizationUrl (camelCase); amounts stored in NGN major units; webhook uses raw body for HMAC-sha512.
+- [Admin API contract](admin-api-contract.md) — /api/admin/users → { users, total, page, pageSize }; stat keys: totalUsers, newUsers30d, payingUsers, mrr, arr, etc.
+- [Supabase graceful degradation](supabase-graceful.md) — Both frontend and backend warn (not crash) when env vars missing; app renders without secrets.
+- [Gmail OAuth state signing](gmail-oauth-state.md) — State is HMAC-sha256 signed with SESSION_SECRET; verified with timingSafeEqual before account linking.
+- [Money units convention](money-units.md) — All payment amounts stored in NGN major units (not kobo); never divide by 100 when displaying from DB.

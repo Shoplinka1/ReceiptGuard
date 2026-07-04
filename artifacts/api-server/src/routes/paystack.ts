@@ -90,8 +90,9 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   await supabaseAdmin.from('payments').insert({
     user_id: req.userId,
     paystack_reference: reference,
-    amount: billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly),
-    currency: 'USD',
+    // Store amount in major units (NGN). amountKobo / 100 = NGN.
+    amount: amountKobo / 100,
+    currency: 'NGN',
     status: 'pending',
     plan_id: planId,
     description: `${plan.name} plan (${billingCycle})`,
@@ -150,13 +151,31 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
     res.status(503).json({ error: 'Webhook secret not configured' });
     return;
   }
-  const hash = crypto.createHmac('sha512', PAYSTACK_WEBHOOK_SECRET).update(JSON.stringify(req.body)).digest('hex');
+
+  // req.body is a Buffer here because app.ts registers express.raw() on this path
+  // before express.json(). Paystack signs the raw request bytes, so we must verify
+  // against the original body, not a re-serialized object.
+  const rawBody: Buffer = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(JSON.stringify(req.body));
+
+  const hash = crypto
+    .createHmac('sha512', PAYSTACK_WEBHOOK_SECRET)
+    .update(rawBody)
+    .digest('hex');
+
   if (hash !== req.headers['x-paystack-signature']) {
     res.sendStatus(400);
     return;
   }
 
-  const event = req.body as { event: string; data: any };
+  let event: { event: string; data: any };
+  try {
+    event = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    res.sendStatus(400);
+    return;
+  }
 
   switch (event.event) {
     case 'charge.success': {
@@ -191,8 +210,9 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
         await supabaseAdmin.from('payments').insert({
           user_id: meta2.userId,
           paystack_reference: event.data.transaction?.reference ?? `failed_${Date.now()}`,
+          // event.data.amount is in kobo; divide by 100 → NGN (major units)
           amount: (event.data.amount ?? 0) / 100,
-          currency: event.data.currency ?? 'USD',
+          currency: 'NGN',
           status: 'failed',
           description: 'Subscription renewal failed',
           metadata: event.data,
