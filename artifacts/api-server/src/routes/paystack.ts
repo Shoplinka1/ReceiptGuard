@@ -60,9 +60,13 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).single();
   if (!plan || planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
 
-  const amountKobo = billingCycle === 'yearly'
-    ? Math.round(Number(plan.price_yearly) * 100)
-    : Math.round(Number(plan.price_monthly) * 100);
+  // Convert USD to NGN for Paystack (Nigerian accounts require NGN)
+  // Rate: approximate mid-market rate; update periodically for accuracy.
+  const USD_TO_NGN = 1600;
+  const usdPrice = billingCycle === 'yearly'
+    ? Number(plan.price_yearly)
+    : Number(plan.price_monthly);
+  const amountKobo = Math.round(usdPrice * USD_TO_NGN * 100); // NGN kobo
 
   const reference = `rg_${req.userId.slice(0, 8)}_${Date.now()}`;
   const callbackUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/billing?ref=${reference}`;
@@ -72,7 +76,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     body: JSON.stringify({
       email: profile.email,
       amount: amountKobo,
-      currency: 'USD',
+      currency: 'NGN',
       reference,
       callback_url: callbackUrl,
       metadata: {

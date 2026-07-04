@@ -1,0 +1,388 @@
+ReceiptGuard — Continue Development and Convert to a Fully Functional Production SaaS
+
+This project has been imported into a new Replit from GitHub because my previous Replit reached its monthly limit.
+
+Treat this as a continuation of the existing project, not a new project.
+
+I have already re-added my project Secrets (Supabase, Paystack, etc.) in this new Replit.
+
+Before making any changes, verify that the environment variables are actually being detected by the application.
+
+If any required environment variable is missing or not being detected, tell me the exact variable name instead of assuming it isn’t configured.
+
+Do not replace or remove existing functionality unless necessary to make it production-ready.
+
+⸻
+
+Current Problems
+
+The application is still mostly a UI demo.
+
+Problems include:
+	•	Fake login flow
+	•	Fake dashboard data
+	•	Placeholder receipts
+	•	Placeholder subscriptions
+	•	Broken buttons
+	•	Broken navigation
+	•	Pages that do nothing
+	•	No real Gmail connection
+	•	No receipt scanning
+	•	No real dashboard
+	•	No upgrade flow
+	•	No yearly pricing
+	•	No admin dashboard
+	•	No feedback system
+
+The UI is already good enough.
+
+Do NOT spend time redesigning the interface.
+
+Focus entirely on making the application fully functional.
+
+⸻
+
+1. Authentication
+
+Configure Supabase Authentication correctly.
+
+Requirements:
+	•	Google OAuth performs a real Google sign-in.
+	•	Email/password authentication works.
+	•	Email verification works.
+	•	Password reset works.
+	•	Sessions persist after refresh.
+	•	Users stay logged in.
+	•	Remove every fake authentication flow.
+
+⸻
+
+2. Gmail Connection
+
+After login:
+
+If Gmail is NOT connected:
+
+Do NOT show the dashboard.
+
+Automatically redirect users to the Connect Gmail page.
+
+Explain clearly:
+	•	Why Gmail permission is required.
+	•	ReceiptGuard only scans purchase-related emails.
+	•	Gmail Read-Only permission is used.
+	•	Personal conversations are never scanned.
+	•	User data is never sold.
+	•	Only metadata required by ReceiptGuard is stored.
+
+When users click Connect Gmail:
+
+Use the real Google OAuth Gmail flow.
+
+Request Gmail Read-Only scope only.
+
+Store OAuth tokens securely on the server.
+
+Never expose tokens to the browser.
+
+⸻
+
+3. Gmail Scanner
+
+Implement a real Gmail scanner.
+
+Only scan purchase-related emails.
+
+Detect:
+	•	Receipts
+	•	Orders
+	•	Invoices
+	•	Payment confirmations
+	•	Subscription emails
+	•	Subscription renewals
+	•	Trial expiration emails
+	•	Warranty confirmations
+	•	Shipping confirmations
+
+Never scan personal conversations.
+
+⸻
+
+4. Receipt Parser
+
+Extract real information including:
+	•	Merchant
+	•	Amount
+	•	Currency
+	•	Purchase Date
+	•	Order ID
+	•	Invoice Number
+	•	Category
+	•	Payment Method (when available)
+	•	Warranty information
+	•	Renewal dates
+
+Save everything into Supabase PostgreSQL.
+
+⸻
+
+5. Database
+
+If supabase/schema.sql does not exist:
+
+Create it.
+
+If it already exists:
+
+Tell me its exact location.
+
+Generate the complete production database schema.
+
+Required tables:
+	•	users
+	•	profiles
+	•	email_accounts
+	•	receipts
+	•	subscriptions
+	•	renewals
+	•	warranties
+	•	reminders
+	•	plans
+	•	payments
+	•	subscriptions_billing
+	•	notifications
+	•	settings
+	•	activity_logs
+	•	feedback
+	•	support_messages
+
+After generating it, tell me exactly what to paste into the Supabase SQL Editor.
+
+⸻
+
+6. Dashboard
+
+Remove every hardcoded demo card.
+
+Remove fake charts.
+
+Remove fake receipts.
+
+Remove fake subscriptions.
+
+Everything must load only from Supabase.
+
+Dashboard cards:
+	•	Monthly Spending
+	•	Estimated Money Saved
+	•	Upcoming Renewals
+	•	Active Subscriptions
+	•	Total Receipts
+
+Dashboard sections:
+	•	Monthly Spending Chart
+	•	Top Merchants
+	•	Recent Purchases
+	•	Upcoming Renewals Timeline
+	•	Subscription Breakdown
+	•	Warranty Expirations
+	•	Recent Activity
+
+Quick Actions:
+	•	Connect Gmail
+	•	Scan Inbox Again
+	•	Export Receipts
+	•	Manage Reminders
+	•	Upgrade to Pro
+
+⸻
+
+7. Empty States
+
+For new users show beautiful onboarding.
+
+Never show fake content.
+
+Examples:
+
+“No receipts found.”
+
+“Connect Gmail to begin scanning.”
+
+“No subscriptions detected.”
+
+“No renewals yet.”
+
+⸻
+
+8. Navigation
+
+Every page must work.
+
+Fix every broken route.
+
+Fix every broken sidebar link.
+
+Every button must perform a real action.
+
+⸻
+
+9. Pricing & Billing
+
+Create a real Pricing page inside the application.
+
+Create a real Billing page.
+
+Support:
+	•	Monthly Plan
+	•	Yearly Plan (with savings badge)
+
+Frontend:
+
+Display prices only in USD ($).
+
+Backend:
+
+Automatically convert USD to NGN before creating the Paystack transaction.
+
+Never show NGN to users.
+
+Only Paystack should receive NGN.
+
+Prepare the billing architecture for future Stripe support as well.
+
+⸻
+
+10. Paystack
+
+I have already added my Paystack secrets.
+
+Verify they are actually detected.
+
+Do NOT assume they are missing.
+
+If any Paystack environment variable is missing, tell me exactly which one.
+
+Prepare:
+	•	Subscription checkout
+	•	Billing history
+	•	Payment records
+	•	Webhook verification
+	•	Subscription status
+	•	Invoice history
+
+If PAYSTACK_WEBHOOK_SECRET is still missing, tell me exactly where to obtain it from Paystack.
+
+⸻
+
+11. Admin Dashboard
+
+Create a secure internal admin panel.
+
+Only admins can access it.
+
+Include:
+	•	Total Users
+	•	Active Users
+	•	Free Users
+	•	Pro Users
+	•	Revenue
+	•	Monthly Recurring Revenue
+	•	Failed Payments
+	•	Recent Signups
+	•	Recent Upgrades
+	•	User Search
+	•	User Profiles
+	•	Subscription Status
+	•	Feedback Inbox
+	•	Support Messages
+	•	Basic Analytics
+
+⸻
+
+12. Feedback System
+
+Create a Feedback page.
+
+Users should be able to:
+	•	Report Bugs
+	•	Request Features
+	•	Contact Support
+
+Store everything in Supabase.
+
+Admins can manage all submissions.
+
+⸻
+
+13. Background Jobs
+
+Implement:
+	•	Manual Scan
+	•	Automatic Scan
+	•	Scheduled Gmail rescans
+
+Prevent duplicate receipt imports.
+
+⸻
+
+14. Environment Variables
+
+Verify every required environment variable.
+
+Required variables:
+	•	NEXT_PUBLIC_SUPABASE_URL
+	•	NEXT_PUBLIC_SUPABASE_ANON_KEY
+	•	SUPABASE_SERVICE_ROLE_KEY
+	•	GOOGLE_CLIENT_ID
+	•	GOOGLE_CLIENT_SECRET
+	•	GMAIL_REDIRECT_URI
+	•	ENCRYPTION_KEY
+	•	PAYSTACK_PUBLIC_KEY
+	•	PAYSTACK_SECRET_KEY
+	•	PAYSTACK_WEBHOOK_SECRET
+	•	FRONTEND_URL
+
+If ENCRYPTION_KEY is missing:
+
+Generate a secure 32-byte key and tell me exactly what value I should add.
+
+⸻
+
+15. Deployment
+
+Prepare the project for both:
+	•	Replit deployment
+	•	Vercel deployment
+
+Generate:
+	•	vercel.json
+	•	.env.example
+
+Never hardcode URLs.
+
+Use FRONTEND_URL throughout the application.
+
+⸻
+
+16. Production Quality Checklist
+
+Before considering this project complete, ensure:
+	•	No fake data remains.
+	•	No placeholder content remains.
+	•	No broken buttons remain.
+	•	No broken navigation remains.
+	•	Authentication is fully functional.
+	•	Gmail OAuth works.
+	•	Gmail scanning works.
+	•	Receipt parsing works.
+	•	Dashboard loads only real database data.
+	•	Billing works.
+	•	Paystack works.
+	•	Pricing page works.
+	•	Billing page works.
+	•	Admin dashboard works.
+	•	Feedback system works.
+	•	The application is production-ready and deployable.
+
+If any external configuration is still required (Google Cloud OAuth, Supabase SQL, Paystack webhook, etc.), stop and tell me exactly what I need to configure instead of leaving placeholder functionality in the application.

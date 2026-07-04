@@ -50,11 +50,173 @@ function decrypt(encryptedText: string): string {
   return decrypted.toString('utf8');
 }
 
+// ─── Token refresh helper ────────────────────────────────────────────────────
+
+async function getValidAccessToken(account: any): Promise<string> {
+  const expiry = account.token_expiry ? new Date(account.token_expiry) : new Date(0);
+  if (expiry > new Date(Date.now() + 5 * 60 * 1000) && account.access_token_enc) {
+    return decrypt(account.access_token_enc);
+  }
+  if (!account.refresh_token_enc) throw new Error('No refresh token. User must reconnect Gmail.');
+  const refreshToken = decrypt(account.refresh_token_enc);
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID!, client_secret: GOOGLE_CLIENT_SECRET!,
+      refresh_token: refreshToken, grant_type: 'refresh_token',
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to refresh Gmail token. User must reconnect Gmail.');
+  const tokens = await res.json() as { access_token: string; expires_in: number };
+  await supabaseAdmin.from('email_accounts').update({
+    access_token_enc: encrypt(tokens.access_token),
+    token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq('id', account.id);
+  return tokens.access_token;
+}
+
+// ─── Gmail REST API helper ───────────────────────────────────────────────────
+
+async function gmailFetch(path: string, accessToken: string): Promise<any> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as any;
+    throw new Error(`Gmail API: ${err.error?.message ?? res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Receipt parser ──────────────────────────────────────────────────────────
+
+const MERCHANT_DOMAINS: Record<string, string> = {
+  'amazon.com': 'Amazon', 'amazon.co.uk': 'Amazon UK',
+  'apple.com': 'Apple', 'itunes.com': 'Apple',
+  'google.com': 'Google', 'googleplay.com': 'Google Play',
+  'netflix.com': 'Netflix', 'spotify.com': 'Spotify', 'hulu.com': 'Hulu',
+  'paypal.com': 'PayPal', 'stripe.com': 'Stripe',
+  'uber.com': 'Uber', 'lyft.com': 'Lyft', 'doordash.com': 'DoorDash',
+  'airbnb.com': 'Airbnb', 'booking.com': 'Booking.com', 'expedia.com': 'Expedia',
+  'shopify.com': 'Shopify', 'etsy.com': 'Etsy', 'ebay.com': 'eBay',
+  'walmart.com': 'Walmart', 'target.com': 'Target', 'bestbuy.com': 'Best Buy',
+  'microsoft.com': 'Microsoft', 'xbox.com': 'Xbox',
+  'steam.com': 'Steam', 'epicgames.com': 'Epic Games', 'playstation.com': 'PlayStation',
+  'digitalocean.com': 'DigitalOcean', 'dropbox.com': 'Dropbox',
+  'notion.so': 'Notion', 'slack.com': 'Slack', 'zoom.us': 'Zoom', 'figma.com': 'Figma',
+  'github.com': 'GitHub', 'gitlab.com': 'GitLab',
+  'adobe.com': 'Adobe', 'canva.com': 'Canva',
+  'squarespace.com': 'Squarespace', 'godaddy.com': 'GoDaddy', 'namecheap.com': 'Namecheap',
+  'cloudflare.com': 'Cloudflare',
+};
+const RECEIPT_SUBJECT_PATTERNS = [
+  /receipt/i, /order\s*(confirmation|confirmed)/i, /invoice/i,
+  /payment\s*(confirmation|received|successful)/i, /your\s*purchase/i,
+  /shipping\s*confirmation/i, /your\s*order/i,
+  /subscription\s*(confirmed|renewed|activated)/i, /trial\s*(started|activated|ending)/i,
+  /warranty/i, /bill\s*(statement|due|paid)/i, /charge\s*from/i,
+  /thank.*for.*order/i, /thank.*for.*purchase/i, /transaction\s*confirmed/i,
+];
+const SKIP_PATTERNS = [/unsubscribe/i, /newsletter/i, /weekly\s*digest/i, /daily\s*digest/i];
+
+function extractEmailDomain(from: string): string {
+  const m = from.match(/@([^>@\s]+)/);
+  if (!m) return '';
+  return m[1].toLowerCase().replace(/^(mail|email|mg|noreply|no-reply)\./i, '');
+}
+function getMerchantName(domain: string): string {
+  if (MERCHANT_DOMAINS[domain]) return MERCHANT_DOMAINS[domain];
+  for (const [k, v] of Object.entries(MERCHANT_DOMAINS)) {
+    if (domain.endsWith(`.${k}`) || domain === k) return v;
+  }
+  const parts = domain.split('.');
+  const main = parts.length >= 2 ? parts[parts.length - 2] : domain;
+  return main.charAt(0).toUpperCase() + main.slice(1);
+}
+function extractAmount(text: string): { amount: number | null; currency: string } {
+  const pats = [
+    /(?:total|amount|charged|paid|price|subtotal)[^\d$£€₦]*[$£€₦]?\s*([\d,]+\.?\d{0,2})/i,
+    /[$£€₦]\s*([\d,]+\.?\d{0,2})/,
+    /([\d,]+\.?\d{2})\s*(?:USD|GBP|EUR|NGN|CAD|AUD)/i,
+  ];
+  const syms: Record<string, string> = { '$': 'USD', '£': 'GBP', '€': 'EUR', '₦': 'NGN' };
+  for (const pat of pats) {
+    const m = text.match(pat);
+    if (m) {
+      const amount = parseFloat(m[1].replace(/,/g, ''));
+      if (!isNaN(amount) && amount > 0 && amount < 100000) {
+        const sm = text.match(/[$£€₦]|(USD|GBP|EUR|NGN|CAD|AUD)/i);
+        return { amount, currency: sm ? (syms[sm[0]] ?? sm[0].toUpperCase()) : 'USD' };
+      }
+    }
+  }
+  return { amount: null, currency: 'USD' };
+}
+function categorize(s: string, f: string, b: string): string {
+  const t = `${s} ${f} ${b}`.toLowerCase();
+  if (/netflix|spotify|hulu|disney|youtube.*premium|apple.*tv|prime.*video/.test(t)) return 'streaming';
+  if (/subscription|saas|software|app|plan|pro|premium|license/.test(t)) return 'software';
+  if (/amazon|shopify|etsy|ebay|walmart|target|bestbuy|shop|store/.test(t)) return 'shopping';
+  if (/restaurant|food|doordash|grubhub|uber.*eat|coffee|dining/.test(t)) return 'food';
+  if (/uber|lyft|transit|parking|airline|hotel|airbnb|booking|travel/.test(t)) return 'travel';
+  if (/gym|fitness|health|medical|pharmacy|clinic/.test(t)) return 'health';
+  if (/electricity|water|gas|internet|phone|mobile|utility/.test(t)) return 'utilities';
+  if (/aws|digitalocean|hosting|domain|cloudflare|server/.test(t)) return 'infrastructure';
+  return 'other';
+}
+function decodeB64(str: string): string {
+  return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+}
+function extractBodyText(parts: any[]): string {
+  let text = '';
+  for (const part of parts ?? []) {
+    if (part.mimeType === 'text/plain' && part.body?.data) text += decodeB64(part.body.data);
+    else if (part.mimeType === 'text/html' && part.body?.data)
+      text += decodeB64(part.body.data).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    else if (part.parts) text += extractBodyText(part.parts);
+  }
+  return text;
+}
+function parseMessage(msg: any): {
+  merchantName: string; amount: number | null; currency: string; purchaseDate: string;
+  category: string; invoiceNumber: string | null; orderId: string | null;
+  paymentMethod: string | null; warrantyMonths: number | null; rawSubject: string; rawFrom: string;
+} | null {
+  const headers = msg.payload?.headers ?? [];
+  const h = (n: string) => headers.find((x: any) => x.name.toLowerCase() === n)?.value ?? '';
+  const subject = h('subject'), from = h('from'), date = h('date');
+  if (!RECEIPT_SUBJECT_PATTERNS.some(p => p.test(subject))) return null;
+  if (SKIP_PATTERNS.some(p => p.test(subject))) return null;
+  let body = msg.payload?.body?.data
+    ? decodeB64(msg.payload.body.data).replace(/<[^>]+>/g, ' ')
+    : extractBodyText(msg.payload?.parts ?? []);
+  const combined = `${subject}\n${body}`;
+  const domain = extractEmailDomain(from);
+  const { amount, currency } = extractAmount(combined);
+  const invM = combined.match(/(?:invoice|order|receipt|confirmation|ref(?:erence)?)\s*(?:#|no\.?|num(?:ber)?)?\s*:?\s*([A-Z0-9\-_]{4,30})/i);
+  const ordM = combined.match(/order\s*(?:id|#|no\.?)?\s*:?\s*([A-Z0-9\-_]{6,30})/i);
+  const payM = combined.match(/(?:paid\s*(?:with|via)|payment\s*method)\s*:?\s*([\w\s]{3,30})/i);
+  let purchaseDate = new Date().toISOString().split('T')[0];
+  try { const d = new Date(date); if (!isNaN(d.getTime())) purchaseDate = d.toISOString().split('T')[0]; } catch { /* ok */ }
+  const warYr = combined.match(/(\d+)\s*-?\s*year\s*(?:limited\s*)?warranty/i);
+  const warMo = combined.match(/(\d+)\s*-?\s*month\s*(?:limited\s*)?warranty/i);
+  const warrantyMonths = warYr ? parseInt(warYr[1]) * 12 : warMo ? parseInt(warMo[1]) : null;
+  return {
+    merchantName: getMerchantName(domain), amount, currency, purchaseDate,
+    category: categorize(subject, from, body),
+    invoiceNumber: invM?.[1] ?? null, orderId: ordM?.[1] ?? null,
+    paymentMethod: payM?.[1]?.trim().slice(0, 50) ?? null,
+    warrantyMonths, rawSubject: subject, rawFrom: from,
+  };
+}
+
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> => {
   if (!GOOGLE_CLIENT_ID) {
-    res.status(503).json({ error: 'Google OAuth not configured. Set GOOGLE_CLIENT_ID.' });
+    res.status(503).json({ error: 'Gmail not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your secrets.' });
     return;
   }
 
@@ -86,13 +248,15 @@ router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> =
 router.get('/api/gmail/callback', async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
 
+  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+
   if (error) {
-    res.redirect(`/?error=${encodeURIComponent(error)}`);
+    res.redirect(`${frontendUrl}/connect-gmail?error=${encodeURIComponent(error)}`);
     return;
   }
 
   if (!code || !state) {
-    res.status(400).json({ error: 'Missing code or state' });
+    res.redirect(`${frontendUrl}/connect-gmail?error=missing_params`);
     return;
   }
 
@@ -102,92 +266,80 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
       Buffer.from(state, 'base64url').toString('utf8'),
     ) as { p: string; s: string };
 
-    // Verify HMAC signature to prevent forged state / account-linking CSRF
     const signingKey = process.env.SESSION_SECRET ?? (GOOGLE_CLIENT_SECRET ?? '');
-    const expectedSig = crypto
-      .createHmac('sha256', signingKey)
-      .update(statePayload)
-      .digest('hex');
+    const expectedSig = crypto.createHmac('sha256', signingKey).update(statePayload).digest('hex');
 
-    if (
-      !signature ||
-      expectedSig.length !== signature.length ||
-      !crypto.timingSafeEqual(Buffer.from(expectedSig, 'hex'), Buffer.from(signature, 'hex'))
-    ) {
-      res.status(400).json({ error: 'Invalid state signature' });
+    if (!signature || expectedSig.length !== signature.length ||
+      !crypto.timingSafeEqual(Buffer.from(expectedSig, 'hex'), Buffer.from(signature, 'hex'))) {
+      res.redirect(`${frontendUrl}/connect-gmail?error=invalid_state`);
       return;
     }
 
     ({ userId } = JSON.parse(statePayload) as { userId: string; nonce: string });
   } catch {
-    res.status(400).json({ error: 'Invalid state' });
+    res.redirect(`${frontendUrl}/connect-gmail?error=bad_state`);
     return;
   }
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    res.status(503).json({ error: 'Google OAuth not configured' });
+    res.redirect(`${frontendUrl}/connect-gmail?error=not_configured`);
     return;
   }
 
-  // Exchange authorization code for tokens
+  if (!ENCRYPTION_KEY) {
+    res.redirect(`${frontendUrl}/connect-gmail?error=encryption_not_configured`);
+    return;
+  }
+
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: GOOGLE_REDIRECT_URI,
-      grant_type: 'authorization_code',
+      code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI, grant_type: 'authorization_code',
     }),
   });
 
   if (!tokenRes.ok) {
-    res.status(502).json({ error: 'Failed to exchange code for tokens' });
+    res.redirect(`${frontendUrl}/connect-gmail?error=token_exchange_failed`);
     return;
   }
 
   const tokens = await tokenRes.json() as {
-    access_token: string;
-    refresh_token?: string;
-    expires_in: number;
-    id_token?: string;
+    access_token: string; refresh_token?: string; expires_in: number;
   };
 
-  // Get the user's email via userinfo API
   const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
+  if (!userInfoRes.ok) {
+    res.redirect(`${frontendUrl}/connect-gmail?error=userinfo_failed`);
+    return;
+  }
   const userInfo = await userInfoRes.json() as { email: string };
 
-  // Store encrypted tokens server-side
-  const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   const { error: dbError } = await supabaseAdmin.from('email_accounts').upsert({
-    user_id: userId,
-    email: userInfo.email,
-    provider: 'gmail',
+    user_id: userId, email: userInfo.email, provider: 'gmail',
     access_token_enc: encrypt(tokens.access_token),
     refresh_token_enc: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
-    token_expiry: expiry,
-    scopes: GMAIL_SCOPES.split(' '),
-    is_active: true,
+    token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    scopes: GMAIL_SCOPES.split(' '), is_active: true,
+    updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id,email' });
 
   if (dbError) {
-    res.status(500).json({ error: 'Failed to save Gmail account' });
+    console.error('[Gmail] DB error:', dbError.message);
+    res.redirect(`${frontendUrl}/connect-gmail?error=db_error`);
     return;
   }
 
-  // Log the connection
   await supabaseAdmin.from('activity_logs').insert({
-    user_id: userId,
-    type: 'gmail_connected',
-    description: `Gmail account ${userInfo.email} connected`,
+    user_id: userId, type: 'gmail_connected',
+    description: `Gmail ${userInfo.email} connected`,
     metadata: { email: userInfo.email },
   });
 
-  // Redirect back to app
-  res.redirect('/connect-gmail?status=connected');
+  res.redirect(`${frontendUrl}/connect-gmail?status=connected`);
 });
 
 router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> => {
@@ -202,39 +354,125 @@ router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> =
 });
 
 router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
-  const { accountId } = req.body as { accountId?: string };
+  const { accountId, forceRescan = false } = req.body as { accountId?: string; forceRescan?: boolean };
 
-  // Get the email account with encrypted tokens
-  const query = supabaseAdmin
-    .from('email_accounts')
-    .select('*')
-    .eq('user_id', req.userId)
-    .eq('is_active', true);
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    res.status(503).json({ error: 'Gmail not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your secrets.' });
+    return;
+  }
+  if (!ENCRYPTION_KEY) {
+    res.status(503).json({ error: 'Encryption not configured. Add ENCRYPTION_KEY to your secrets.' });
+    return;
+  }
 
-  if (accountId) query.eq('id', accountId);
+  let query: any = supabaseAdmin
+    .from('email_accounts').select('*').eq('user_id', req.userId).eq('is_active', true);
+  if (accountId) query = query.eq('id', accountId);
+  const { data: account, error: accErr } = await query.limit(1).single();
 
-  const { data: accounts, error } = await query.limit(1).single();
-  if (error || !accounts) {
+  if (accErr || !account) {
     res.status(404).json({ error: 'No connected Gmail account found. Connect Gmail first.' });
     return;
   }
 
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    res.status(503).json({
-      error: 'Gmail scanning not yet configured. Please add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and ENCRYPTION_KEY environment variables.',
+  // Respond immediately — scan runs in background
+  res.json({ status: 'scanning', message: 'Gmail scan started. Receipts will appear shortly.', accountEmail: account.email });
+
+  // Background scan
+  runGmailScan(account, req.userId, forceRescan).catch(err =>
+    console.error('[Gmail Scan] Unhandled error:', err)
+  );
+});
+
+async function runGmailScan(account: any, userId: string, forceRescan: boolean): Promise<void> {
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken(account);
+  } catch (err: any) {
+    await supabaseAdmin.from('activity_logs').insert({
+      user_id: userId, type: 'gmail_scan_failed', description: err.message,
     });
     return;
   }
 
-  // TODO: Refresh token if expired, then call Gmail API to fetch messages,
-  // run AI extraction pipeline, and store results.
-  // This requires ENCRYPTION_KEY to be set.
-  res.json({
-    status: 'pending',
-    message: 'Gmail scan queued. Results will appear in your receipts shortly.',
-    accountEmail: accounts.email,
+  // Existing message IDs to avoid duplicates
+  const { data: existing } = await supabaseAdmin
+    .from('receipts').select('gmail_message_id').eq('user_id', userId).not('gmail_message_id', 'is', null);
+  const alreadyImported = new Set((existing ?? []).map((r: any) => r.gmail_message_id));
+
+  const gmailQueries = [
+    'subject:(receipt OR "order confirmation" OR invoice OR "payment confirmation" OR "order confirmed") -in:spam -in:trash',
+    'subject:("subscription confirmed" OR "subscription renewed" OR "trial started" OR warranty) -in:spam -in:trash',
+    'subject:("shipping confirmation" OR "your shipment" OR "your package") -in:spam -in:trash',
+  ];
+
+  let allIds: string[] = [];
+  for (const q of gmailQueries) {
+    try {
+      const r = await gmailFetch(`/messages?q=${encodeURIComponent(q)}&maxResults=100`, accessToken);
+      allIds.push(...(r.messages ?? []).map((m: any) => m.id));
+    } catch (e: any) { console.warn('[Gmail Scan] Search error:', e.message); }
+  }
+  allIds = [...new Set(allIds)];
+  if (!forceRescan) allIds = allIds.filter(id => !alreadyImported.has(id));
+
+  let importedCount = 0, skippedCount = 0, failedCount = 0;
+
+  for (let i = 0; i < allIds.length; i += 10) {
+    await Promise.all(allIds.slice(i, i + 10).map(async (msgId) => {
+      try {
+        const msg = await gmailFetch(`/messages/${msgId}?format=full`, accessToken);
+        const parsed = parseMessage(msg);
+        if (!parsed || !parsed.amount) { skippedCount++; return; }
+
+        const warrantyEnd = parsed.warrantyMonths
+          ? (() => { const d = new Date(parsed.purchaseDate); d.setMonth(d.getMonth() + parsed.warrantyMonths!); return d.toISOString().split('T')[0]; })()
+          : null;
+
+        const { error: e } = await supabaseAdmin.from('receipts').upsert({
+          user_id: userId, email_account_id: account.id, gmail_message_id: msgId,
+          merchant_name: parsed.merchantName, amount: parsed.amount, currency: parsed.currency,
+          purchase_date: parsed.purchaseDate, category: parsed.category, status: 'confirmed',
+          invoice_number: parsed.invoiceNumber, order_id: parsed.orderId,
+          payment_method: parsed.paymentMethod, warranty_months: parsed.warrantyMonths,
+          warranty_end_date: warrantyEnd, raw_email_subject: parsed.rawSubject, raw_email_from: parsed.rawFrom,
+        }, { onConflict: 'user_id,gmail_message_id', ignoreDuplicates: true });
+
+        if (e) { failedCount++; return; }
+        importedCount++;
+
+        // Auto-detect subscription
+        if (/subscription|recurring|monthly|annual|yearly|auto-renew/i.test(`${parsed.rawSubject}${parsed.rawFrom}`)) {
+          await supabaseAdmin.from('subscriptions').upsert({
+            user_id: userId, name: parsed.merchantName, merchant_name: parsed.merchantName,
+            monthly_price: parsed.amount, currency: parsed.currency,
+            billing_cycle: /annual|yearly/i.test(parsed.rawSubject) ? 'yearly' : 'monthly',
+            category: parsed.category, status: 'active',
+          }, { onConflict: 'user_id,name', ignoreDuplicates: true });
+        }
+
+        // Auto-create warranty record
+        if (parsed.warrantyMonths && warrantyEnd) {
+          await supabaseAdmin.from('warranties').upsert({
+            user_id: userId, product_name: parsed.merchantName, merchant_name: parsed.merchantName,
+            purchase_date: parsed.purchaseDate, warranty_end_date: warrantyEnd,
+            warranty_months: parsed.warrantyMonths,
+            status: new Date(warrantyEnd) > new Date() ? 'active' : 'expired',
+          }, { onConflict: 'user_id,product_name', ignoreDuplicates: true });
+        }
+      } catch (e: any) { console.warn('[Gmail Scan] Message error:', e.message); failedCount++; }
+    }));
+    if (i + 10 < allIds.length) await new Promise(r => setTimeout(r, 200));
+  }
+
+  await supabaseAdmin.from('email_accounts').update({ last_scanned_at: new Date().toISOString() }).eq('id', account.id);
+  await supabaseAdmin.from('activity_logs').insert({
+    user_id: userId, type: 'gmail_scan_complete',
+    description: `Scan complete: ${importedCount} receipts imported, ${skippedCount} skipped`,
+    metadata: { importedCount, skippedCount, failedCount, total: allIds.length },
   });
-});
+  console.log(`[Gmail Scan] ${account.email}: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed`);
+}
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {
   const { id } = req.params;
