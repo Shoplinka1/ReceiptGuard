@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
 import { useGetUserSettings, useUpdateUserSettings } from '@workspace/api-client-react'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/hooks/use-auth'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, CheckCircle2 } from 'lucide-react'
+import { Loader2, CheckCircle2, Trash2, Mail, AlertTriangle, RefreshCw } from 'lucide-react'
+import { useLocation } from 'wouter'
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 
@@ -29,10 +31,13 @@ async function apiFetch(path: string, opts?: RequestInit) {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? `HTTP ${res.status}`)
+    throw new Error((body as any)?.error ?? `HTTP ${res.status}`)
   }
+  if (res.status === 204) return null
   return res.json()
 }
+
+// ─── Feedback ───────────────────────────────────────────────────────────────
 
 type FeedbackType = 'feedback' | 'feature_request' | 'bug_report' | 'support'
 
@@ -64,13 +69,17 @@ const feedbackTypes: { value: FeedbackType; label: string; description: string; 
 ]
 
 function FeedbackForm({ type }: { type: FeedbackType }) {
+  const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
   const cfg = feedbackTypes.find(t => t.value === type)!
 
   const submit = useMutation({
-    mutationFn: () => apiFetch('/api/feedback', { method: 'POST', body: JSON.stringify({ type, message }) }),
-    onSuccess: () => { setSent(true); setMessage('') },
+    mutationFn: () => apiFetch('/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ type, subject: subject.trim() || cfg.label, body: message.trim() }),
+    }),
+    onSuccess: () => { setSent(true); setSubject(''); setMessage('') },
     onError: (e: Error) => toast.error(e.message),
   })
 
@@ -89,15 +98,28 @@ function FeedbackForm({ type }: { type: FeedbackType }) {
 
   return (
     <form onSubmit={e => { e.preventDefault(); if (message.trim()) submit.mutate() }} className="space-y-4">
-      <Textarea
-        placeholder={cfg.placeholder}
-        value={message}
-        onChange={e => setMessage(e.target.value)}
-        rows={6}
-        required
-        className="resize-none"
-        disabled={submit.isPending}
-      />
+      <div>
+        <label className="text-sm font-medium mb-1.5 block">Subject <span className="text-muted-foreground font-normal">(optional)</span></label>
+        <Input
+          placeholder={cfg.label}
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          maxLength={120}
+          disabled={submit.isPending}
+        />
+      </div>
+      <div>
+        <label className="text-sm font-medium mb-1.5 block">Message</label>
+        <Textarea
+          placeholder={cfg.placeholder}
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          rows={6}
+          required
+          className="resize-none"
+          disabled={submit.isPending}
+        />
+      </div>
       <Button type="submit" disabled={submit.isPending || !message.trim()}>
         {submit.isPending
           ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
@@ -107,15 +129,143 @@ function FeedbackForm({ type }: { type: FeedbackType }) {
   )
 }
 
+// ─── Gmail Accounts Tab ──────────────────────────────────────────────────────
+
+function GmailAccountsTab() {
+  const qc = useQueryClient()
+
+  const { data: accounts, isLoading, refetch } = useQuery({
+    queryKey: ['gmail-accounts'],
+    queryFn: () => apiFetch('/api/gmail/accounts'),
+    retry: false,
+  })
+
+  const connectMutation = useMutation({
+    mutationFn: () => apiFetch('/api/gmail/auth-url'),
+    onSuccess: (data: any) => {
+      if (data?.url) window.location.href = data.url
+    },
+    onError: (e: any) => {
+      if (e.message?.includes('limit')) {
+        toast.error('Free plan allows 1 Gmail account. Upgrade to Pro for unlimited.')
+      } else {
+        toast.error(e.message)
+      }
+    },
+  })
+
+  const disconnectMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/gmail/accounts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Gmail account disconnected')
+      qc.invalidateQueries({ queryKey: ['gmail-accounts'] })
+      qc.invalidateQueries({ queryKey: ['user-profile'] })
+      refetch()
+    },
+    onError: (e: any) => toast.error(e.message),
+  })
+
+  const scanMutation = useMutation({
+    mutationFn: (id: string) => apiFetch('/api/gmail/scan', { method: 'POST', body: JSON.stringify({ accountId: id }) }),
+    onSuccess: (data: any) => {
+      toast.success(`Scan complete: ${data?.receiptsFound ?? 0} new receipts found`)
+      qc.invalidateQueries({ queryKey: ['receipts'] })
+    },
+    onError: (e: any) => toast.error(e.message),
+  })
+
+  return (
+    <div className="mt-6 space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected Gmail Accounts</CardTitle>
+          <CardDescription>
+            ReceiptGuard scans connected accounts for receipts, invoices, and subscription confirmations.
+            Read-only access only — we never modify your email.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading accounts…
+            </div>
+          ) : (accounts as any[])?.length === 0 || !accounts ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Mail className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-medium">No Gmail accounts connected</p>
+              <p className="text-xs mt-1">Connect your Gmail to start scanning for receipts automatically.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {(accounts as any[]).map((acc: any) => (
+                <div key={acc.id} className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{acc.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last scanned: {acc.lastSyncAt ? new Date(acc.lastSyncAt).toLocaleDateString() : 'Never'}
+                      </p>
+                    </div>
+                    {acc.isActive && <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/30 bg-emerald-500/5">Active</Badge>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => scanMutation.mutate(acc.id)}
+                      disabled={scanMutation.isPending}
+                    >
+                      {scanMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      <span className="ml-1.5 hidden sm:inline">Scan now</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => disconnectMutation.mutate(acc.id)}
+                      disabled={disconnectMutation.isPending}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="ml-1.5 hidden sm:inline">Disconnect</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button
+            onClick={() => connectMutation.mutate()}
+            disabled={connectMutation.isPending}
+            className="mt-2"
+          >
+            {connectMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connecting…</> : '+ Connect Gmail Account'}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Main Settings Page ──────────────────────────────────────────────────────
+
 export default function SettingsPage() {
   const { data: settings } = useGetUserSettings()
   const updateSettings = useUpdateUserSettings()
   const { theme, setTheme } = useTheme()
-  const { updatePassword } = useAuth()
+  const { updatePassword, signOut } = useAuth()
+  const [, setLocation] = useLocation()
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+
+  // Delete account state
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme)
@@ -139,6 +289,16 @@ export default function SettingsPage() {
     }
   }
 
+  const deleteAccount = useMutation({
+    mutationFn: () => apiFetch('/api/user/account', { method: 'DELETE' }),
+    onSuccess: async () => {
+      toast.success('Account deleted. Goodbye!')
+      await signOut()
+      setLocation('/')
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Failed to delete account'),
+  })
+
   return (
     <AppShell>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -150,6 +310,7 @@ export default function SettingsPage() {
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="flex w-full overflow-x-auto lg:w-auto">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="gmail">Gmail</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>
@@ -161,7 +322,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Regional Preferences</CardTitle>
-                <CardDescription>Set your default currency and timezone.</CardDescription>
+                <CardDescription>Set your default currency, timezone, and language.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
@@ -176,6 +337,7 @@ export default function SettingsPage() {
                     <option value="GBP">GBP (£)</option>
                     <option value="NGN">NGN (₦)</option>
                     <option value="CAD">CAD (C$)</option>
+                    <option value="AUD">AUD (A$)</option>
                   </select>
                 </div>
                 <div className="grid gap-2">
@@ -191,6 +353,26 @@ export default function SettingsPage() {
                     <option value="America/Chicago">Central Time (CT)</option>
                     <option value="America/Los_Angeles">Pacific Time (PT)</option>
                     <option value="Europe/London">London (GMT)</option>
+                    <option value="Europe/Paris">Central European Time (CET)</option>
+                    <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
+                    <option value="Australia/Sydney">Australian Eastern Time (AEST)</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Language</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={(settings as any)?.language || 'en'}
+                    onChange={e => updateSettings.mutate({ data: { language: e.target.value } as any })}
+                  >
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                    <option value="pt">Português</option>
+                    <option value="yo">Yorùbá</option>
+                    <option value="ig">Igbo</option>
+                    <option value="ha">Hausa</option>
                   </select>
                 </div>
               </CardContent>
@@ -224,6 +406,11 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* GMAIL ACCOUNTS */}
+          <TabsContent value="gmail">
+            <GmailAccountsTab />
           </TabsContent>
 
           {/* APPEARANCE */}
@@ -309,14 +496,50 @@ export default function SettingsPage() {
                 <CardTitle className="text-destructive">Danger Zone</CardTitle>
                 <CardDescription>These actions are permanent and cannot be undone.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  disabled
-                >
-                  Delete Account
-                </Button>
+              <CardContent className="space-y-4">
+                {!showDeleteConfirm ? (
+                  <Button
+                    variant="outline"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+                  </Button>
+                ) : (
+                  <div className="space-y-4 p-4 bg-destructive/5 border border-destructive/20 rounded-lg max-w-sm">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-destructive">Delete your account?</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This permanently deletes all your receipts, subscriptions, warranties, and account data. This action <strong>cannot</strong> be undone.
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium mb-1.5 block">Type <strong>DELETE</strong> to confirm</label>
+                      <Input
+                        placeholder="DELETE"
+                        value={deleteConfirm}
+                        onChange={e => setDeleteConfirm(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={deleteConfirm !== 'DELETE' || deleteAccount.isPending}
+                        onClick={() => deleteAccount.mutate()}
+                      >
+                        {deleteAccount.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Deleting…</> : 'Delete my account'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirm('') }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

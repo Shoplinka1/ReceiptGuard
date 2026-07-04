@@ -184,10 +184,39 @@ async function runReminderCheck(): Promise<void> {
   }
 }
 
+async function runExpiryDowngrade(): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    // Find active user_subscriptions that have passed their period end
+    const { data: expired, error } = await supabaseAdmin
+      .from('user_subscriptions')
+      .select('id, user_id')
+      .eq('status', 'active')
+      .lte('current_period_end', now);
+
+    if (error) { logger.error({ error }, '[reminders] Expiry check failed'); return; }
+    if (!expired || expired.length === 0) return;
+
+    logger.info({ count: expired.length }, '[reminders] Downgrading expired subscriptions');
+    for (const sub of expired) {
+      await supabaseAdmin.from('user_subscriptions').update({ status: 'expired' }).eq('id', sub.id);
+      await supabaseAdmin.from('profiles').update({ plan_id: 'free' }).eq('id', sub.user_id);
+      await supabaseAdmin.from('activity_logs').insert({
+        user_id: sub.user_id, type: 'plan_downgraded',
+        description: 'Subscription expired — downgraded to Free plan automatically.',
+      });
+      logger.info({ userId: sub.user_id }, '[reminders] Downgraded to free on expiry');
+    }
+  } catch (err) {
+    logger.error({ err }, '[reminders] Expiry downgrade error');
+  }
+}
+
 export function startReminderScheduler(): void {
   logger.info('[reminders] Reminder scheduler started — checking every hour');
 
   // Run immediately on startup, then every hour
   runReminderCheck();
-  setInterval(runReminderCheck, INTERVAL_MS);
+  runExpiryDowngrade();
+  setInterval(() => { runReminderCheck(); runExpiryDowngrade(); }, INTERVAL_MS);
 }

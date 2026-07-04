@@ -220,6 +220,16 @@ router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> =
     return;
   }
 
+  // Free plan: max 1 Gmail account
+  const { data: userPlan } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
+  if (userPlan?.plan_id !== 'pro') {
+    const { count } = await supabaseAdmin.from('email_accounts').select('*', { count: 'exact', head: true }).eq('user_id', req.userId).eq('is_active', true);
+    if ((count ?? 0) >= 1) {
+      res.status(403).json({ error: 'Free plan allows 1 Gmail account. Upgrade to Pro for unlimited.', limitReached: true, limit: 1 });
+      return;
+    }
+  }
+
   // Build a signed state parameter to prevent OAuth CSRF / account-linking attacks.
   // We sign the payload with SESSION_SECRET (or GOOGLE_CLIENT_SECRET as fallback)
   // so a forged state cannot be crafted without the server secret.

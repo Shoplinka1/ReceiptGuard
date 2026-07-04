@@ -107,10 +107,15 @@ export default function LoginPage() {
           </div>
         </CardContent>
 
-        <CardFooter className="justify-center border-t border-border/50 pt-6">
+        <CardFooter className="flex flex-col gap-3 border-t border-border/50 pt-6">
           <p className="text-sm text-muted-foreground">
             Don't have an account?{' '}
             <Link href="/signup" className="text-primary hover:underline font-medium">Sign up</Link>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
+            {' · '}
+            <Link href="/terms" className="hover:underline">Terms of Service</Link>
           </p>
         </CardFooter>
       </Card>

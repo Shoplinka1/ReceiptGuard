@@ -11,15 +11,20 @@ import {
   LogOut,
   CreditCard,
   User as UserIcon,
-  MessageSquare
+  MessageSquare,
+  Search,
+  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/use-auth"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
+  const { signOut } = useAuth()
   
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Search", href: "/search", icon: Search },
     { name: "Receipts", href: "/receipts", icon: Receipt },
     { name: "Subscriptions", href: "/subscriptions", icon: Repeat },
     { name: "Renewals", href: "/renewals", icon: CalendarDays },
@@ -28,6 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   
   const bottomItems = [
     { name: "Reminders", href: "/reminders", icon: Bell },
+    { name: "Support", href: "/support", icon: HelpCircle },
     { name: "Feedback", href: "/feedback", icon: MessageSquare },
     { name: "Profile", href: "/profile", icon: UserIcon },
     { name: "Settings", href: "/settings", icon: Settings },
@@ -88,12 +94,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               )
             })}
-            <Link href="/">
-              <div className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4">
-                <LogOut className="w-4 h-4 opacity-70" />
-                Sign Out
-              </div>
-            </Link>
+            <button
+              onClick={() => signOut()}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4"
+            >
+              <LogOut className="w-4 h-4 opacity-70" />
+              Sign Out
+            </button>
           </nav>
         </div>
       </aside>

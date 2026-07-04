@@ -45,6 +45,16 @@ router.post('/api/receipts', requireAuth, async (req, res): Promise<void> => {
   const { merchantName, merchantLogoUrl, amount, currency, purchaseDate, category, invoiceNumber, notes } = req.body;
   if (!merchantName || !amount || !purchaseDate || !category) { res.status(400).json({ error: 'merchantName, amount, purchaseDate, and category are required' }); return; }
 
+  // Free plan: max 50 receipts
+  const { data: profile } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
+  if (profile?.plan_id !== 'pro') {
+    const { count } = await supabaseAdmin.from('receipts').select('*', { count: 'exact', head: true }).eq('user_id', req.userId);
+    if ((count ?? 0) >= 50) {
+      res.status(403).json({ error: 'Free plan limit reached (50 receipts). Upgrade to Pro for unlimited.', limitReached: true, limit: 50 });
+      return;
+    }
+  }
+
   const { data, error } = await supabaseAdmin.from('receipts').insert({
     user_id: req.userId, merchant_name: merchantName, merchant_logo_url: merchantLogoUrl ?? null,
     amount, currency: currency ?? 'USD', purchase_date: purchaseDate, category, status: 'manual',

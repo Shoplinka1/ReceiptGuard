@@ -14,6 +14,9 @@ import ForgotPasswordPage from './pages/forgot-password';
 import ResetPasswordPage from './pages/reset-password';
 import AuthCallbackPage from './pages/auth-callback';
 import NotFound from './pages/not-found';
+import PricingPage from './pages/pricing';
+import PrivacyPage from './pages/privacy';
+import TermsPage from './pages/terms';
 
 // Protected pages (lazy-loaded)
 const DashboardPage = lazy(() => import('./pages/dashboard'));
@@ -28,6 +31,8 @@ const ProfilePage = lazy(() => import('./pages/profile'));
 const ConnectGmailPage = lazy(() => import('./pages/connect-gmail'));
 const AdminPage = lazy(() => import('./pages/admin'));
 const FeedbackPage = lazy(() => import('./pages/feedback'));
+const SearchPage = lazy(() => import('./pages/search'));
+const SupportPage = lazy(() => import('./pages/support'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +63,9 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/auth/callback" component={AuthCallbackPage} />
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/privacy" component={PrivacyPage} />
+        <Route path="/terms" component={TermsPage} />
 
         {/* Protected */}
         <Route path="/dashboard">
@@ -95,6 +103,12 @@ function Router() {
         </Route>
         <Route path="/feedback">
           {() => <ProtectedRoute component={FeedbackPage} />}
+        </Route>
+        <Route path="/search">
+          {() => <ProtectedRoute component={SearchPage} />}
+        </Route>
+        <Route path="/support">
+          {() => <ProtectedRoute component={SupportPage} />}
         </Route>
 
         <Route component={NotFound} />

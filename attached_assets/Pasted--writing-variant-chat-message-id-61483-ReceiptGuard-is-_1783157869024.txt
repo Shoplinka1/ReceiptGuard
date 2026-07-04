@@ -1,0 +1,148 @@
+:::writing{variant=“chat_message” id=“61483”}
+ReceiptGuard is very close to being production-ready, but there are still several critical features missing or incomplete. Please prioritize functionality over UI polish.
+
+1. Google OAuth Verification Readiness
+
+Prepare ReceiptGuard for Google OAuth verification and public release.
+	•	Verify the Google OAuth implementation follows Google’s OAuth 2.0 policies.
+	•	Ensure only the minimum Gmail scope is requested (https://www.googleapis.com/auth/gmail.readonly).
+	•	Verify the OAuth consent screen configuration is correct.
+	•	Ensure Privacy Policy and Terms of Service links are present wherever Google requires them.
+	•	Clearly explain to users why Gmail access is requested, exactly what data is accessed, and confirm that only purchase-related emails are scanned.
+	•	Confirm personal conversations are never scanned.
+	•	Store OAuth tokens securely server-side only.
+	•	Review the implementation against Google’s Gmail API verification requirements and tell me exactly what is still missing before I submit for Google verification.
+	•	Do not attempt to bypass Google’s verification process.
+
+2. Pricing & Billing
+
+The application currently has no usable Pricing or Billing experience.
+
+Please build a complete pricing system.
+
+Create:
+	•	Pricing page
+	•	Billing page
+	•	Upgrade page
+
+Support:
+	•	Monthly Pro
+	•	Yearly Pro (with visible savings badge)
+
+Users must be able to:
+	•	Upgrade
+	•	Downgrade
+	•	Cancel subscriptions
+	•	View invoices
+	•	View payment history
+	•	View current plan
+	•	View renewal date
+	•	View subscription status
+
+3. Paystack
+
+I have already added all my Paystack keys to Replit Secrets.
+
+Please verify they are actually detected.
+
+If any environment variable is missing, tell me the exact variable name.
+
+Implement a complete Paystack integration:
+	•	Checkout
+	•	Subscription creation
+	•	Webhook verification
+	•	Payment verification
+	•	Billing records
+	•	Invoice history
+	•	Subscription renewal handling
+	•	Failed payment handling
+
+Display prices in USD ($) throughout the application.
+
+When a user starts checkout, automatically convert the USD amount to the equivalent Nigerian Naira (NGN) on the backend before creating the Paystack transaction. Users should only ever see USD; Paystack should only receive NGN.
+
+When a payment succeeds:
+	•	Upgrade the user’s account to Pro immediately.
+	•	Store the payment in the database.
+	•	Create billing history.
+	•	Set the subscription expiry date.
+
+If the subscription expires, is cancelled, or renewal fails:
+	•	Automatically downgrade the user back to the Free plan.
+	•	Update all feature access accordingly.
+	•	Never leave users permanently on Pro.
+
+4. Plans
+
+The application should fully enforce plan limits.
+
+Free
+	•	1 Gmail account
+	•	50 receipts
+	•	5 active subscriptions
+	•	Basic search
+	•	Basic reminders
+
+Pro Monthly
+
+Unlimited access.
+
+Pro Yearly
+
+Unlimited access with yearly billing discount.
+
+Restrict premium features for Free users and display upgrade prompts where appropriate.
+
+5. Navigation
+
+Several pages are missing or inaccessible.
+
+Ensure every sidebar item works.
+
+Create and connect:
+	•	Dashboard
+	•	Receipts
+	•	Subscriptions
+	•	Renewal Calendar
+	•	Warranty Tracker
+	•	Search
+	•	Pricing
+	•	Billing
+	•	Settings
+	•	Feedback
+	•	Support
+	•	User Profile
+
+No broken routes or placeholder pages should remain.
+
+6. Settings
+
+Complete the Settings page with working sections:
+	•	Profile
+	•	Notifications
+	•	Connected Gmail Accounts
+	•	Security
+	•	Appearance
+	•	Language
+	•	Timezone
+	•	Currency
+	•	Delete Account
+
+7. Production Review
+
+Before marking this task complete, verify:
+	•	No demo data remains.
+	•	No placeholder data remains.
+	•	All buttons work.
+	•	All navigation works.
+	•	Authentication is real.
+	•	Gmail connection is real.
+	•	Dashboard uses only database data.
+	•	Pricing works.
+	•	Billing works.
+	•	Paystack works.
+	•	Monthly and yearly plans work.
+	•	Automatic downgrade on expiry works.
+	•	The application is production-ready for deployment.
+
+If anything cannot be completed because of missing configuration or external requirements, stop and tell me exactly what is missing instead of leaving placeholder functionality.

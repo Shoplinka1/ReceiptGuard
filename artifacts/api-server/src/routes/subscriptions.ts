@@ -35,6 +35,16 @@ router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> =
   const { companyName, companyLogoUrl, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
   if (!companyName || !monthlyPrice || !renewalDate || !category) { res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' }); return; }
 
+  // Free plan: max 5 active subscriptions
+  const { data: profile } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
+  if (profile?.plan_id !== 'pro') {
+    const { count } = await supabaseAdmin.from('subscriptions').select('*', { count: 'exact', head: true }).eq('user_id', req.userId).eq('status', 'active');
+    if ((count ?? 0) >= 5) {
+      res.status(403).json({ error: 'Free plan limit reached (5 active subscriptions). Upgrade to Pro for unlimited.', limitReached: true, limit: 5 });
+      return;
+    }
+  }
+
   const { data, error } = await supabaseAdmin.from('subscriptions').insert({
     user_id: req.userId, company_name: companyName, company_logo_url: companyLogoUrl ?? null,
     monthly_price: monthlyPrice, yearly_price: yearlyPrice ?? null, billing_cycle: billingCycle ?? 'monthly',

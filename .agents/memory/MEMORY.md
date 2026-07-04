@@ -1,3 +1,9 @@
 - [Paystack webhook verification](paystack-webhook.md) — uses PAYSTACK_SECRET_KEY (not a separate webhook secret) with HMAC-SHA512 on x-paystack-signature header.
 - [Google OAuth for Supabase](supabase-google-auth.md) — Supabase Google sign-in requires manual config in Supabase Dashboard; redirect URLs must be allowlisted there.
 - [Email reminder scheduler](reminder-scheduler.md) — runs hourly in api-server, checks renewals table for items due in 3 days, creates notifications + sends email via nodemailer.
+- [Plan enforcement](plan-enforcement.md) — Free limits enforced server-side: 50 receipts (receipts.ts POST), 5 subs (subscriptions.ts POST), 1 Gmail (gmail.ts auth-url). Returns 403 + limitReached:true.
+- [Auto-downgrade scheduler](auto-downgrade.md) — reminder-scheduler.ts runs runExpiryDowngrade() hourly; finds expired user_subscriptions, sets plan_id=free in profiles.
+- [DB tables not yet created](db-tables.md) — supabase/schema.sql must be run in Supabase SQL Editor before any data routes work; missing tables cause PGRST205 errors.
+- [Settings page](settings-tabs.md) — 6 tabs: General (currency/timezone/language/notifications), Gmail (connect/disconnect/scan accounts), Appearance, Security, Data (delete account), Feedback.
+- [Feedback API shape](feedback-api.md) — POST /api/feedback expects { type, subject, body } not { type, message }. Settings FeedbackForm corrected accordingly.
+- [Delete account](delete-account.md) — DELETE /api/user/account in user.ts; deletes in dependency order then supabaseAdmin.auth.admin.deleteUser(uid). Requires user to type "DELETE" to confirm in UI.
