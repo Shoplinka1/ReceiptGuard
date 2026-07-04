@@ -10,7 +10,8 @@ import {
   Bell,
   LogOut,
   CreditCard,
-  User as UserIcon
+  User as UserIcon,
+  MessageSquare
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   
   const bottomItems = [
     { name: "Reminders", href: "/reminders", icon: Bell },
+    { name: "Feedback", href: "/feedback", icon: MessageSquare },
     { name: "Profile", href: "/profile", icon: UserIcon },
     { name: "Settings", href: "/settings", icon: Settings },
     { name: "Billing", href: "/billing", icon: CreditCard },

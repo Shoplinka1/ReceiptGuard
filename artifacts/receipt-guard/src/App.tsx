@@ -27,6 +27,7 @@ const BillingPage = lazy(() => import('./pages/billing'));
 const ProfilePage = lazy(() => import('./pages/profile'));
 const ConnectGmailPage = lazy(() => import('./pages/connect-gmail'));
 const AdminPage = lazy(() => import('./pages/admin'));
+const FeedbackPage = lazy(() => import('./pages/feedback'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,9 @@ function Router() {
         </Route>
         <Route path="/admin">
           {() => <ProtectedRoute component={AdminPage} adminOnly />}
+        </Route>
+        <Route path="/feedback">
+          {() => <ProtectedRoute component={FeedbackPage} />}
         </Route>
 
         <Route component={NotFound} />

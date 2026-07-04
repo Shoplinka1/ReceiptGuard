@@ -1,11 +1,31 @@
 import React from "react"
+import { Link } from "wouter"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { useGetDashboardSummary, useGetSpendingTrend, useListActivity, useGetTopMerchants, useGetUpcomingRenewals, useGetSubscriptionBreakdown } from "@workspace/api-client-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts"
-import { ArrowUpRight, ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+
+async function getAuthToken() {
+  const { supabase } = await import('@/lib/supabase')
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ?? ''
+}
+
+async function fetchGmailAccounts() {
+  const token = await getAuthToken()
+  const res = await fetch(`${API_BASE}/api/gmail/accounts`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!res.ok) return []
+  return res.json()
+}
 
 export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary()
@@ -14,12 +34,29 @@ export default function Dashboard() {
   const { data: merchants, isLoading: loadingMerchants } = useGetTopMerchants()
   const { data: renewals, isLoading: loadingRenewals } = useGetUpcomingRenewals()
   const { data: breakdown, isLoading: loadingBreakdown } = useGetSubscriptionBreakdown()
+  const { data: gmailAccounts = [] } = useQuery({ queryKey: ['gmail', 'accounts'], queryFn: fetchGmailAccounts, retry: false })
 
   const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-8">
+        {/* Gmail not connected banner */}
+        {(gmailAccounts as any[]).length === 0 && (
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <Mail className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">Connect your Gmail inbox</p>
+                <p className="text-xs text-muted-foreground mt-0.5">ReceiptGuard needs Gmail access to automatically scan your receipts and track subscriptions.</p>
+              </div>
+            </div>
+            <Link href="/connect-gmail">
+              <Button size="sm" className="shrink-0">Connect Gmail</Button>
+            </Link>
+          </div>
+        )}
+
         <header className="flex justify-between items-end pb-4 border-b border-border">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">
