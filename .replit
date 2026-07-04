@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16"]
+modules = ["nodejs-24"]
 
 [deployment]
 router = "application"
@@ -18,13 +18,3 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
-
-[nix]
-channel = "stable-25_05"
-
-[userenv]
-
-[userenv.shared]
-SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co"
-VITE_SUPABASE_ANON_KEY = "sb_publishable_qWXWU29TC9ys4HZG6MnZ1A_6jgpk5rf"
-VITE_SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co"

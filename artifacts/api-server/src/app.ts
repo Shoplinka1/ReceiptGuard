@@ -25,25 +25,10 @@ app.use(
     },
   }),
 );
-
-// CORS — restrict to known origin in production, open in development
-const corsOrigin: cors.CorsOptions["origin"] =
-  process.env.NODE_ENV === "production"
-    ? process.env.FRONTEND_URL ?? false
-    : true;
-app.use(cors({ origin: corsOrigin, credentials: true }));
-
-// Raw body capture for Paystack webhook signature verification.
-// Must be registered BEFORE express.json() so the webhook route
-// receives the untouched byte stream that Paystack signed.
-app.use(
-  "/api/paystack/webhook",
-  express.raw({ type: "application/json" }),
-);
-
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(router);
+app.use("/api", router);
 
 export default app;
