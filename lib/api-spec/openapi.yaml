@@ -3,13 +3,32 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ReceiptGuard API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: receipts
+    description: Receipt operations
+  - name: subscriptions
+    description: Subscription operations
+  - name: warranties
+    description: Warranty operations
+  - name: renewals
+    description: Renewal operations
+  - name: merchants
+    description: Merchant operations
+  - name: dashboard
+    description: Dashboard summary operations
+  - name: activity
+    description: Activity log operations
+  - name: user
+    description: User profile and settings
+  - name: reminders
+    description: Reminder settings operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +43,636 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Dashboard ───────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/spending-trend:
+    get:
+      operationId: getSpendingTrend
+      tags: [dashboard]
+      summary: Get monthly spending trend (last 6 months)
+      responses:
+        "200":
+          description: Spending trend data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SpendingMonth"
+
+  /dashboard/top-merchants:
+    get:
+      operationId: getTopMerchants
+      tags: [dashboard]
+      summary: Get top merchants by total spend
+      responses:
+        "200":
+          description: Top merchants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MerchantSummary"
+
+  /dashboard/upcoming-renewals:
+    get:
+      operationId: getUpcomingRenewals
+      tags: [dashboard]
+      summary: Get renewals coming up in the next 30 days
+      responses:
+        "200":
+          description: Upcoming renewals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Renewal"
+
+  # ─── Receipts ─────────────────────────────────────────────────────────────
+  /receipts:
+    get:
+      operationId: listReceipts
+      tags: [receipts]
+      summary: List receipts with optional search and filters
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: merchant
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: minAmount
+          in: query
+          schema:
+            type: number
+        - name: maxAmount
+          in: query
+          schema:
+            type: number
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of receipts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptListResponse"
+    post:
+      operationId: createReceipt
+      tags: [receipts]
+      summary: Create a receipt manually
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptInput"
+      responses:
+        "201":
+          description: Created receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+
+  /receipts/{id}:
+    get:
+      operationId: getReceipt
+      tags: [receipts]
+      summary: Get a single receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateReceipt
+      tags: [receipts]
+      summary: Update a receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptUpdate"
+      responses:
+        "200":
+          description: Updated receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteReceipt
+      tags: [receipts]
+      summary: Delete a receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ─── Subscriptions ──────────────────────────────────────────────────────────
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [subscriptions]
+      summary: List subscriptions with optional search/filter
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: billingCycle
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+    post:
+      operationId: createSubscription
+      tags: [subscriptions]
+      summary: Create a subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionInput"
+      responses:
+        "201":
+          description: Created subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /subscriptions/{id}:
+    get:
+      operationId: getSubscription
+      tags: [subscriptions]
+      summary: Get a single subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSubscription
+      tags: [subscriptions]
+      summary: Update a subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionUpdate"
+      responses:
+        "200":
+          description: Updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSubscription
+      tags: [subscriptions]
+      summary: Delete a subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /subscriptions/breakdown:
+    get:
+      operationId: getSubscriptionBreakdown
+      tags: [subscriptions]
+      summary: Get subscription cost breakdown (monthly vs yearly, totals)
+      responses:
+        "200":
+          description: Subscription breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionBreakdown"
+
+  # ─── Warranties ─────────────────────────────────────────────────────────────
+  /warranties:
+    get:
+      operationId: listWarranties
+      tags: [warranties]
+      summary: List warranties
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of warranties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Warranty"
+    post:
+      operationId: createWarranty
+      tags: [warranties]
+      summary: Create a warranty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarrantyInput"
+      responses:
+        "201":
+          description: Created warranty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warranty"
+
+  /warranties/{id}:
+    get:
+      operationId: getWarranty
+      tags: [warranties]
+      summary: Get a single warranty
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Warranty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warranty"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateWarranty
+      tags: [warranties]
+      summary: Update a warranty
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarrantyUpdate"
+      responses:
+        "200":
+          description: Updated warranty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warranty"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteWarranty
+      tags: [warranties]
+      summary: Delete a warranty
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ─── Renewals ────────────────────────────────────────────────────────────────
+  /renewals:
+    get:
+      operationId: listRenewals
+      tags: [renewals]
+      summary: List upcoming renewals (optionally filter by month/year)
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, this_week, this_month, next_month]
+      responses:
+        "200":
+          description: List of renewals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Renewal"
+
+  /renewals/{id}:
+    patch:
+      operationId: updateRenewal
+      tags: [renewals]
+      summary: Update a renewal (e.g. change reminder settings)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenewalUpdate"
+      responses:
+        "200":
+          description: Updated renewal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Renewal"
+        "404":
+          description: Not found
+
+  # ─── Merchants ──────────────────────────────────────────────────────────────
+  /merchants:
+    get:
+      operationId: listMerchants
+      tags: [merchants]
+      summary: List all merchants seen in receipts
+      responses:
+        "200":
+          description: List of merchants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Merchant"
+
+  # ─── Activity ────────────────────────────────────────────────────────────────
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: Get recent activity log
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Activity log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEntry"
+
+  # ─── User profile ────────────────────────────────────────────────────────────
+  /user/profile:
+    get:
+      operationId: getUserProfile
+      tags: [user]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    patch:
+      operationId: updateUserProfile
+      tags: [user]
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /user/settings:
+    get:
+      operationId: getUserSettings
+      tags: [user]
+      summary: Get user settings (notifications, appearance, etc.)
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+    patch:
+      operationId: updateUserSettings
+      tags: [user]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+
+  # ─── Reminders ───────────────────────────────────────────────────────────────
+  /reminders/settings:
+    get:
+      operationId: getReminderSettings
+      tags: [reminders]
+      summary: Get reminder notification settings
+      responses:
+        "200":
+          description: Reminder settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReminderSettings"
+    patch:
+      operationId: updateReminderSettings
+      tags: [reminders]
+      summary: Update reminder settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReminderSettingsUpdate"
+      responses:
+        "200":
+          description: Updated reminder settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReminderSettings"
+
+  # ─── Gmail scan ──────────────────────────────────────────────────────────────
+  /gmail/scan:
+    post:
+      operationId: triggerGmailScan
+      tags: [user]
+      summary: Trigger a Gmail inbox scan (mock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GmailScanRequest"
+      responses:
+        "200":
+          description: Scan initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailScanResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +683,565 @@ components:
       required:
         - status
 
+    # ─── Dashboard ─────────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      required:
+        - monthlySpending
+        - totalReceipts
+        - activeSubscriptions
+        - upcomingRenewalsCount
+        - activeWarranties
+        - moneySaved
+        - subscriptionsMonthlyTotal
+        - firstName
+        - gmailConnected
+        - plan
+      properties:
+        firstName:
+          type: string
+        monthlySpending:
+          type: number
+        totalReceipts:
+          type: integer
+        activeSubscriptions:
+          type: integer
+        upcomingRenewalsCount:
+          type: integer
+        activeWarranties:
+          type: integer
+        moneySaved:
+          type: number
+        subscriptionsMonthlyTotal:
+          type: number
+        gmailConnected:
+          type: boolean
+        plan:
+          type: string
+          enum: [free, pro]
+
+    SpendingMonth:
+      type: object
+      required: [month, year, total, previousTotal]
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        label:
+          type: string
+        total:
+          type: number
+        previousTotal:
+          type: number
+
+    MerchantSummary:
+      type: object
+      required: [id, name, totalSpent, purchaseCount, lastPurchaseDate]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        totalSpent:
+          type: number
+        purchaseCount:
+          type: integer
+        lastPurchaseDate:
+          type: string
+
+    # ─── Receipts ──────────────────────────────────────────────────────────────
+    Receipt:
+      type: object
+      required:
+        - id
+        - merchantName
+        - amount
+        - purchaseDate
+        - category
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        merchantName:
+          type: string
+        merchantLogoUrl:
+          type: ["string", "null"]
+        amount:
+          type: number
+        currency:
+          type: string
+        purchaseDate:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [detected, verified, manual]
+        invoiceNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ReceiptInput:
+      type: object
+      required: [merchantName, amount, purchaseDate, category]
+      properties:
+        merchantName:
+          type: string
+        merchantLogoUrl:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        purchaseDate:
+          type: string
+        category:
+          type: string
+        invoiceNumber:
+          type: string
+        notes:
+          type: string
+
+    ReceiptUpdate:
+      type: object
+      properties:
+        merchantName:
+          type: string
+        amount:
+          type: number
+        purchaseDate:
+          type: string
+        category:
+          type: string
+        invoiceNumber:
+          type: string
+        notes:
+          type: string
+
+    ReceiptListResponse:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Receipt"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    # ─── Subscriptions ─────────────────────────────────────────────────────────
+    Subscription:
+      type: object
+      required:
+        - id
+        - companyName
+        - monthlyPrice
+        - billingCycle
+        - renewalDate
+        - status
+        - category
+        - createdAt
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        companyLogoUrl:
+          type: ["string", "null"]
+        monthlyPrice:
+          type: number
+        yearlyPrice:
+          type: ["number", "null"]
+        billingCycle:
+          type: string
+          enum: [monthly, yearly, quarterly]
+        renewalDate:
+          type: string
+        status:
+          type: string
+          enum: [active, cancelled, paused, trial]
+        category:
+          type: string
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    SubscriptionInput:
+      type: object
+      required: [companyName, monthlyPrice, billingCycle, renewalDate, category]
+      properties:
+        companyName:
+          type: string
+        companyLogoUrl:
+          type: string
+        monthlyPrice:
+          type: number
+        yearlyPrice:
+          type: number
+        billingCycle:
+          type: string
+          enum: [monthly, yearly, quarterly]
+        renewalDate:
+          type: string
+        status:
+          type: string
+          enum: [active, cancelled, paused, trial]
+        category:
+          type: string
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: string
+
+    SubscriptionUpdate:
+      type: object
+      properties:
+        companyName:
+          type: string
+        monthlyPrice:
+          type: number
+        yearlyPrice:
+          type: number
+        billingCycle:
+          type: string
+          enum: [monthly, yearly, quarterly]
+        renewalDate:
+          type: string
+        status:
+          type: string
+          enum: [active, cancelled, paused, trial]
+        category:
+          type: string
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: string
+
+    SubscriptionBreakdown:
+      type: object
+      required: [monthlyCount, yearlyCount, monthlyTotal, yearlyTotal, grandMonthlyEquivalent]
+      properties:
+        monthlyCount:
+          type: integer
+        yearlyCount:
+          type: integer
+        monthlyTotal:
+          type: number
+        yearlyTotal:
+          type: number
+        grandMonthlyEquivalent:
+          type: number
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryTotal"
+
+    CategoryTotal:
+      type: object
+      required: [category, total, count]
+      properties:
+        category:
+          type: string
+        total:
+          type: number
+        count:
+          type: integer
+
+    # ─── Warranties ────────────────────────────────────────────────────────────
+    Warranty:
+      type: object
+      required:
+        - id
+        - productName
+        - purchaseDate
+        - warrantyEndDate
+        - daysRemaining
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        productName:
+          type: string
+        merchantName:
+          type: ["string", "null"]
+        purchaseDate:
+          type: string
+        warrantyEndDate:
+          type: string
+        daysRemaining:
+          type: integer
+        status:
+          type: string
+          enum: [active, expiring_soon, expired]
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    WarrantyInput:
+      type: object
+      required: [productName, purchaseDate, warrantyEndDate]
+      properties:
+        productName:
+          type: string
+        merchantName:
+          type: string
+        purchaseDate:
+          type: string
+        warrantyEndDate:
+          type: string
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: string
+
+    WarrantyUpdate:
+      type: object
+      properties:
+        productName:
+          type: string
+        merchantName:
+          type: string
+        warrantyEndDate:
+          type: string
+        reminderEnabled:
+          type: boolean
+        notes:
+          type: string
+
+    # ─── Renewals ──────────────────────────────────────────────────────────────
+    Renewal:
+      type: object
+      required: [id, subscriptionId, companyName, amount, renewalDate, daysUntilRenewal, reminderEnabled]
+      properties:
+        id:
+          type: integer
+        subscriptionId:
+          type: integer
+        companyName:
+          type: string
+        companyLogoUrl:
+          type: ["string", "null"]
+        amount:
+          type: number
+        renewalDate:
+          type: string
+        daysUntilRenewal:
+          type: integer
+        reminderEnabled:
+          type: boolean
+        reminderDaysBefore:
+          type: ["integer", "null"]
+
+    RenewalUpdate:
+      type: object
+      properties:
+        reminderEnabled:
+          type: boolean
+        reminderDaysBefore:
+          type: integer
+
+    # ─── Merchants ─────────────────────────────────────────────────────────────
+    Merchant:
+      type: object
+      required: [id, name, purchaseCount, totalSpent]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        purchaseCount:
+          type: integer
+        totalSpent:
+          type: number
+        lastPurchaseDate:
+          type: ["string", "null"]
+
+    # ─── Activity ──────────────────────────────────────────────────────────────
+    ActivityEntry:
+      type: object
+      required: [id, type, description, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum:
+            - gmail_connected
+            - inbox_scanned
+            - receipt_detected
+            - subscription_detected
+            - reminder_created
+            - warranty_added
+            - export_completed
+        description:
+          type: string
+        metadata:
+          type: ["object", "null"]
+        createdAt:
+          type: string
+
+    # ─── User ──────────────────────────────────────────────────────────────────
+    UserProfile:
+      type: object
+      required: [id, name, email, plan, gmailConnected, storageUsed, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        plan:
+          type: string
+          enum: [free, pro]
+        gmailConnected:
+          type: boolean
+        gmailEmail:
+          type: ["string", "null"]
+        storageUsed:
+          type: integer
+        createdAt:
+          type: string
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        avatarUrl:
+          type: string
+
+    UserSettings:
+      type: object
+      required: [id, userId, theme, currency, timezone, language]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        theme:
+          type: string
+          enum: [light, dark, system]
+        currency:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+        emailNotifications:
+          type: boolean
+        browserNotifications:
+          type: boolean
+
+    UserSettingsUpdate:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        currency:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+        emailNotifications:
+          type: boolean
+        browserNotifications:
+          type: boolean
+
+    # ─── Reminders ─────────────────────────────────────────────────────────────
+    ReminderSettings:
+      type: object
+      required: [id, userId, renewalReminder, warrantyReminder, returnWindowReminder]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        renewalReminder:
+          type: boolean
+        warrantyReminder:
+          type: boolean
+        returnWindowReminder:
+          type: boolean
+        daysBefore30:
+          type: boolean
+        daysBefore14:
+          type: boolean
+        daysBefore7:
+          type: boolean
+        daysBefore3:
+          type: boolean
+        daysBefore1:
+          type: boolean
+        emailNotifications:
+          type: boolean
+        browserNotifications:
+          type: boolean
+
+    ReminderSettingsUpdate:
+      type: object
+      properties:
+        renewalReminder:
+          type: boolean
+        warrantyReminder:
+          type: boolean
+        returnWindowReminder:
+          type: boolean
+        daysBefore30:
+          type: boolean
+        daysBefore14:
+          type: boolean
+        daysBefore7:
+          type: boolean
+        daysBefore3:
+          type: boolean
+        daysBefore1:
+          type: boolean
+        emailNotifications:
+          type: boolean
+        browserNotifications:
+          type: boolean
+
+    # ─── Gmail ─────────────────────────────────────────────────────────────────
+    GmailScanRequest:
+      type: object
+      properties:
+        forceRescan:
+          type: boolean
+
+    GmailScanResponse:
+      type: object
+      required: [status, receiptsFound, subscriptionsFound]
+      properties:
+        status:
+          type: string
+        receiptsFound:
+          type: integer
+        subscriptionsFound:
+          type: integer
+        message:
+          type: string
