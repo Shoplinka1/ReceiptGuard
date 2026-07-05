@@ -50,7 +50,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     return;
   }
 
-  const { planId, billingCycle = 'monthly' } = req.body as { planId: string; billingCycle?: 'monthly' | 'yearly' };
+  const { planId, billingCycle = 'monthly', frontendUrl } = req.body as { planId: string; billingCycle?: 'monthly' | 'yearly'; frontendUrl?: string };
 
   // Get the user's profile for their email — auto-create if missing (new Google OAuth users)
   let userEmail = '';
@@ -72,19 +72,34 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     userName = existingProfile.full_name ?? '';
   }
 
-  const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).single();
-  if (!plan || planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
+  if (planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
 
-  // Convert USD to NGN for Paystack (Nigerian accounts require NGN)
-  // Rate: approximate mid-market rate; update periodically for accuracy.
+  // Hardcoded fallback prices (USD) — used when DB plans table is unavailable
+  const FALLBACK_PRICES: Record<string, { monthly: number; yearly: number; name: string }> = {
+    pro: { monthly: 5.99, yearly: 59.99, name: 'Pro' },
+  };
+
+  let usdPrice: number;
+  let planName: string;
+  const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).maybeSingle();
+  if (plan) {
+    usdPrice = billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
+    planName = plan.name;
+  } else if (FALLBACK_PRICES[planId]) {
+    usdPrice = billingCycle === 'yearly' ? FALLBACK_PRICES[planId].yearly : FALLBACK_PRICES[planId].monthly;
+    planName = FALLBACK_PRICES[planId].name;
+  } else {
+    res.status(400).json({ error: 'Unknown plan' }); return;
+  }
+
+  // Convert USD to NGN for Paystack (Nigerian merchant accounts transact in NGN)
+  // Rate: approximate mid-market; update periodically for accuracy.
   const USD_TO_NGN = 1600;
-  const usdPrice = billingCycle === 'yearly'
-    ? Number(plan.price_yearly)
-    : Number(plan.price_monthly);
   const amountKobo = Math.round(usdPrice * USD_TO_NGN * 100); // NGN kobo
 
   const reference = `rg_${req.userId.slice(0, 8)}_${Date.now()}`;
-  const callbackUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/billing?ref=${reference}`;
+  const baseUrl = frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:5173';
+  const callbackUrl = `${baseUrl}/billing?ref=${reference}`;
 
   const data = await paystackRequest('/transaction/initialize', {
     method: 'POST',
@@ -99,22 +114,23 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
         planId,
         billingCycle,
         custom_fields: [
-          { display_name: 'Plan', variable_name: 'plan', value: plan.name },
+          { display_name: 'Plan', variable_name: 'plan', value: planName },
         ],
       },
     }),
   });
 
-  // Store pending payment record
+  // Store pending payment record in USD (the currency users see)
   await supabaseAdmin.from('payments').insert({
     user_id: req.userId,
     paystack_reference: reference,
-    // Store amount in major units (NGN). amountKobo / 100 = NGN.
-    amount: amountKobo / 100,
-    currency: 'NGN',
+    amount: usdPrice,
+    currency: 'USD',
     status: 'pending',
     plan_id: planId,
-    description: `${plan.name} plan (${billingCycle})`,
+    billing_cycle: billingCycle,
+    description: `ReceiptGuard ${planName} plan (${billingCycle})`,
+    metadata: { amountNgn: amountKobo / 100, billingCycle },
   });
 
   res.json({ authorizationUrl: data.data.authorization_url, reference });
@@ -133,29 +149,31 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
   const txn = data.data;
 
   if (txn.status === 'success') {
-    const meta = txn.metadata as { userId: string; planId: string };
+    const meta = txn.metadata as { userId: string; planId: string; billingCycle?: string };
+    const isYearly = meta.billingCycle === 'yearly';
+    const periodDays = isYearly ? 365 : 30;
 
-    // Update payment record
-    await supabaseAdmin.from('payments').update({ status: 'success' }).eq('paystack_reference', reference);
+    // Update payment record to success
+    await supabaseAdmin.from('payments').update({ status: 'success', paid_at: new Date().toISOString() }).eq('paystack_reference', reference);
 
     // Upgrade user plan
     await supabaseAdmin.from('profiles').update({ plan_id: meta.planId }).eq('id', meta.userId);
 
-    // Upsert user_subscription
+    // Upsert user_subscription with correct period end date
     await supabaseAdmin.from('user_subscriptions').upsert({
       user_id: meta.userId,
       plan_id: meta.planId,
       paystack_customer_id: txn.customer?.customer_code,
       status: 'active',
       current_period_start: new Date().toISOString(),
-      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      current_period_end: new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000).toISOString(),
     }, { onConflict: 'user_id' });
 
     await supabaseAdmin.from('activity_logs').insert({
       user_id: meta.userId,
       type: 'plan_upgraded',
-      description: `Upgraded to ${meta.planId} plan`,
-      metadata: { reference, planId: meta.planId },
+      description: `Upgraded to ${meta.planId} plan (${meta.billingCycle ?? 'monthly'})`,
+      metadata: { reference, planId: meta.planId, billingCycle: meta.billingCycle },
     });
   }
 

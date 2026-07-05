@@ -197,7 +197,7 @@ function BillingTab() {
   const initCheckout = useMutation({
     mutationFn: () => apiFetch('/api/paystack/initialize', {
       method: 'POST',
-      body: JSON.stringify({ planId: 'pro', billingCycle }),
+      body: JSON.stringify({ planId: 'pro', billingCycle, frontendUrl: window.location.origin }),
     }),
     onSuccess: (data: any) => {
       if (data?.authorizationUrl) window.location.href = data.authorizationUrl
@@ -300,7 +300,7 @@ function BillingTab() {
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
-                    <span className="font-mono font-medium text-sm">₦{Number(p.amount).toLocaleString()}</span>
+                    <span className="font-mono font-medium text-sm">${Number(p.amount).toFixed(2)}</span>
                   </div>
                 </div>
               ))}
@@ -682,8 +682,8 @@ function ProfileTab() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (profile?.fullName) setFullName(profile.fullName)
-  }, [profile?.fullName])
+    if ((profile as any)?.name) setFullName((profile as any).name)
+  }, [(profile as any)?.name])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -691,7 +691,7 @@ function ProfileTab() {
     try {
       await apiFetch('/api/user/profile', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: fullName }),
+        body: JSON.stringify({ name: fullName }),
       })
       toast.success('Profile updated')
       refetch()

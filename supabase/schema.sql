@@ -71,7 +71,7 @@ create policy "Anyone can view plans" on public.plans for select using (true);
 
 insert into public.plans (id, name, description, price_monthly, price_yearly, features) values
 ('free', 'Free', 'Get started tracking your receipts', 0, 0, '["1 Gmail account","Up to 50 receipts","Up to 5 subscriptions","Basic dashboard","Basic reminders"]'),
-('pro', 'Pro', 'Full access for power users', 9.99, 99.99, '["Unlimited Gmail accounts","Unlimited receipts","Unlimited subscriptions","Advanced analytics","CSV & PDF export","Warranty tracking","Priority support","Custom categories","Spending reports"]')
+('pro', 'Pro', 'Full access for power users', 5.99, 59.99, '["Unlimited Gmail accounts","Unlimited receipts","Unlimited subscriptions","Advanced analytics","CSV & PDF export","Warranty tracking","Priority support","Custom categories","Spending reports"]')
 on conflict (id) do update set
   name = excluded.name,
   price_monthly = excluded.price_monthly,
@@ -245,11 +245,13 @@ create table if not exists public.payments (
   user_id             uuid not null references auth.users(id) on delete cascade,
   paystack_reference  text unique,
   amount              numeric(12,2) not null,
-  currency            text not null default 'NGN',
+  currency            text not null default 'USD',
   status              text not null default 'pending',    -- pending | success | failed | refunded
   plan_id             text references public.plans(id),
+  billing_cycle       text,                               -- monthly | yearly
   description         text,
   metadata            jsonb,
+  paid_at             timestamptz,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );

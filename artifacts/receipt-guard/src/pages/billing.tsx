@@ -89,7 +89,7 @@ export default function BillingPage() {
   const initCheckout = useMutation({
     mutationFn: () => apiFetch('/api/paystack/initialize', {
       method: 'POST',
-      body: JSON.stringify({ planId: 'pro', billingCycle }),
+      body: JSON.stringify({ planId: 'pro', billingCycle, frontendUrl: window.location.origin }),
     }),
     onSuccess: (data: any) => {
       if (data?.authorizationUrl) {
@@ -311,7 +311,7 @@ export default function BillingPage() {
                     <div className="flex items-center gap-4">
                       <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
                       <span className="font-mono font-medium text-sm">
-                        {p.currency === 'NGN' ? '₦' : '$'}{Number(p.amount).toLocaleString()}
+                        ${Number(p.amount).toFixed(2)}
                       </span>
                     </div>
                   </div>
