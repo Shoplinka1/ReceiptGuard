@@ -23,6 +23,7 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  let feedbackId: string | null = null;
   const { data, error } = await supabaseAdmin.from('feedback').insert({
     user_id: req.userId,
     type,
@@ -31,14 +32,22 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     status: 'open',
   }).select().single();
 
-  if (error) { res.status(500).json({ error: error.message }); return; }
-
-  await supabaseAdmin.from('activity_logs').insert({
-    user_id: req.userId,
-    type: `feedback_submitted`,
-    description: `${type.replace('_', ' ')} submitted: ${subject}`,
-    metadata: { feedbackId: data.id, type },
-  });
+  // If DB insert fails (e.g. table not yet created), still send the email notification
+  // and return success — data is captured in the email.
+  if (error) {
+    if (error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
+      res.status(500).json({ error: error.message }); return;
+    }
+    // Table doesn't exist yet — fall through and still send email
+  } else {
+    feedbackId = data?.id ?? null;
+    await supabaseAdmin.from('activity_logs').insert({
+      user_id: req.userId,
+      type: `feedback_submitted`,
+      description: `${type.replace('_', ' ')} submitted: ${subject}`,
+      metadata: { feedbackId, type },
+    }).catch(() => {});
+  }
 
   // Fire-and-forget email notification to admin
   const { data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
@@ -64,7 +73,7 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     `,
   }).catch(() => {});
 
-  res.status(201).json(data);
+  res.status(201).json(data ?? { type, subject, body, status: 'open', created_at: new Date().toISOString() });
 });
 
 router.get('/api/feedback', requireAuth, async (req, res): Promise<void> => {

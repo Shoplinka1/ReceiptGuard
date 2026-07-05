@@ -1,0 +1,97 @@
+:::writing{variant=“chat_message” id=“31847”}
+The last major feature remaining is the Gmail connection. Please make it fully functional and production-ready.
+
+Gmail Connection Flow
+
+After a user signs in:
+	•	If Gmail is not connected, automatically redirect them to the Connect Gmail page.
+	•	Do not allow access to the dashboard until Gmail is connected or the user explicitly skips the step (if a skip option exists).
+
+The Connect Gmail page should explain:
+	•	Why Gmail access is needed.
+	•	That ReceiptGuard only reads purchase-related emails.
+	•	That only Gmail Read-Only permission is requested.
+	•	That personal conversations are never scanned.
+	•	That user data is never sold.
+	•	That users can disconnect Gmail at any time.
+
+Connect Gmail Button
+
+When the user clicks Connect Gmail:
+	•	Launch the real Google OAuth flow.
+	•	Request only the https://www.googleapis.com/auth/gmail.readonly scope.
+	•	Store OAuth tokens securely on the server.
+	•	Never expose tokens to the browser.
+
+After Successful Connection
+
+Immediately:
+	•	Scan the user’s Gmail.
+	•	Detect:
+	•	Receipts
+	•	Orders
+	•	Invoices
+	•	Payment confirmations
+	•	Subscription emails
+	•	Subscription renewals
+	•	Trial expiration emails
+	•	Warranty confirmations
+	•	Shipping confirmations
+
+Extract and save:
+	•	Merchant
+	•	Amount
+	•	Currency
+	•	Purchase date
+	•	Order ID
+	•	Invoice number
+	•	Subscription information
+	•	Renewal dates
+	•	Warranty details (when available)
+
+Save all extracted data into Supabase.
+
+Dashboard
+
+After the first successful scan:
+	•	Redirect the user to the Dashboard.
+	•	Remove all placeholder/demo data.
+	•	Display only real data from Supabase.
+	•	If no receipts are found, show a beautiful empty state instead of fake data.
+
+Gmail Management
+
+In Settings, add a Connected Gmail Accounts section where users can:
+	•	View connected Gmail account(s)
+	•	Disconnect Gmail
+	•	Reconnect Gmail
+	•	Manually scan again
+	•	View last scan time
+	•	Enable or disable automatic scans
+
+Background Scans
+
+Implement:
+	•	Manual Scan
+	•	Automatic scheduled scans
+	•	Duplicate detection so the same receipt is never imported twice.
+
+When users try to connect Gmail, Google shows:
+
+Error 403: access_denied
+"This app has not completed the Google verification process. The app is currently being tested and can only be accessed by developer-approved testers."
+
+Please inspect my Google OAuth integration and tell me exactly why Google still considers the app to be in Testing.
+
+Specifically:
+- Check whether the OAuth consent screen is still in Testing or can be published to Production.
+- Tell me the exact Google requirement that is still preventing Production (don't guess).
+- Verify the OAuth client configuration, redirect URIs, Gmail scopes, and consent screen settings.
+- Tell me whether this is a Google Cloud configuration issue, an application issue, or simply that Google OAuth verification has not yet been completed.
+- If anything in my implementation needs to change before I can submit for verification, list each required change.
+
+Do not leave this as a generic explanation. Inspect the current implementation and configuration and tell me the exact blocker.
+
+Finally, verify the complete Gmail flow from start to finish:
+Sign in → Connect Gmail → Grant permission → Scan inbox → Save data → Populate dashboard with real information.
+If anything still requires Google Cloud configuration or OAuth verification, tell me exactly what is missing instead of leaving placeholder functionality.

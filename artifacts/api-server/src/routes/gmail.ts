@@ -20,7 +20,9 @@ const router: IRouter = Router();
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:8080/api/gmail/callback';
+const REPLIT_DEV_DOMAIN = process.env.REPLIT_DEV_DOMAIN ?? '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
+  ?? (REPLIT_DEV_DOMAIN ? `https://${REPLIT_DEV_DOMAIN}/api/gmail/callback` : 'http://localhost:5173/api/gmail/callback');
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // 32-byte hex key
 
 const GMAIL_SCOPES = [
@@ -258,15 +260,15 @@ router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> =
 router.get('/api/gmail/callback', async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
 
-  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+  const frontendUrl = REPLIT_DEV_DOMAIN ? `https://${REPLIT_DEV_DOMAIN}` : (process.env.FRONTEND_URL ?? 'http://localhost:5173');
 
   if (error) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=${encodeURIComponent(error)}`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=${encodeURIComponent(error)}`);
     return;
   }
 
   if (!code || !state) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=missing_params`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=missing_params`);
     return;
   }
 
@@ -281,23 +283,23 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 
     if (!signature || expectedSig.length !== signature.length ||
       !crypto.timingSafeEqual(Buffer.from(expectedSig, 'hex'), Buffer.from(signature, 'hex'))) {
-      res.redirect(`${frontendUrl}/connect-gmail?error=invalid_state`);
+      res.redirect(`${frontendUrl}/settings?tab=gmail&error=invalid_state`);
       return;
     }
 
     ({ userId } = JSON.parse(statePayload) as { userId: string; nonce: string });
   } catch {
-    res.redirect(`${frontendUrl}/connect-gmail?error=bad_state`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=bad_state`);
     return;
   }
 
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=not_configured`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=not_configured`);
     return;
   }
 
   if (!ENCRYPTION_KEY) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=encryption_not_configured`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=encryption_not_configured`);
     return;
   }
 
@@ -311,7 +313,9 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
   });
 
   if (!tokenRes.ok) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=token_exchange_failed`);
+    const errBody = await tokenRes.json().catch(() => ({})) as any;
+    console.error('[Gmail] Token exchange failed:', JSON.stringify(errBody));
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=token_exchange_failed`);
     return;
   }
 
@@ -323,23 +327,23 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   if (!userInfoRes.ok) {
-    res.redirect(`${frontendUrl}/connect-gmail?error=userinfo_failed`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=userinfo_failed`);
     return;
   }
   const userInfo = await userInfoRes.json() as { email: string };
 
-  const { error: dbError } = await supabaseAdmin.from('email_accounts').upsert({
+  const { data: newAccount, error: dbError } = await supabaseAdmin.from('email_accounts').upsert({
     user_id: userId, email: userInfo.email, provider: 'gmail',
     access_token_enc: encrypt(tokens.access_token),
     refresh_token_enc: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
     token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
     scopes: GMAIL_SCOPES.split(' '), is_active: true,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,email' });
+  }, { onConflict: 'user_id,email' }).select().single();
 
   if (dbError) {
     console.error('[Gmail] DB error:', dbError.message);
-    res.redirect(`${frontendUrl}/connect-gmail?error=db_error`);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=db_error`);
     return;
   }
 
@@ -349,7 +353,14 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
     metadata: { email: userInfo.email },
   });
 
-  res.redirect(`${frontendUrl}/connect-gmail?status=connected`);
+  // Kick off background scan immediately after connection
+  if (newAccount) {
+    runGmailScan(newAccount, userId, false).catch(err =>
+      console.error('[Gmail] Initial scan error:', err)
+    );
+  }
+
+  res.redirect(`${frontendUrl}/settings?tab=gmail&connected=true`);
 });
 
 router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> => {

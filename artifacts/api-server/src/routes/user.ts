@@ -25,20 +25,33 @@ router.patch('/api/user/profile', requireAuth, async (req, res): Promise<void> =
 });
 
 router.get('/api/user/settings', requireAuth, async (req, res): Promise<void> => {
-  const { data } = await supabaseAdmin.from('profiles').select('theme, currency, timezone, language, email_notifications, browser_notifications').eq('id', req.userId).single();
-  res.json({ id: req.userId, userId: req.userId, theme: data?.theme ?? 'system', currency: data?.currency ?? 'USD', timezone: data?.timezone ?? 'UTC', language: data?.language ?? 'en', emailNotifications: data?.email_notifications ?? true, browserNotifications: data?.browser_notifications ?? true });
+  // Read from dedicated settings table; fall back to sensible defaults if table not created yet
+  const { data } = await supabaseAdmin.from('settings').select('*').eq('user_id', req.userId).maybeSingle();
+  res.json({
+    id: req.userId, userId: req.userId,
+    theme: data?.theme ?? 'system',
+    currency: data?.currency ?? 'USD',
+    timezone: data?.timezone ?? 'UTC',
+    language: data?.language ?? 'en',
+    emailNotifications: data?.email_notifications ?? true,
+    browserNotifications: data?.browser_notifications ?? true,
+  });
 });
 
 router.patch('/api/user/settings', requireAuth, async (req, res): Promise<void> => {
   const { theme, currency, timezone, language, emailNotifications, browserNotifications } = req.body;
-  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
-  if (theme) updates.theme = theme;
-  if (currency) updates.currency = currency;
-  if (timezone) updates.timezone = timezone;
-  if (language) updates.language = language;
+  const updates: Record<string, any> = { user_id: req.userId, updated_at: new Date().toISOString() };
+  if (theme !== undefined) updates.theme = theme;
+  if (currency !== undefined) updates.currency = currency;
+  if (timezone !== undefined) updates.timezone = timezone;
+  if (language !== undefined) updates.language = language;
   if (emailNotifications !== undefined) updates.email_notifications = emailNotifications;
   if (browserNotifications !== undefined) updates.browser_notifications = browserNotifications;
-  await supabaseAdmin.from('profiles').update(updates).eq('id', req.userId);
+  // Upsert into settings table (creates row for new users automatically)
+  const { error } = await supabaseAdmin.from('settings').upsert(updates, { onConflict: 'user_id' });
+  if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
+    res.status(500).json({ error: error.message }); return;
+  }
   res.json({ theme: theme ?? 'system', currency: currency ?? 'USD', timezone: timezone ?? 'UTC', language: language ?? 'en', emailNotifications, browserNotifications });
 });
 

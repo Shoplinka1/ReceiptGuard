@@ -49,6 +49,16 @@ type FeedbackType = 'feedback' | 'feature_request' | 'bug_report' | 'support'
 
 // ─── Gmail Accounts Tab ──────────────────────────────────────────────────────
 
+const GMAIL_ERRORS: Record<string, string> = {
+  access_denied: 'You declined Gmail access. Click Connect to try again.',
+  redirect_uri_mismatch: 'OAuth redirect URI mismatch — contact support.',
+  token_exchange_failed: 'Failed to exchange auth code. Please try again.',
+  not_configured: 'Google OAuth not configured on the server.',
+  invalid_state: 'Security check failed. Please try again.',
+  db_error: 'Could not save your Gmail connection. Please retry.',
+  userinfo_failed: 'Could not fetch your Gmail address. Please retry.',
+}
+
 function GmailTab() {
   const qc = useQueryClient()
   const { data: accounts, isLoading, refetch } = useQuery({
@@ -56,6 +66,25 @@ function GmailTab() {
     queryFn: () => apiFetch('/api/gmail/accounts'),
     retry: false,
   })
+
+  // Handle OAuth callback — read ?connected=true or ?error=... from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const connected = params.get('connected')
+    const error = params.get('error')
+    const tab = params.get('tab')
+    if (tab !== 'gmail') return
+    // Clean URL params without reloading
+    window.history.replaceState({}, '', window.location.pathname + '?tab=gmail')
+    if (connected === 'true') {
+      toast.success('Gmail connected! Scanning your inbox for receipts…')
+      refetch()
+      qc.invalidateQueries({ queryKey: ['receipts'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    } else if (error) {
+      toast.error(GMAIL_ERRORS[error] ?? `Gmail connection failed: ${error}`)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectMutation = useMutation({
     mutationFn: () => apiFetch('/api/gmail/auth-url'),
@@ -75,9 +104,12 @@ function GmailTab() {
 
   const scanMutation = useMutation({
     mutationFn: (id: string) => apiFetch('/api/gmail/scan', { method: 'POST', body: JSON.stringify({ accountId: id }) }),
-    onSuccess: (data: any) => {
-      toast.success(`Scan complete: ${data?.receiptsFound ?? 0} new receipts found`)
-      qc.invalidateQueries({ queryKey: ['receipts'] })
+    onSuccess: () => {
+      toast.success('Scan started! New receipts will appear in a few moments.')
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['receipts'] })
+        qc.invalidateQueries({ queryKey: ['dashboard'] })
+      }, 3000)
     },
     onError: (e: any) => toast.error(e.message),
   })
