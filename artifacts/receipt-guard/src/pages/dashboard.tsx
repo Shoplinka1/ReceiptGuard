@@ -214,7 +214,9 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground">In {renewal.daysUntilRenewal} days</p>
                         </div>
                       </div>
-                      <div className="font-medium text-foreground">${renewal.amount.toFixed(2)}</div>
+                      <div className="font-medium text-foreground">
+  ${(renewal.amount ?? 0).toFixed(2)}
+</div>
                     </div>
                   ))}
                   {(!renewals || renewals.length === 0) && (
