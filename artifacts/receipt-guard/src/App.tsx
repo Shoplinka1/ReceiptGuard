@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { ThemeProvider } from './components/theme-provider';
 import { AuthProvider } from './hooks/use-auth';
 import { ProtectedRoute } from './components/auth/protected-route';
+import { ErrorBoundary } from './components/error-boundary';
 
 // Public pages
 import LandingPage from './pages/landing';
@@ -54,6 +55,7 @@ function PageLoader() {
 
 function Router() {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
       <Switch>
         {/* Public */}
@@ -114,6 +116,7 @@ function Router() {
         <Route component={NotFound} />
       </Switch>
     </Suspense>
+    </ErrorBoundary>
   );
 }
 
