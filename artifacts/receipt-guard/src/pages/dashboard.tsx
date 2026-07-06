@@ -210,7 +210,9 @@ export default function Dashboard() {
                           {(renewal.companyName || '?').substring(0,1)}
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{renewal.companyName}</p>
+                         <p className="font-medium text-foreground">
+  {renewal.companyName || 'Unknown'}
+</p>
                           <p className="text-xs text-muted-foreground">In {renewal.daysUntilRenewal} days</p>
                         </div>
                       </div>
