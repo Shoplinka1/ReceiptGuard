@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { MessageSquare, Bug, Lightbulb, HeadphonesIcon, Send, Clock, CheckCircle2, XCircle } from 'lucide-react'
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
 async function getAuthToken() {
   const { supabase } = await import('@/lib/supabase')

@@ -10,7 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { ArrowUpRight, ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
 async function getAuthToken() {
   const { supabase } = await import('@/lib/supabase')

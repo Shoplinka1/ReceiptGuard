@@ -7,7 +7,7 @@ import { ShieldCheck, Mail, Lock, CheckCircle2, Loader2, Trash2, RefreshCw } fro
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
 async function getAuthToken() {
   const { supabase } = await import('@/lib/supabase')

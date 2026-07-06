@@ -13,7 +13,7 @@ import {
   AlertTriangle, CheckCircle2, Sparkles, Calendar,
 } from 'lucide-react'
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
 async function getAuthToken() {
   const { supabase } = await import('@/lib/supabase')
