@@ -207,7 +207,7 @@ export default function Dashboard() {
                     <div key={renewal.id} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center font-bold text-xs">
-                          {renewal.companyName.substring(0,1)}
+                          {(renewal.companyName || '?').substring(0,1)}
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{renewal.companyName}</p>
