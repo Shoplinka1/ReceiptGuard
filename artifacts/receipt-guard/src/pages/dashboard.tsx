@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React from "react"
 import { Link } from "wouter"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,7 +9,6 @@ import { useGetDashboardSummary, useGetSpendingTrend, useListActivity, useGetTop
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts"
 import { ArrowUpRight, ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
-import { getEntries, subscribe, type DebugEntry } from "@/lib/debug-log"
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
@@ -41,134 +40,25 @@ function toSafeArray<T>(value: unknown, fieldName: string): T[] {
   if (value === null || value === undefined) return []
   if (Array.isArray(value)) return value as T[]
 
-  // Log the unexpected shape so the debug panel / console reveals it.
-  if (import.meta.env.DEV || import.meta.env.VITE_DEBUG === 'true') {
-    console.warn(
-      `[dashboard] Expected array for "${fieldName}" but got:`,
-      typeof value === 'string' ? value.slice(0, 200) : value,
-    )
-  }
-
   // Try common wrapper keys returned by some APIs.
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>
     for (const key of ['data', fieldName, 'items', 'results', 'activities', 'renewals', 'merchants']) {
-      if (Array.isArray(obj[key])) {
-        console.warn(`[dashboard] Unwrapped "${fieldName}" from response key "${key}"`)
-        return obj[key] as T[]
-      }
+      if (Array.isArray(obj[key])) return obj[key] as T[]
     }
   }
 
   return []
 }
 
-// ── Debug banner component ─────────────────────────────────────────────────
-function DebugBanner({
-  queryStates,
-}: {
-  queryStates: Array<{ name: string; isLoading: boolean; isError: boolean; error: unknown; data: unknown }>
-}) {
-  const [entries, setEntries] = useState<DebugEntry[]>(() => getEntries())
-  const [open, setOpen] = useState(true)
-
-  useEffect(() => {
-    const unsub = subscribe(() => setEntries([...getEntries()]))
-    return unsub
-  }, [])
-
-  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? '(not set)'
-
-  return (
-    <div style={{ fontFamily: 'monospace', fontSize: '12px', background: '#0f172a', color: '#94a3b8', borderRadius: '8px', marginBottom: '16px', overflow: 'hidden' }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{ padding: '8px 14px', background: '#1e293b', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-      >
-        <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>🐛 DEBUG PANEL (click to {open ? 'hide' : 'show'})</span>
-        <span style={{ color: '#64748b' }}>remove before final release</span>
-      </div>
-      {open && (
-        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-          {/* Env var */}
-          <div>
-            <span style={{ color: '#64748b' }}>VITE_API_URL: </span>
-            <span style={{ color: apiUrl === '(not set)' ? '#ef4444' : '#4ade80' }}>{apiUrl}</span>
-          </div>
-
-          {/* React Query states */}
-          <div>
-            <div style={{ color: '#64748b', marginBottom: '4px' }}>React Query states:</div>
-            {queryStates.map(q => {
-              const errMsg = q.isError
-                ? (q.error instanceof Error ? q.error.message : String(q.error))
-                : null
-              const dataType = q.data === undefined ? 'undefined' : q.data === null ? 'null' : typeof q.data === 'string' ? `string(${(q.data as string).slice(0,40)})` : Array.isArray(q.data) ? `array[${(q.data as unknown[]).length}]` : `object(${Object.keys(q.data as object).slice(0,3).join(',')})`
-              return (
-                <div key={q.name} style={{ marginLeft: '8px', marginBottom: '2px' }}>
-                  <span style={{ color: '#cbd5e1' }}>{q.name}: </span>
-                  {q.isLoading && <span style={{ color: '#fbbf24' }}>loading…</span>}
-                  {q.isError && <span style={{ color: '#ef4444' }}>ERROR — {errMsg}</span>}
-                  {!q.isLoading && !q.isError && <span style={{ color: '#4ade80' }}>ok — {dataType}</span>}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Fetch log */}
-          <div>
-            <div style={{ color: '#64748b', marginBottom: '4px' }}>Fetch log ({entries.filter(e => e.url.includes('/api/')).length} API calls):</div>
-            {entries.filter(e => e.url.includes('/api/')).length === 0 && (
-              <div style={{ marginLeft: '8px', color: '#fbbf24' }}>No /api/ requests captured yet — VITE_API_URL may be wrong or auth token may be missing</div>
-            )}
-            {entries.filter(e => e.url.includes('/api/')).map((e, i) => (
-              <div key={i} style={{ marginLeft: '8px', marginBottom: '6px', borderLeft: '2px solid #334155', paddingLeft: '8px' }}>
-                <div><span style={{ color: '#64748b' }}>url: </span><span style={{ color: '#e2e8f0', wordBreak: 'break-all' }}>{e.url}</span></div>
-                <div>
-                  <span style={{ color: '#64748b' }}>status: </span>
-                  <span style={{ color: e.status === 200 ? '#4ade80' : '#ef4444' }}>{e.status ?? 'network error'}</span>
-                  <span style={{ color: '#64748b' }}> · content-type: </span>
-                  <span style={{ color: e.isJson ? '#4ade80' : '#f87171' }}>{e.contentType ?? 'none'}</span>
-                  <span style={{ color: '#64748b' }}> · body: </span>
-                  <span style={{ color: e.isJson ? '#4ade80' : '#f87171' }}>{e.isJson ? 'JSON ✓' : 'NOT JSON ✗'}</span>
-                </div>
-                {e.bodySnippet && (
-                  <div style={{ color: '#f87171', marginTop: '2px', wordBreak: 'break-all' }}>
-                    snippet: {e.bodySnippet}
-                  </div>
-                )}
-                {e.error && (
-                  <div style={{ color: '#ef4444' }}>network error: {e.error}</div>
-                )}
-              </div>
-            ))}
-          </div>
-
-        </div>
-      )}
-    </div>
-  )
-}
-// ──────────────────────────────────────────────────────────────────────────
-
 export default function Dashboard() {
-  const { data: summary, isLoading: loadingSummary, isError: errSummary, error: errSummaryVal } = useGetDashboardSummary()
-  const { data: trends, isLoading: loadingTrends, isError: errTrends, error: errTrendsVal } = useGetSpendingTrend()
-  const { data: activities, isLoading: loadingActivity, isError: errActivity, error: errActivityVal } = useListActivity({ limit: 5 })
-  const { data: merchants, isLoading: loadingMerchants, isError: errMerchants, error: errMerchantsVal } = useGetTopMerchants()
-  const { data: renewals, isLoading: loadingRenewals, isError: errRenewals, error: errRenewalsVal } = useGetUpcomingRenewals()
-  const { data: breakdown, isLoading: loadingBreakdown, isError: errBreakdown, error: errBreakdownVal } = useGetSubscriptionBreakdown()
+  const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary()
+  const { data: trends, isLoading: loadingTrends } = useGetSpendingTrend()
+  const { data: activities, isLoading: loadingActivity } = useListActivity({ limit: 5 })
+  const { data: merchants, isLoading: loadingMerchants } = useGetTopMerchants()
+  const { data: renewals, isLoading: loadingRenewals } = useGetUpcomingRenewals()
+  const { data: breakdown, isLoading: loadingBreakdown } = useGetSubscriptionBreakdown()
   const { data: gmailAccounts = [] } = useQuery({ queryKey: ['gmail', 'accounts'], queryFn: fetchGmailAccounts, retry: false })
-
-  const queryStates = [
-    { name: 'summary', isLoading: loadingSummary, isError: errSummary, error: errSummaryVal, data: summary },
-    { name: 'trends', isLoading: loadingTrends, isError: errTrends, error: errTrendsVal, data: trends },
-    { name: 'activities', isLoading: loadingActivity, isError: errActivity, error: errActivityVal, data: activities },
-    { name: 'merchants', isLoading: loadingMerchants, isError: errMerchants, error: errMerchantsVal, data: merchants },
-    { name: 'renewals', isLoading: loadingRenewals, isError: errRenewals, error: errRenewalsVal, data: renewals },
-    { name: 'breakdown', isLoading: loadingBreakdown, isError: errBreakdown, error: errBreakdownVal, data: breakdown },
-  ]
 
   // Coerce every list-typed query result to a guaranteed array before render.
   // This prevents "x.map is not a function" if the API returns an error
@@ -186,9 +76,6 @@ export default function Dashboard() {
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-8">
-
-        {/* ── DEBUG BANNER ── */}
-        <DebugBanner queryStates={queryStates} />
 
         {/* Gmail not connected banner */}
         {(gmailAccounts as any[]).length === 0 && (
