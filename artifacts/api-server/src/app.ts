@@ -26,26 +26,30 @@ app.use(
   }),
 );
 
-// CORS — in production, allow every origin listed in FRONTEND_URL (comma-separated).
-// If FRONTEND_URL is not set the server falls back to permissive (all origins) so
-// the app keeps working during initial deployment; set FRONTEND_URL on your host to
-// lock it down once the production URL is stable.
+// CORS configuration.
+//
+// Development: allow all origins (open).
+// Production: allow only origins explicitly listed in FRONTEND_URL (comma-separated)
+//   plus server-to-server requests (no Origin header, e.g. Vercel proxy).
+//   If FRONTEND_URL is not set in production the server starts but rejects all
+//   browser cross-origin requests — this is intentional fail-closed behaviour.
+//   Set FRONTEND_URL to the frontend domain(s) to permit browser traffic.
 const rawFrontendUrls = (process.env.FRONTEND_URL ?? "").trim();
 const allowedOrigins = rawFrontendUrls
   ? rawFrontendUrls.split(",").map((o) => o.trim()).filter(Boolean)
   : [];
 
-const corsOrigin: cors.CorsOptions["origin"] =
-  process.env.NODE_ENV !== "production" || allowedOrigins.length === 0
-    ? true // open: dev mode, or prod without FRONTEND_URL configured
-    : (origin, callback) => {
-        // Allow server-to-server requests (no Origin header) and listed origins.
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error(`CORS: origin "${origin}" is not allowed`));
-        }
-      };
+const isProduction = process.env.NODE_ENV === "production";
+
+const corsOrigin: cors.CorsOptions["origin"] = isProduction
+  ? (origin, callback) => {
+      // No Origin header = server-to-server request (e.g. Vercel proxy). Always allow.
+      if (!origin) return callback(null, true);
+      // Browser cross-origin: only listed origins are permitted.
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin "${origin}" is not allowed`));
+    }
+  : true; // Development: allow all origins
 
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
