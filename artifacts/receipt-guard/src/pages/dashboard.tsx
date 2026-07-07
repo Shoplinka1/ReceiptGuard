@@ -269,7 +269,7 @@ export default function Dashboard() {
               ) : (
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={trends || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={safeTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
                       <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} dy={10} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} tickFormatter={(val) => `${val}`} />
@@ -302,7 +302,7 @@ export default function Dashboard() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={breakdown?.categoryBreakdown || []}
+                          data={safeCategoryBreakdown}
                           cx="50%"
                           cy="50%"
                           innerRadius={60}
