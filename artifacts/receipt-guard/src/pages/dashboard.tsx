@@ -28,6 +28,41 @@ async function fetchGmailAccounts() {
   return res.json()
 }
 
+/**
+ * Safely coerces an API response to an array.
+ *
+ * Why this exists: react-query sets `data` to whatever the server returns.
+ * If the response is an error envelope ({ error: "..." }), a wrapper object
+ * ({ data: [...] }), or an HTML fallback string (HTTP 200 but wrong
+ * Content-Type), calling .map() on it throws "TypeError: x.map is not a
+ * function" and crashes the render. This helper absorbs all of those cases.
+ */
+function toSafeArray<T>(value: unknown, fieldName: string): T[] {
+  if (value === null || value === undefined) return []
+  if (Array.isArray(value)) return value as T[]
+
+  // Log the unexpected shape so the debug panel / console reveals it.
+  if (import.meta.env.DEV || import.meta.env.VITE_DEBUG === 'true') {
+    console.warn(
+      `[dashboard] Expected array for "${fieldName}" but got:`,
+      typeof value === 'string' ? value.slice(0, 200) : value,
+    )
+  }
+
+  // Try common wrapper keys returned by some APIs.
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    for (const key of ['data', fieldName, 'items', 'results', 'activities', 'renewals', 'merchants']) {
+      if (Array.isArray(obj[key])) {
+        console.warn(`[dashboard] Unwrapped "${fieldName}" from response key "${key}"`)
+        return obj[key] as T[]
+      }
+    }
+  }
+
+  return []
+}
+
 // ── Debug banner component ─────────────────────────────────────────────────
 function DebugBanner({
   queryStates,
@@ -134,6 +169,17 @@ export default function Dashboard() {
     { name: 'renewals', isLoading: loadingRenewals, isError: errRenewals, error: errRenewalsVal, data: renewals },
     { name: 'breakdown', isLoading: loadingBreakdown, isError: errBreakdown, error: errBreakdownVal, data: breakdown },
   ]
+
+  // Coerce every list-typed query result to a guaranteed array before render.
+  // This prevents "x.map is not a function" if the API returns an error
+  // envelope, a wrapper object, or an HTML string instead of a plain array.
+  const safeActivities  = toSafeArray<typeof activities extends (infer U)[] | undefined ? U : never>(activities,  'activities')
+  const safeRenewals    = toSafeArray<typeof renewals   extends (infer U)[] | undefined ? U : never>(renewals,    'renewals')
+  const safeMerchants   = toSafeArray<typeof merchants  extends (infer U)[] | undefined ? U : never>(merchants,   'merchants')
+  const safeCategoryBreakdown = toSafeArray<NonNullable<typeof breakdown>['categoryBreakdown'][number]>(
+    breakdown?.categoryBreakdown, 'breakdown.categoryBreakdown'
+  )
+  const safeTrends = toSafeArray<typeof trends extends (infer U)[] | undefined ? U : never>(trends, 'trends')
 
   const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
@@ -265,7 +311,7 @@ export default function Dashboard() {
                           dataKey="total"
                           nameKey="category"
                         >
-                          {(breakdown?.categoryBreakdown || []).map((_, index) => (
+                          {safeCategoryBreakdown.map((_, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -277,7 +323,7 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                   <div className="w-full mt-4 space-y-2">
-                    {breakdown?.categoryBreakdown?.map((cat, i) => (
+                    {safeCategoryBreakdown.map((cat, i) => (
                       <div key={i} className="flex justify-between text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
@@ -306,7 +352,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {renewals?.slice(0, 4).map(renewal => (
+                  {safeRenewals.slice(0, 4).map(renewal => (
                     <div key={renewal.id} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center font-bold text-xs">
@@ -320,7 +366,7 @@ export default function Dashboard() {
                       <div className="font-medium text-foreground">${(renewal.amount ?? 0).toFixed(2)}</div>
                     </div>
                   ))}
-                  {(!renewals || renewals.length === 0) && (
+                  {safeRenewals.length === 0 && !loadingRenewals && (
                     <p className="text-sm text-muted-foreground text-center py-4">No upcoming renewals.</p>
                   )}
                 </div>
@@ -342,7 +388,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {activities?.map(activity => (
+                  {safeActivities.map(activity => (
                     <div key={activity.id} className="flex gap-3 text-sm">
                       <div className="w-2 h-2 mt-1.5 rounded-full bg-primary shrink-0" />
                       <div>
@@ -351,7 +397,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
-                  {(!activities || activities.length === 0) && (
+                  {safeActivities.length === 0 && !loadingActivity && (
                     <p className="text-sm text-muted-foreground text-center py-4">No recent activity.</p>
                   )}
                 </div>
@@ -373,13 +419,13 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {merchants?.slice(0,4).map(merchant => (
+                  {safeMerchants.slice(0,4).map(merchant => (
                     <div key={merchant.id} className="flex justify-between items-center text-sm">
                       <div className="font-medium text-foreground">{merchant.name}</div>
                       <div className="text-muted-foreground">${merchant.totalSpent.toFixed(2)}</div>
                     </div>
                   ))}
-                  {(!merchants || merchants.length === 0) && (
+                  {safeMerchants.length === 0 && !loadingMerchants && (
                     <p className="text-sm text-muted-foreground text-center py-4">No data available.</p>
                   )}
                 </div>
