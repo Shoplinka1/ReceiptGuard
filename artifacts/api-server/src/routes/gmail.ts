@@ -260,7 +260,7 @@ router.get('/api/gmail/auth-url', requireAuth, async (req, res): Promise<void> =
 router.get('/api/gmail/callback', async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
 
-  const frontendUrl = REPLIT_DEV_DOMAIN ? `https://${REPLIT_DEV_DOMAIN}` : (process.env.FRONTEND_URL ?? 'http://localhost:5173');
+  const frontendUrl = (REPLIT_DEV_DOMAIN ? `https://${REPLIT_DEV_DOMAIN}` : (process.env.FRONTEND_URL ?? 'http://localhost:5173')).replace(/\/+$/, '');
 
   if (error) {
     res.redirect(`${frontendUrl}/settings?tab=gmail&error=${encodeURIComponent(error)}`);
