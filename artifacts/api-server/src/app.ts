@@ -26,11 +26,27 @@ app.use(
   }),
 );
 
-// CORS — restrict to known origin in production, open in development
+// CORS — in production, allow every origin listed in FRONTEND_URL (comma-separated).
+// If FRONTEND_URL is not set the server falls back to permissive (all origins) so
+// the app keeps working during initial deployment; set FRONTEND_URL on your host to
+// lock it down once the production URL is stable.
+const rawFrontendUrls = (process.env.FRONTEND_URL ?? "").trim();
+const allowedOrigins = rawFrontendUrls
+  ? rawFrontendUrls.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+
 const corsOrigin: cors.CorsOptions["origin"] =
-  process.env.NODE_ENV === "production"
-    ? process.env.FRONTEND_URL ?? false
-    : true;
+  process.env.NODE_ENV !== "production" || allowedOrigins.length === 0
+    ? true // open: dev mode, or prod without FRONTEND_URL configured
+    : (origin, callback) => {
+        // Allow server-to-server requests (no Origin header) and listed origins.
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`CORS: origin "${origin}" is not allowed`));
+        }
+      };
+
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
 // Raw body capture for Paystack webhook signature verification.
