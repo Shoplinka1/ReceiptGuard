@@ -224,14 +224,14 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard 
             title="Monthly Spending" 
-            value={summary ? `${summary.monthlySpending.toFixed(2)}` : null} 
+            value={summary ? `${Number(summary.monthlySpending ?? 0).toFixed(2)}` : null} 
             loading={loadingSummary} 
             icon={CreditCard} 
             colSpan="md:col-span-1 lg:col-span-2"
           />
           <StatCard 
             title="Money Saved" 
-            value={summary ? `${summary.moneySaved.toFixed(2)}` : null} 
+            value={summary ? `${Number(summary.moneySaved ?? 0).toFixed(2)}` : null} 
             loading={loadingSummary} 
             icon={ArrowDownRight} 
             trend="+12% from last month"
@@ -329,7 +329,7 @@ export default function Dashboard() {
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                           <span className="capitalize">{cat.category}</span>
                         </div>
-                        <span className="font-medium">${cat.total.toFixed(2)}</span>
+                        <span className="font-medium">${Number(cat.total ?? 0).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -422,7 +422,7 @@ export default function Dashboard() {
                   {safeMerchants.slice(0,4).map(merchant => (
                     <div key={merchant.id} className="flex justify-between items-center text-sm">
                       <div className="font-medium text-foreground">{merchant.name}</div>
-                      <div className="text-muted-foreground">${merchant.totalSpent.toFixed(2)}</div>
+                      <div className="text-muted-foreground">${Number(merchant.totalSpent ?? 0).toFixed(2)}</div>
                     </div>
                   ))}
                   {safeMerchants.length === 0 && !loadingMerchants && (

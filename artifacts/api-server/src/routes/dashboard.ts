@@ -23,16 +23,24 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
   ]);
 
+  // safeNum: converts any DB value to a finite number, treating null/undefined/NaN as 0.
+  // This prevents NaN from propagating into Math.round(), which would serialize as JSON null
+  // and crash the frontend's .toFixed() call.
+  const safeNum = (v: unknown): number => {
+    const n = Number(v);
+    return isFinite(n) ? n : 0;
+  };
+
   const monthlySpending = (receipts ?? [])
     .filter(r => r.purchase_date >= firstOfMonth)
-    .reduce((sum, r) => sum + Number(r.amount), 0);
+    .reduce((sum, r) => sum + safeNum(r.amount), 0);
 
   const upcomingRenewals = (activeSubs ?? []).filter(s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater).length;
   const activeWarranties = (warranties ?? []).filter(w => w.warranty_end_date >= today).length;
 
   const monthlySubTotal = (activeSubs ?? []).reduce((sum, s) => {
-    if (s.billing_cycle === 'yearly' && s.yearly_price) return sum + Number(s.yearly_price) / 12;
-    return sum + Number(s.monthly_price);
+    if (s.billing_cycle === 'yearly') return sum + safeNum(s.yearly_price) / 12;
+    return sum + safeNum(s.monthly_price);
   }, 0);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
