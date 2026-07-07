@@ -101,27 +101,34 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   const baseUrl = frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const callbackUrl = `${baseUrl}/billing?ref=${reference}`;
 
-  const data = await paystackRequest('/transaction/initialize', {
-    method: 'POST',
-    body: JSON.stringify({
-      email: userEmail,
-      amount: amountKobo,
-      currency: 'NGN',
-      reference,
-      callback_url: callbackUrl,
-      metadata: {
-        userId: req.userId,
-        planId,
-        billingCycle,
-        custom_fields: [
-          { display_name: 'Plan', variable_name: 'plan', value: planName },
-        ],
-      },
-    }),
-  });
+  let data: any;
+  try {
+    data = await paystackRequest('/transaction/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: userEmail,
+        amount: amountKobo,
+        currency: 'NGN',
+        reference,
+        callback_url: callbackUrl,
+        metadata: {
+          userId: req.userId,
+          planId,
+          billingCycle,
+          custom_fields: [
+            { display_name: 'Plan', variable_name: 'plan', value: planName },
+          ],
+        },
+      }),
+    });
+  } catch (err: any) {
+    console.error('[Paystack] initialize failed:', err.message);
+    res.status(502).json({ error: err.message ?? 'Payment provider error. Please try again.' });
+    return;
+  }
 
   // Store pending payment record in USD (the currency users see)
-  await supabaseAdmin.from('payments').insert({
+  const { error: insertError } = await supabaseAdmin.from('payments').insert({
     user_id: req.userId,
     paystack_reference: reference,
     amount: usdPrice,
@@ -132,6 +139,10 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     description: `ReceiptGuard ${planName} plan (${billingCycle})`,
     metadata: { amountNgn: amountKobo / 100, billingCycle },
   });
+  if (insertError) {
+    console.error('[Paystack] payments insert failed:', insertError.message);
+    // Non-fatal — checkout URL is still valid; log and continue
+  }
 
   res.json({ authorizationUrl: data.data.authorization_url, reference });
 });
@@ -145,7 +156,14 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
   }
 
   const { reference } = req.params;
-  const data = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
+  let data: any;
+  try {
+    data = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
+  } catch (err: any) {
+    console.error('[Paystack] verify failed:', err.message);
+    res.status(502).json({ error: err.message ?? 'Payment verification error. Please try again.' });
+    return;
+  }
   const txn = data.data;
 
   if (txn.status === 'success') {
@@ -281,10 +299,15 @@ router.post('/api/paystack/cancel', requireAuth, async (req, res): Promise<void>
   if (!sub) { res.status(404).json({ error: 'No active subscription found' }); return; }
 
   if (sub.paystack_subscription_id && PAYSTACK_SECRET_KEY) {
-    await paystackRequest(`/subscription/disable`, {
-      method: 'POST',
-      body: JSON.stringify({ code: sub.paystack_subscription_id, token: sub.paystack_plan_code }),
-    });
+    try {
+      await paystackRequest(`/subscription/disable`, {
+        method: 'POST',
+        body: JSON.stringify({ code: sub.paystack_subscription_id, token: sub.paystack_plan_code }),
+      });
+    } catch (err: any) {
+      console.error('[Paystack] subscription disable failed:', err.message);
+      // Non-fatal — still mark cancelled locally even if Paystack call fails
+    }
   }
 
   await supabaseAdmin.from('user_subscriptions').update({

@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -65,5 +65,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(router);
+
+// Global error handler — catches any unhandled async errors from route handlers.
+// Without this, Express 5 propagates them as a plain 500 HTML response.
+// Must be 4 arguments for Express to recognise it as an error handler.
+app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
+  logger.error({ err }, 'Unhandled route error');
+  if (res.headersSent) return next(err);
+  // Return a generic message in production to avoid leaking internal details.
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : (err.message ?? 'Internal server error');
+  res.status(500).json({ error: message });
+});
 
 export default app;
