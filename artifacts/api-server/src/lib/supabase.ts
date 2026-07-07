@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import Ws from 'ws';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -8,6 +9,9 @@ let _supabaseAdmin: SupabaseClient | null = null;
 if (supabaseUrl && supabaseServiceKey) {
   _supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    // Node.js < 22 has no native WebSocket; supply the 'ws' implementation so
+    // Supabase's realtime client can initialise without throwing.
+    realtime: { transport: Ws as unknown as typeof WebSocket },
   });
 } else {
   console.warn(
