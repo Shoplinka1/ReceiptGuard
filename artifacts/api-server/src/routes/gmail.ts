@@ -92,6 +92,47 @@ async function gmailFetch(path: string, accessToken: string): Promise<any> {
   return res.json();
 }
 
+// ─── Paginated message ID fetcher ────────────────────────────────────────────
+
+const FREE_SCAN_LIMIT = 500;   // total message IDs across all queries
+const PRO_SCAN_LIMIT  = 10_000; // safety ceiling for pro users
+
+/**
+ * Fetches all message IDs matching a Gmail search query, following nextPageToken
+ * until exhausted or the per-query cap is reached.
+ *
+ * @param query       Gmail search query string
+ * @param accessToken Valid OAuth access token
+ * @param cap         Max IDs to collect for this query (use Infinity for uncapped,
+ *                    but PRO_SCAN_LIMIT is enforced at the call-site)
+ */
+async function fetchAllMessageIds(
+  query: string,
+  accessToken: string,
+  cap: number,
+): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({ q: query, maxResults: '500' });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const r = await gmailFetch(`/messages?${params.toString()}`, accessToken);
+    const batch = (r.messages ?? []).map((m: any) => m.id as string);
+    ids.push(...batch);
+
+    pageToken = r.nextPageToken as string | undefined;
+
+    if (ids.length >= cap) break;
+
+    // Brief pause between pages — avoids hammering Gmail's quota
+    if (pageToken) await new Promise(resolve => setTimeout(resolve, 150));
+  } while (pageToken);
+
+  return ids.slice(0, cap);
+}
+
 // ─── Receipt parser ──────────────────────────────────────────────────────────
 
 const MERCHANT_DOMAINS: Record<string, string> = {
@@ -407,8 +448,20 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Check plan so we can give the user an accurate message
+  const { data: userPlan } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
+  const isPro = userPlan?.plan_id === 'pro';
+
   // Respond immediately — scan runs in background
-  res.json({ status: 'scanning', message: 'Gmail scan started. Receipts will appear shortly.', accountEmail: account.email });
+  res.json({
+    status: 'scanning',
+    message: isPro
+      ? `Deep inbox scan started. We'll scan up to ${PRO_SCAN_LIMIT.toLocaleString()} messages from your Gmail history — this may take a few minutes.`
+      : `Inbox scan started (Free plan: up to ${FREE_SCAN_LIMIT} new messages). Upgrade to Pro to scan deeper into your Gmail history.`,
+    accountEmail: account.email,
+    isPro,
+    scanLimit: isPro ? PRO_SCAN_LIMIT : FREE_SCAN_LIMIT,
+  });
 
   // Background scan
   runGmailScan(account, req.userId, forceRescan).catch(err =>
@@ -427,6 +480,18 @@ export async function runGmailScan(account: any, userId: string, forceRescan: bo
     return;
   }
 
+  // Determine plan-based scan cap
+  const { data: profile } = await supabaseAdmin
+    .from('profiles').select('plan_id').eq('id', userId).single();
+  const isPro = profile?.plan_id === 'pro';
+  // totalCap = max NEW messages to process per scan run (applied after removing already-imported IDs)
+  const totalCap = isPro ? PRO_SCAN_LIMIT : FREE_SCAN_LIMIT;
+  // perQueryCap: over-fetch by 2× so that after removing already-imported IDs we still
+  // have enough candidates to fill totalCap. Pro fetches up to the safety ceiling per query.
+  const perQueryCap = isPro ? PRO_SCAN_LIMIT : FREE_SCAN_LIMIT * 2;
+
+  console.log(`[Gmail Scan] ${account.email}: plan=${profile?.plan_id ?? 'free'}, totalCap=${totalCap}, perQueryCap=${perQueryCap}`);
+
   // Existing message IDs to avoid duplicates
   const { data: existing } = await supabaseAdmin
     .from('receipts').select('gmail_message_id').eq('user_id', userId).not('gmail_message_id', 'is', null);
@@ -438,17 +503,34 @@ export async function runGmailScan(account: any, userId: string, forceRescan: bo
     'subject:("shipping confirmation" OR "your shipment" OR "your package") -in:spam -in:trash',
   ];
 
+  // Collect IDs from all queries with full pagination, then deduplicate across queries
   let allIds: string[] = [];
   for (const q of gmailQueries) {
     try {
-      const r = await gmailFetch(`/messages?q=${encodeURIComponent(q)}&maxResults=100`, accessToken);
-      allIds.push(...(r.messages ?? []).map((m: any) => m.id));
+      const ids = await fetchAllMessageIds(q, accessToken, perQueryCap);
+      allIds.push(...ids);
     } catch (e: any) { console.warn('[Gmail Scan] Search error:', e.message); }
+    // Pause between queries to stay within Gmail API rate limits
+    await new Promise(r => setTimeout(r, 250));
   }
+
+  // Deduplicate across queries first, THEN filter already-imported, THEN apply cap.
+  // Ordering matters: applying the cap before filtering would mean repeated scans always
+  // hit the same recently-fetched IDs and never advance into older inbox history.
   allIds = [...new Set(allIds)];
   if (!forceRescan) allIds = allIds.filter(id => !alreadyImported.has(id));
+  allIds = allIds.slice(0, totalCap);
+
+  console.log(`[Gmail Scan] ${account.email}: ${allIds.length} candidate messages to process`);
 
   let importedCount = 0, skippedCount = 0, failedCount = 0;
+
+  // Log scan start
+  await supabaseAdmin.from('activity_logs').insert({
+    user_id: userId, type: 'gmail_scan_started',
+    description: `Scanning ${allIds.length} messages (${isPro ? 'Pro — full history' : `Free — up to ${FREE_SCAN_LIMIT}`})`,
+    metadata: { total: allIds.length, isPro, forceRescan },
+  });
 
   for (let i = 0; i < allIds.length; i += 10) {
     await Promise.all(allIds.slice(i, i + 10).map(async (msgId) => {
@@ -494,16 +576,27 @@ export async function runGmailScan(account: any, userId: string, forceRescan: bo
         }
       } catch (e: any) { console.warn('[Gmail Scan] Message error:', e.message); failedCount++; }
     }));
+
+    // Log progress every 100 messages so admin can track long scans
+    const processed = Math.min(i + 10, allIds.length);
+    if (processed % 100 === 0 || processed === allIds.length) {
+      console.log(`[Gmail Scan] ${account.email}: progress ${processed}/${allIds.length} — ${importedCount} imported, ${skippedCount} skipped`);
+    }
+
     if (i + 10 < allIds.length) await new Promise(r => setTimeout(r, 200));
   }
 
-  await supabaseAdmin.from('email_accounts').update({ last_scanned_at: new Date().toISOString() }).eq('id', account.id);
+  await supabaseAdmin.from('email_accounts')
+    .update({ last_scanned_at: new Date().toISOString() })
+    .eq('id', account.id);
+
   await supabaseAdmin.from('activity_logs').insert({
     user_id: userId, type: 'gmail_scan_complete',
-    description: `Scan complete: ${importedCount} receipts imported, ${skippedCount} skipped`,
-    metadata: { importedCount, skippedCount, failedCount, total: allIds.length },
+    description: `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed (of ${allIds.length} candidates)`,
+    metadata: { importedCount, skippedCount, failedCount, total: allIds.length, isPro, forceRescan },
   });
-  console.log(`[Gmail Scan] ${account.email}: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed`);
+
+  console.log(`[Gmail Scan] ${account.email}: DONE — ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed`);
 }
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {
