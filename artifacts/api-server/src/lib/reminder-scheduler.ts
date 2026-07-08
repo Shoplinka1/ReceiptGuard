@@ -294,13 +294,13 @@ async function runExpiryDowngrade(): Promise<void> {
       });
 
       // In-app notification for the downgrade
-      await supabaseAdmin.from('notifications').insert({
+      void supabaseAdmin.from('notifications').insert({
         user_id: sub.user_id, type: 'plan_downgraded',
         title: 'Your Pro plan has expired',
         body: 'Your ReceiptGuard Pro subscription has ended. Your data is safe. Upgrade to Pro to restore unlimited access.',
         is_read: false,
         metadata: { subscriptionId: sub.id },
-      }).catch(() => {});
+      }).then(undefined, () => {});
 
       logger.info({ userId: sub.user_id }, '[reminders] Downgraded to free on expiry');
     }

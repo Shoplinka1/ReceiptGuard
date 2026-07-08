@@ -812,14 +812,14 @@ export async function runGmailScan(
 
   // Create an in-app notification if the Free limit was hit
   if (freeLimitReached) {
-    await supabaseAdmin.from('notifications').insert({
+    void supabaseAdmin.from('notifications').insert({
       user_id: userId, type: 'plan_limit',
       title: `Receipt storage limit reached (${FREE_RECEIPT_LIMIT} receipts)`,
       body: `Your Gmail scan found more receipts, but the Free plan stores up to ${FREE_RECEIPT_LIMIT}. ` +
         `Upgrade to Pro for unlimited storage and full Gmail history scanning.`,
       is_read: false,
       metadata: { type: 'receipt_limit', limit: FREE_RECEIPT_LIMIT, importedCount },
-    }).catch(() => {});
+    }).then(undefined, () => {});
   }
 
   console.log(`[Gmail Scan] ${account.email}: DONE — ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed${freeLimitReached ? ` (limit reached, ${limitStoppedCount} stopped)` : ''}`);

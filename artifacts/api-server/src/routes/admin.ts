@@ -210,12 +210,12 @@ router.delete('/api/admin/users/:id', ...adminGuard, async (req, res): Promise<v
   const { error } = await supabaseAdmin.auth.admin.deleteUser(id as string);
   if (error) { res.status(500).json({ error: error.message }); return; }
 
-  await supabaseAdmin.from('audit_logs').insert({
+  void supabaseAdmin.from('audit_logs').insert({
     actor_id: req.userId,
     action: 'user_deleted',
     target_type: 'user',
     target_id: id,
-  }).catch(() => {});
+  }).then(undefined, () => {});
 
   res.sendStatus(204);
 });

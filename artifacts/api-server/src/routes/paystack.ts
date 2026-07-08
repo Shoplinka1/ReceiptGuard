@@ -260,8 +260,8 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
       userId: meta.userId,
       planId: meta.planId,
       billingCycle,
-      paystackCustomerCode: txn.customer?.customer_code,
-      reference,
+      paystackCustomerCode: txn.customer?.customer_code as string | undefined,
+      reference: reference as string,
     });
 
     await supabaseAdmin.from('activity_logs').insert({
@@ -384,7 +384,7 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
           description: `ReceiptGuard Pro renewal (${billingCycle})`,
           paid_at: new Date().toISOString(),
           metadata: { amountNgn: paidAmountNgn, event: event.event },
-        }).catch(e => console.warn('[Paystack] payment insert for renewal failed:', e.message));
+        }).then(undefined, (e: any) => console.warn('[Paystack] payment insert for renewal failed:', e?.message));
 
         await supabaseAdmin.from('activity_logs').insert({
           user_id: subRow.user_id, type: 'subscription_renewed',
@@ -438,7 +438,7 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
         }
 
         if (failedUserId) {
-          await supabaseAdmin.from('payments').insert({
+          void supabaseAdmin.from('payments').insert({
             user_id: failedUserId,
             paystack_reference: event.data.transaction?.reference ?? `failed_${Date.now()}`,
             amount: (event.data.amount ?? 0) / 100 / 1600,
@@ -446,7 +446,7 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
             status: 'failed',
             description: 'Subscription renewal payment failed',
             metadata: event.data,
-          }).catch(() => {});
+          }).then(undefined, (e: any) => console.warn('[Paystack] failed payment insert error:', e?.message));
 
           await supabaseAdmin.from('activity_logs').insert({
             user_id: failedUserId, type: 'payment_failed',
@@ -455,13 +455,13 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
           });
 
           // Notify the user in-app
-          await supabaseAdmin.from('notifications').insert({
+          void supabaseAdmin.from('notifications').insert({
             user_id: failedUserId, type: 'payment_failed',
             title: 'Subscription renewal failed',
             body: 'Your Pro subscription renewal payment failed. Please update your payment method to keep Pro access.',
             is_read: false,
             metadata: { event: event.event },
-          }).catch(() => {});
+          }).then(undefined, () => {});
         }
         break;
       }
