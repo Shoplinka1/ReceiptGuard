@@ -1,0 +1,353 @@
+ReceiptGuard Production Readiness Audit & Implementation
+
+ReceiptGuard’s Gmail scanning is now working in production. Before adding new features, perform a complete production audit and then implement the approved improvements to make the app production-ready, highly reliable, and encourage Pro upgrades.
+
+IMPORTANT
+	•	Production backend is Railway.
+	•	Frontend is Vercel.
+	•	Do NOT modify, recreate, overwrite, or reset Railway, Vercel, Supabase credentials, OAuth credentials, environment variables, secrets, or database data unless I explicitly approve.
+	•	Preserve all existing user data.
+	•	Make changes safely and minimally.
+
+⸻
+
+Phase 1 — Complete Audit
+
+Audit the entire application and report every finding before making changes.
+
+⸻
+
+1. Free vs Pro Plans
+
+Audit every Free and Pro limit currently enforced.
+
+Verify:
+	•	Gmail account limit
+	•	Initial Gmail scan limit
+	•	Background scan limit
+	•	Gmail message scan limit
+	•	Receipt import limit
+	•	Receipt storage limit
+	•	Subscription tracking limit
+	•	Warranty tracking limit
+	•	Reminder limit
+	•	Search limit
+	•	Dashboard analytics
+	•	Export functionality
+	•	Premium-only features
+
+Explain clearly the difference between:
+	•	Gmail messages scanned
+	•	Receipts imported
+	•	Receipts stored
+
+The current Free plan scans 500 Gmail messages, which seems too generous and may reduce incentives to upgrade.
+
+Recommend a smarter monetization strategy.
+
+Recommend better limits that balance user experience and conversion to Pro.
+
+Do not change anything yet.
+
+⸻
+
+2. Receipt Parsing Accuracy
+
+Audit the Gmail parser.
+
+Verify:
+	•	amount extraction
+	•	merchant extraction
+	•	currency detection
+	•	decimal parsing
+	•	thousand separators
+	•	exchange-rate conversion
+	•	duplicate detection
+	•	tax calculations
+	•	receipt totals
+
+I noticed:
+
+Top Merchant
+
+Bybit
+
+$1,197,628.48
+
+This appears incorrect.
+
+Find the exact cause.
+
+Ensure dashboard totals always match the actual stored receipt data.
+
+Prevent malformed receipts from corrupting statistics.
+
+⸻
+
+3. Dashboard Accuracy
+
+Audit every dashboard calculation.
+
+Verify:
+	•	Monthly Spending
+	•	Money Saved
+	•	Top Merchants
+	•	Spending Trend
+	•	Dashboard Charts
+	•	Active Subscriptions
+	•	Receipt count
+	•	Warranty count
+
+Ensure calculations are mathematically correct.
+
+⸻
+
+4. Gmail Scanner
+
+Audit the complete Gmail pipeline.
+
+Verify:
+	•	OAuth
+	•	Token storage
+	•	Token encryption
+	•	Token refresh
+	•	Initial scan
+	•	Background scan
+	•	Duplicate protection
+	•	Merchant extraction
+	•	Category detection
+	•	Subscription detection
+	•	Warranty detection
+	•	Activity logs
+
+Ensure scans are idempotent.
+
+Running multiple scans should never create duplicate receipts.
+
+⸻
+
+5. Reminder System
+
+Audit:
+	•	renewal reminders
+	•	warranty reminders
+	•	scheduled reminder worker
+	•	email reminders
+	•	in-app notifications
+	•	timezone handling
+
+Ensure reminders are accurate and never duplicated.
+
+⸻
+
+6. Billing
+
+Audit Paystack.
+
+Verify:
+	•	Upgrade
+	•	Verification
+	•	Webhooks
+	•	Monthly subscriptions
+	•	Annual subscriptions
+	•	Failed renewals
+	•	Subscription expiration
+
+When a subscription expires:
+	•	Automatically downgrade the user to Free.
+	•	Reapply Free limits.
+	•	Never delete receipts.
+	•	Never delete subscriptions.
+	•	Never delete warranties.
+	•	Never delete reminders.
+	•	Preserve billing history.
+
+Verify recurring renewals correctly extend subscription periods.
+
+⸻
+
+7. Feedback System
+
+Feedback is now saving successfully.
+
+Audit only email delivery.
+
+Verify:
+	•	transporter.verify()
+	•	SMTP authentication
+	•	Gmail App Password
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	sendMail()
+
+Log the exact SMTP response if delivery fails.
+
+Never silently ignore email failures.
+
+⸻
+
+8. Admin Dashboard
+
+Audit whether administrators can view:
+	•	Total users
+	•	Active users
+	•	Free users
+	•	Pro users
+	•	Revenue
+	•	Monthly recurring revenue
+	•	Gmail accounts connected
+	•	Receipts imported
+	•	Total subscriptions
+	•	Payments
+	•	Feedback
+	•	Activity logs
+
+If an admin dashboard already exists, document everything.
+
+If not, recommend improvements before implementing.
+
+⸻
+
+9. Error Handling
+
+Replace generic “Internal Error” responses with meaningful user-friendly messages while keeping sensitive server details hidden.
+
+⸻
+
+10. Launch Checklist
+
+Classify everything as:
+
+✅ Production Ready
+
+⚠ Needs Improvement
+
+❌ Broken
+
+Do not make changes until the audit is complete.
+
+⸻
+
+Phase 2 — After My Approval
+
+After I approve the audit, implement the improvements.
+
+⸻
+
+Improve the Free & Pro Plans
+
+Redesign the plans to encourage upgrades without frustrating Free users.
+
+Review and improve:
+	•	Gmail scan limits
+	•	Gmail account limits
+	•	Receipt storage limits
+	•	Subscription limits
+	•	Warranty limits
+	•	Reminder limits
+	•	Dashboard features
+	•	Search
+	•	Export
+	•	Analytics
+	•	Premium features
+
+The current Free plan scans 500 Gmail messages.
+
+Recommend and implement a better strategy.
+
+For example (adjust if you find a better balance):
+
+Free
+	•	1 Gmail account
+	•	Initial scan of approximately 100–150 Gmail messages
+	•	Continue background scanning for new incoming emails after the initial scan
+	•	Maximum 50 stored receipts
+	•	Maximum 5 active subscriptions
+	•	Maximum 5 warranties
+	•	Basic dashboard
+	•	Basic reminders
+	•	No exports
+
+Pro
+	•	Unlimited Gmail accounts
+	•	Full mailbox scan
+	•	Unlimited receipts
+	•	Unlimited subscriptions
+	•	Unlimited warranties
+	•	Advanced dashboard
+	•	Advanced analytics
+	•	Exports
+	•	Priority scanning
+	•	Future premium AI features
+
+When a Free user reaches a limit:
+	•	Explain the limit clearly.
+	•	Explain what Pro unlocks.
+	•	Show an attractive Upgrade to Pro button.
+	•	Never silently block features.
+
+⸻
+
+Receipt Storage
+
+Ensure that when Free users reach the receipt storage limit:
+	•	Existing receipts remain.
+	•	New receipts are not imported until they delete old receipts or upgrade.
+	•	Explain the reason clearly.
+
+⸻
+
+Subscription Expiration
+
+When Monthly or Annual Pro expires:
+	•	Automatically return the user to the Free plan.
+	•	Reapply Free limits immediately.
+	•	Preserve all historical receipts.
+	•	Preserve subscriptions.
+	•	Preserve warranties.
+	•	Preserve reminders.
+	•	Preserve billing history.
+	•	Prevent creation of new items only if the user exceeds the Free limits.
+
+⸻
+
+Billing Experience
+
+Improve the upgrade experience.
+
+Make upgrading simple, trustworthy, and require as few clicks as possible.
+
+Ensure recurring payments always extend subscription periods correctly.
+
+⸻
+
+Smart Backend Improvements
+
+Improve the backend so calculations are accurate and reliable.
+
+Prevent:
+	•	duplicate receipts
+	•	incorrect totals
+	•	incorrect currencies
+	•	malformed receipts
+	•	incorrect dashboard statistics
+
+Ensure all calculations are consistent across the application.
+
+⸻
+
+Final Report
+
+After implementation provide:
+	•	Every file modified
+	•	Every backend improvement
+	•	Every frontend improvement
+	•	Every billing improvement
+	•	Every Free/Pro limit changed
+	•	Every bug fixed
+	•	Any database migration required before deployment
+
+Finally, verify that ReceiptGuard is ready for production and explain any remaining issues before launch.
