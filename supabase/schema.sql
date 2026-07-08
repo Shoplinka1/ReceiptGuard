@@ -172,7 +172,8 @@ create table if not exists public.subscriptions (
   notes               text,
   metadata            jsonb,
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  unique (user_id, name)
 );
 
 create index if not exists subscriptions_user_id_idx on public.subscriptions(user_id);
@@ -219,7 +220,8 @@ create table if not exists public.warranties (
   notes               text,
   metadata            jsonb,
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  unique (user_id, product_name)
 );
 
 create index if not exists warranties_user_id_idx on public.warranties(user_id);
@@ -472,9 +474,38 @@ BEGIN
   END IF;
 END $body$;
 
+-- Add unique constraints required by the Gmail-scan upsert dedup logic
+-- (ON CONFLICT needs a matching unique/exclusion constraint to exist).
+DO $body$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_user_id_name_key'
+  ) THEN
+    -- Remove any pre-existing duplicate (user_id, name) rows before adding the
+    -- constraint, keeping the most recently updated row of each duplicate set.
+    DELETE FROM public.subscriptions a USING public.subscriptions b
+      WHERE a.user_id = b.user_id AND a.name = b.name
+        AND (a.updated_at, a.id) < (b.updated_at, b.id);
+    ALTER TABLE public.subscriptions ADD CONSTRAINT subscriptions_user_id_name_key UNIQUE (user_id, name);
+  END IF;
+END $body$;
+
+DO $body$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'warranties_user_id_product_name_key'
+  ) THEN
+    DELETE FROM public.warranties a USING public.warranties b
+      WHERE a.user_id = b.user_id AND a.product_name = b.product_name
+        AND (a.updated_at, a.id) < (b.updated_at, b.id);
+    ALTER TABLE public.warranties ADD CONSTRAINT warranties_user_id_product_name_key UNIQUE (user_id, product_name);
+  END IF;
+END $body$;
+
 -- ─── Done ────────────────────────────────────────────────────────────────────
 -- All tables, RLS policies, indexes, and triggers have been created.
 -- Next: In Supabase > Auth > Providers, enable Google OAuth and set your
 -- Google Client ID and Secret.
 -- Run all the DO $body$ migration blocks above on existing databases to add
--- new columns: language, browser_notifications, is_suspended, and reminder flags.
+-- new columns: language, browser_notifications, is_suspended, and reminder flags,
+-- plus the subscriptions/warranties unique constraints needed for Gmail scan dedup.
