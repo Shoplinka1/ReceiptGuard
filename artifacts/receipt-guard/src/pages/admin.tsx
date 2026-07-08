@@ -124,6 +124,8 @@ function SmtpTestCard({ apiFetch }: { apiFetch: (path: string, opts?: RequestIni
 export default function AdminPage() {
   const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail' | 'activity' | 'scan-logs' | 'receipts' | 'warranties'>('overview')
   const [search, setSearch] = useState('')
+  const [receiptSearch, setReceiptSearch] = useState('')
+  const [gmailSearch, setGmailSearch] = useState('')
   const qc = useQueryClient()
 
   const { data: stats, isLoading: loadingStats, error: statsError } = useAdminStats()

@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, Calendar, CreditCard, Repeat, Mail, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { useListSubscriptions } from "@workspace/api-client-react"
+import { useListSubscriptions, useGetUserSettings } from "@workspace/api-client-react"
 import { format } from "date-fns"
+import { formatCurrency } from "@/lib/currency"
 
 export default function SubscriptionsPage() {
   const [search, setSearch] = useState("")

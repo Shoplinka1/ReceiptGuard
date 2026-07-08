@@ -379,6 +379,66 @@ router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<voi
       ? `Test email sent to ${recipient}. Check the inbox (and spam folder) to confirm delivery.`
       : `SMTP is configured but sendMail failed. Check Railway logs for [email] sendMail FAILED with the full error code and SMTP response.`,
   });
+// ─── Receipts ────────────────────────────────────────────────────────────────
+
+router.get('/api/admin/receipts', ...adminGuard, async (req, res): Promise<void> => {
+  const { search, page = '1', pageSize = '20' } = req.query as Record<string, string>;
+  const offset = (parseInt(page) - 1) * parseInt(pageSize);
+
+  let query = supabaseAdmin
+    .from('receipts')
+    .select('*, profiles(email, full_name)', { count: 'exact' })
+    .range(offset, offset + parseInt(pageSize) - 1)
+    .order('created_at', { ascending: false });
+
+  if (search) query = query.ilike('merchant_name', `%${search}%`);
+
+  const { data, count, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ receipts: data ?? [], total: count ?? 0, page: parseInt(page), pageSize: parseInt(pageSize) });
+});
+
+router.delete('/api/admin/receipts/:id', ...adminGuard, async (req, res): Promise<void> => {
+  const { error } = await supabaseAdmin.from('receipts').delete().eq('id', req.params.id);
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.sendStatus(204);
+});
+
+// ─── Gmail Accounts ──────────────────────────────────────────────────────────
+
+router.get('/api/admin/gmail-accounts', ...adminGuard, async (req, res): Promise<void> => {
+  const { search, page = '1', pageSize = '20' } = req.query as Record<string, string>;
+  const offset = (parseInt(page) - 1) * parseInt(pageSize);
+
+  let query = supabaseAdmin
+    .from('email_accounts')
+    // Never select access_token_enc / refresh_token_enc — admins can see connection
+    // status, not raw tokens.
+    .select('id, user_id, email, provider, is_active, last_scanned_at, created_at, profiles(email, full_name)', { count: 'exact' })
+    .range(offset, offset + parseInt(pageSize) - 1)
+    .order('created_at', { ascending: false });
+
+  if (search) query = query.ilike('email', `%${search}%`);
+
+  const { data, count, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ accounts: data ?? [], total: count ?? 0, page: parseInt(page), pageSize: parseInt(pageSize) });
+});
+
+router.patch('/api/admin/gmail-accounts/:id', ...adminGuard, async (req, res): Promise<void> => {
+  const { is_active } = req.body as Record<string, any>;
+  const updates: Record<string, any> = {};
+  if (is_active !== undefined) updates.is_active = is_active;
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from('email_accounts')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select('id, user_id, email, provider, is_active, last_scanned_at, created_at')
+    .single();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(data);
 });
 
 export default router;

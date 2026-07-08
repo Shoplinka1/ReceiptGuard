@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Search, Receipt, Mail } from "lucide-react"
 import { useListReceipts } from "@workspace/api-client-react"
 import { format } from "date-fns"
+import { formatCurrency } from "@/lib/currency"
 
 export default function ReceiptsPage() {
   const [search, setSearch] = useState("")

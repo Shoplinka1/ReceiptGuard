@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startReminderScheduler } from "./lib/reminder-scheduler";
+import { startGmailRescanScheduler } from "./lib/gmail-scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -49,4 +50,5 @@ app.listen(port, (err) => {
 
   // Start background jobs
   startReminderScheduler();
+  startGmailRescanScheduler();
 });

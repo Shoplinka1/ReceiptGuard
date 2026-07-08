@@ -7,9 +7,13 @@
  * Flow:
  *   1. GET  /api/gmail/auth-url  → returns the Google consent screen URL
  *   2. GET  /api/gmail/callback  → exchanges code for tokens, stores encrypted
- *   3. POST /api/gmail/scan      → scans inbox and extracts receipts via AI
+ *   3. POST /api/gmail/scan      → scans inbox and extracts receipts (regex-based parsing)
  *   4. GET  /api/gmail/accounts  → lists connected Gmail accounts
  *   5. DELETE /api/gmail/accounts/:id → revokes and removes account
+ *
+ * Background rescanning: see ../lib/gmail-scheduler.ts, which imports
+ * `runGmailScan` (exported below) and re-runs it periodically for every
+ * active account so newly-arrived receipts are picked up automatically.
  */
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
@@ -1128,13 +1132,13 @@ export async function runGmailScan(
           })();
           if (canAddSub) {
             await supabaseAdmin.from('subscriptions').upsert({
-              user_id: userId, name: parsed.merchantName, merchant_name: parsed.merchantName,
+              user_id: userId, company_name: parsed.merchantName,
               monthly_price: monthlyPrice, yearly_price: yearlyPrice,
               currency: parsed.currency,
               billing_cycle: billingCycle,
               renewal_date: renewalDate,
               category: parsed.category, status: 'active',
-            }, { onConflict: 'user_id,name', ignoreDuplicates: true });
+            }, { onConflict: 'user_id,company_name', ignoreDuplicates: true });
 
             // Backfill renewal_date for subscriptions that were imported before
             // this field was added. ignoreDuplicates:true skips the full row on
@@ -1143,7 +1147,7 @@ export async function runGmailScan(
               await supabaseAdmin.from('subscriptions')
                 .update({ renewal_date: renewalDate })
                 .eq('user_id', userId)
-                .eq('name', parsed.merchantName)
+                .eq('company_name', parsed.merchantName)
                 .is('renewal_date', null);
             }
           }

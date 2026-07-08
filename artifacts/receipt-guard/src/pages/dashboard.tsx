@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { useGetDashboardSummary, useGetSpendingTrend, useListActivity, useGetTopMerchants, useGetUpcomingRenewals, useGetSubscriptionBreakdown } from "@workspace/api-client-react"
+import { useGetDashboardSummary, useGetSpendingTrend, useListActivity, useGetTopMerchants, useGetUpcomingRenewals, useGetSubscriptionBreakdown, useGetUserSettings } from "@workspace/api-client-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts"
 import { ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail, TrendingUp, Sparkles, CheckCircle2, AlertTriangle, Crown } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
+import { formatCurrency } from "@/lib/currency"
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
 
@@ -286,7 +287,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                       </div>
-                      <div className="font-medium text-foreground">${(renewal.amount ?? 0).toFixed(2)}</div>
+                      <div className="font-medium text-foreground">{formatCurrency(renewal.amount, currency)}</div>
                     </div>
                   ))}
                 </div>
