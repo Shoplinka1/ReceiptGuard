@@ -195,7 +195,7 @@ router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Pr
   const result = (subs ?? []).map((s, i) => ({
     id: i + 1,
     subscriptionId: s.id,
-    companyName: s.name ?? s.company_name,
+    companyName: s.company_name,
     companyLogoUrl: s.company_logo_url ?? null,
     amount: s.billing_cycle === 'yearly' ? safeNum(s.yearly_price) : safeNum(s.monthly_price),
     renewalDate: s.renewal_date,
