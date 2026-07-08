@@ -109,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-6 py-3 safe-area-bottom">
-        {[navItems[0], navItems[1], navItems[2], bottomItems[0]].map((item) => {
+        {[navItems[0], navItems[1], navItems[2], bottomItems[0], bottomItems[1]].map((item) => {
           const isActive = location === item.href
           return (
             <Link key={item.name} href={item.href}>
