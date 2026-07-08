@@ -73,6 +73,7 @@ export default function BillingPage() {
           toast.success('Payment confirmed! Your plan has been upgraded.')
           refetchProfile()
           qc.invalidateQueries({ queryKey: ['payments', 'history'] })
+          qc.invalidateQueries({ queryKey: ['sub', 'details'] })
         } else {
           toast.info('Payment is being processed. Your plan will update shortly.')
         }
@@ -84,6 +85,14 @@ export default function BillingPage() {
     queryKey: ['payments', 'history'],
     queryFn: () => apiFetch('/api/paystack/payments'),
     retry: false,
+  })
+
+  // Fetch active subscription details (period end, cancel status)
+  const { data: subDetails } = useQuery({
+    queryKey: ['sub', 'details'],
+    queryFn: () => apiFetch('/api/paystack/subscription'),
+    retry: false,
+    enabled: isPro,
   })
 
   const initCheckout = useMutation({
@@ -106,6 +115,7 @@ export default function BillingPage() {
     onSuccess: () => {
       toast.success('Subscription cancelled. You keep Pro until the end of the billing period.')
       refetchProfile()
+      qc.invalidateQueries({ queryKey: ['sub', 'details'] })
     },
     onError: (e: any) => toast.error(e.message),
   })
@@ -144,6 +154,18 @@ export default function BillingPage() {
                 </>
               )}
             </div>
+
+            {isPro && subDetails && (
+              <div className="text-sm text-muted-foreground space-y-1 mb-2">
+                {subDetails.current_period_end && (
+                  <p>
+                    {subDetails.cancel_at_period_end
+                      ? <>Cancelled — access ends <strong className="text-foreground">{new Date(subDetails.current_period_end).toLocaleDateString()}</strong></>
+                      : <>Next renewal: <strong className="text-foreground">{new Date(subDetails.current_period_end).toLocaleDateString()}</strong></>}
+                  </p>
+                )}
+              </div>
+            )}
 
             {!isPro ? (
               <div className="space-y-6">
@@ -200,17 +222,21 @@ export default function BillingPage() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" onClick={() => initCheckout.mutate()} disabled={initCheckout.isPending}>
-                  Manage Subscription
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => cancelSub.mutate()}
-                  disabled={cancelSub.isPending}
-                >
-                  {cancelSub.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : 'Cancel Subscription'}
-                </Button>
+                {!(subDetails as any)?.cancel_at_period_end && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => cancelSub.mutate()}
+                    disabled={cancelSub.isPending}
+                  >
+                    {cancelSub.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : 'Cancel Subscription'}
+                  </Button>
+                )}
+                {(subDetails as any)?.cancel_at_period_end && (
+                  <p className="text-sm text-muted-foreground self-center">
+                    Your subscription is cancelled and will not renew.
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -305,7 +331,7 @@ export default function BillingPage() {
                 {(paymentHistory as any[]).map((p: any) => (
                   <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
                     <div>
-                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
+                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${String(p.plan_id).charAt(0).toUpperCase() + String(p.plan_id).slice(1)}` : 'ReceiptGuard'}</p>
                       <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
                     </div>
                     <div className="flex items-center gap-4">

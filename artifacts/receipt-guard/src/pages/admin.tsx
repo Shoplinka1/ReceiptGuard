@@ -97,20 +97,31 @@ export default function AdminPage() {
   ]
 
   const statCards = [
-    { label: 'Total Users', value: stats?.totalUsers, icon: Users },
-    { label: 'Users Today', value: stats?.usersToday, icon: Activity },
-    { label: 'Active Users', value: stats?.activeUsers, icon: CheckCircle2 },
-    { label: 'Free Users', value: stats?.freeUsers, icon: Users },
-    { label: 'Pro Users', value: stats?.payingUsers, icon: Sparkles },
-    { label: 'Monthly Revenue', value: stats?.mrr != null ? `$${(stats.mrr as number).toFixed(2)}` : null, icon: DollarSign },
-    { label: 'Total Revenue', value: stats?.totalRevenue != null ? `$${(stats.totalRevenue as number).toFixed(2)}` : null, icon: TrendingUp },
-    { label: 'MRR', value: stats?.mrr != null ? `$${(stats.mrr as number).toFixed(2)}` : null, icon: DollarSign },
-    { label: 'ARR', value: stats?.arr != null ? `$${(stats.arr as number).toFixed(2)}` : null, icon: TrendingUp },
+    // Users
+    { label: 'Total Users',     value: stats?.totalUsers,    icon: Users },
+    { label: 'New Today',       value: stats?.newUsersToday, icon: Activity },
+    { label: 'New (30d)',       value: stats?.newUsers30d,   icon: Activity },
+    { label: 'Active Users',    value: stats?.activeUsers,   icon: CheckCircle2 },
+    { label: 'Free Users',      value: stats?.freeUsers,     icon: Users },
+    { label: 'Pro Users',       value: stats?.payingUsers,   icon: Sparkles },
+    // Engagement
+    { label: 'DAU',             value: stats?.dau,           icon: Activity },
+    { label: 'WAU',             value: stats?.wau,           icon: Activity },
+    { label: 'MAU',             value: stats?.mau,           icon: Activity },
+    // Revenue
+    { label: 'MRR',             value: stats?.mrr           != null ? `$${(stats.mrr           as number).toFixed(2)}` : null, icon: DollarSign },
+    { label: 'ARR',             value: stats?.arr           != null ? `$${(stats.arr           as number).toFixed(2)}` : null, icon: TrendingUp },
+    { label: 'Total Revenue',   value: stats?.totalRevenue  != null ? `$${(stats.totalRevenue  as number).toFixed(2)}` : null, icon: TrendingUp },
     { label: 'Failed Payments', value: stats?.failedPaymentsCount, icon: AlertTriangle },
-    { label: 'New (30d)', value: stats?.newUsers30d, icon: Activity },
-    { label: 'Conversion', value: stats?.conversionRate != null ? `${(stats.conversionRate as number).toFixed(1)}%` : null, icon: TrendingUp },
-    { label: 'Gmail Accounts', value: stats?.connectedGmailAccounts, icon: Mail },
-    { label: 'Open Feedback', value: stats?.openFeedbackCount, icon: RefreshCw },
+    // Conversion & churn
+    { label: 'Conversion',      value: stats?.conversionRate   != null ? `${(stats.conversionRate   as number).toFixed(1)}%` : null, icon: TrendingUp },
+    { label: 'New Pro (30d)',   value: stats?.newProUpgrades30d, icon: Sparkles },
+    { label: 'Churn (30d)',     value: stats?.churnedCount30d,   icon: AlertTriangle },
+    // Content & scans
+    { label: 'Total Receipts',  value: stats?.totalReceipts,           icon: Inbox },
+    { label: 'Gmail Accounts',  value: stats?.connectedGmailAccounts,  icon: Mail },
+    { label: 'Scan Success',    value: stats?.scanSuccessRate != null ? `${(stats.scanSuccessRate as number).toFixed(1)}%` : null, icon: CheckCircle2 },
+    { label: 'Open Feedback',   value: stats?.openFeedbackCount, icon: RefreshCw },
   ]
 
   return (
