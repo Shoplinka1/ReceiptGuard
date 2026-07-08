@@ -7,6 +7,7 @@ import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
 import { sendEmail } from '../lib/email';
+import { logger } from '../lib/logger';
 
 const router: IRouter = Router();
 
@@ -24,33 +25,44 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
   }
 
   let feedbackId: string | null = null;
-  const { data, error } = await supabaseAdmin.from('feedback').insert({
-    user_id: req.userId,
-    type,
-    subject: subject.trim(),
-    body: body.trim(),
-    status: 'open',
-  }).select().single();
-
-  // If DB insert fails (e.g. table not yet created), still send the email notification
-  // and return success — data is captured in the email.
-  if (error) {
-    if (error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
-      res.status(500).json({ error: error.message }); return;
-    }
-    // Table doesn't exist yet — fall through and still send email
-  } else {
-    feedbackId = data?.id ?? null;
-    supabaseAdmin.from('activity_logs').insert({
+  // Wrapped in try/catch (in addition to checking the returned `error`) so
+  // that even a thrown exception (e.g. a network failure) can't skip the
+  // email notification below — the admin should always be notified even if
+  // persistence to Supabase is temporarily broken.
+  let data: any = null;
+  try {
+    const insertResult = await supabaseAdmin.from('feedback').insert({
       user_id: req.userId,
-      type: `feedback_submitted`,
-      description: `${type.replace('_', ' ')} submitted: ${subject}`,
-      metadata: { feedbackId, type },
-    }).then(undefined, () => {/* non-fatal */});
+      type,
+      subject: subject.trim(),
+      body: body.trim(),
+      status: 'open',
+    }).select().single();
+    data = insertResult.data;
+    const error = insertResult.error;
+    if (error) {
+      logger.error({ err: error, type, subject }, '[Feedback] DB insert failed — continuing to send email notification');
+    } else {
+      feedbackId = data?.id ?? null;
+      supabaseAdmin.from('activity_logs').insert({
+        user_id: req.userId,
+        type: `feedback_submitted`,
+        description: `${type.replace('_', ' ')} submitted: ${subject}`,
+        metadata: { feedbackId, type },
+      }).then(undefined, () => {/* non-fatal */});
+    }
+  } catch (insertErr: any) {
+    logger.error({ err: insertErr, type, subject }, '[Feedback] DB insert threw — continuing to send email notification');
   }
 
-  // Fire-and-forget email notification to admin
-  const { data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+  // Fire-and-forget email notification to admin — a failure here should never
+  // block the response, and must not be able to throw uncaught.
+  let userProfile: { email?: string; full_name?: string } | null = null;
+  try {
+    ({ data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single());
+  } catch (profileErr: any) {
+    logger.error({ err: profileErr }, '[Feedback] profile lookup for email failed — continuing without sender name');
+  }
   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
   sendEmail({
     to: 'receiptguard01@gmail.com',

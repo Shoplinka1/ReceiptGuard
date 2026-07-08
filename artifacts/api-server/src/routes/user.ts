@@ -67,14 +67,19 @@ router.patch('/api/user/settings', requireAuth, async (req, res): Promise<void> 
   if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
     res.status(500).json({ error: error.message }); return;
   }
-  // Return only what was actually persisted so the UI doesn't cache values that were dropped
+  // Return the actual persisted row instead of fabricating a response from the
+  // request body — the request body only ever contains the fields the caller
+  // changed, so echoing it back (with defaults for the rest) would misrepresent
+  // every field the caller didn't touch.
+  const { data: persisted } = await supabaseAdmin.from('settings').select('*').eq('user_id', req.userId).maybeSingle();
   res.json({
-    theme: theme ?? 'system',
-    currency: currency ?? 'USD',
-    timezone: timezone ?? 'UTC',
-    language: usedCoreOnly ? undefined : (language ?? 'en'),
-    emailNotifications,
-    browserNotifications: usedCoreOnly ? undefined : browserNotifications,
+    id: req.userId, userId: req.userId,
+    theme: persisted?.theme ?? 'system',
+    currency: persisted?.currency ?? 'USD',
+    timezone: persisted?.timezone ?? 'UTC',
+    language: usedCoreOnly ? undefined : (persisted?.language ?? 'en'),
+    emailNotifications: persisted?.email_notifications ?? true,
+    browserNotifications: usedCoreOnly ? undefined : (persisted?.browser_notifications ?? true),
   });
 });
 

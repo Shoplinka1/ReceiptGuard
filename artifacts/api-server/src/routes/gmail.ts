@@ -25,6 +25,13 @@ const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
   ?? (REPLIT_DEV_DOMAIN ? `https://${REPLIT_DEV_DOMAIN}/api/gmail/callback` : 'http://localhost:5173/api/gmail/callback');
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // 32-byte hex key
 
+// A valid AES-256 key is exactly 32 bytes, i.e. exactly 64 hex characters.
+// `ENCRYPTION_KEY` being merely *set* is not enough — a wrong-length or
+// non-hex value throws deep inside crypto.createCipheriv, which previously
+// surfaced as a generic `server_error` redirect with no way to diagnose it.
+const isValidEncryptionKey = (key: string | undefined): boolean =>
+  !!key && /^[0-9a-fA-F]{64}$/.test(key);
+
 const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
@@ -33,8 +40,8 @@ const GMAIL_SCOPES = [
 // ─── Encryption helpers ─────────────────────────────────────────────────────
 
 function encrypt(text: string): string {
-  if (!ENCRYPTION_KEY) throw new Error('ENCRYPTION_KEY env var is required');
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  if (!isValidEncryptionKey(ENCRYPTION_KEY)) throw new Error('ENCRYPTION_KEY env var is missing or is not a valid 64-character hex string');
+  const key = Buffer.from(ENCRYPTION_KEY!, 'hex');
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
@@ -42,8 +49,8 @@ function encrypt(text: string): string {
 }
 
 function decrypt(encryptedText: string): string {
-  if (!ENCRYPTION_KEY) throw new Error('ENCRYPTION_KEY env var is required');
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  if (!isValidEncryptionKey(ENCRYPTION_KEY)) throw new Error('ENCRYPTION_KEY env var is missing or is not a valid 64-character hex string');
+  const key = Buffer.from(ENCRYPTION_KEY!, 'hex');
   const [ivHex, encHex] = encryptedText.split(':');
   const iv = Buffer.from(ivHex, 'hex');
   const encryptedBuffer = Buffer.from(encHex, 'hex');
@@ -339,8 +346,9 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
     return;
   }
 
-  if (!ENCRYPTION_KEY) {
-    res.redirect(`${frontendUrl}/settings?tab=gmail&error=encryption_not_configured`);
+  if (!isValidEncryptionKey(ENCRYPTION_KEY)) {
+    console.error('[Gmail] ENCRYPTION_KEY is missing or is not a valid 64-character hex string');
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=encryption_key_invalid`);
     return;
   }
 
@@ -433,8 +441,8 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
     res.status(503).json({ error: 'Gmail not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your secrets.' });
     return;
   }
-  if (!ENCRYPTION_KEY) {
-    res.status(503).json({ error: 'Encryption not configured. Add ENCRYPTION_KEY to your secrets.' });
+  if (!isValidEncryptionKey(ENCRYPTION_KEY)) {
+    res.status(503).json({ error: 'Encryption not configured correctly. ENCRYPTION_KEY must be a 64-character hex string.' });
     return;
   }
 
@@ -611,7 +619,7 @@ router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<
     .single();
 
   // Revoke the Google token — best-effort, never block disconnect on failure
-  if (account && ENCRYPTION_KEY) {
+  if (account && isValidEncryptionKey(ENCRYPTION_KEY)) {
     try {
       const tokenToRevoke = account.refresh_token_enc
         ? decrypt(account.refresh_token_enc)

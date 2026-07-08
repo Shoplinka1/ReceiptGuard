@@ -53,24 +53,42 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
 
   const { planId, billingCycle = 'monthly', frontendUrl } = req.body as { planId: string; billingCycle?: 'monthly' | 'yearly'; frontendUrl?: string };
 
-  // Get the user's profile for their email — auto-create if missing (new Google OAuth users)
+  // Get the user's profile for their email — auto-create if missing (new Google OAuth users).
+  // Wrapped in try/catch: any failure here (e.g. the Supabase Auth admin API call)
+  // must return a specific, real error instead of falling through to the
+  // generic global "Internal server error" handler.
   let userEmail = '';
   let userName = '';
-  const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
-  if (!existingProfile) {
-    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(req.userId);
-    if (!authData?.user) { res.status(404).json({ error: 'User account not found' }); return; }
-    userEmail = authData.user.email ?? '';
-    userName = (authData.user.user_metadata?.full_name as string | undefined) ?? '';
-    await supabaseAdmin.from('profiles').upsert({
-      id: req.userId,
-      email: userEmail,
-      full_name: userName,
-      plan_id: 'free',
-    }, { onConflict: 'id' });
-  } else {
-    userEmail = existingProfile.email;
-    userName = existingProfile.full_name ?? '';
+  try {
+    const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+    if (!existingProfile) {
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(req.userId);
+      if (authError || !authData?.user) {
+        console.error('[Paystack] getUserById failed:', authError?.message);
+        res.status(404).json({ error: authError?.message ?? 'User account not found' });
+        return;
+      }
+      userEmail = authData.user.email ?? '';
+      userName = (authData.user.user_metadata?.full_name as string | undefined) ?? '';
+      const { error: upsertError } = await supabaseAdmin.from('profiles').upsert({
+        id: req.userId,
+        email: userEmail,
+        full_name: userName,
+        plan_id: 'free',
+      }, { onConflict: 'id' });
+      if (upsertError) {
+        console.error('[Paystack] profile auto-create failed:', upsertError.message);
+        res.status(500).json({ error: `Could not create user profile: ${upsertError.message}` });
+        return;
+      }
+    } else {
+      userEmail = existingProfile.email;
+      userName = existingProfile.full_name ?? '';
+    }
+  } catch (err: any) {
+    console.error('[Paystack] profile lookup/auto-create threw:', err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? 'Could not look up user profile' });
+    return;
   }
 
   if (planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
@@ -82,15 +100,21 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
 
   let usdPrice: number;
   let planName: string;
-  const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).maybeSingle();
-  if (plan) {
-    usdPrice = billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
-    planName = plan.name;
-  } else if (FALLBACK_PRICES[planId]) {
-    usdPrice = billingCycle === 'yearly' ? FALLBACK_PRICES[planId].yearly : FALLBACK_PRICES[planId].monthly;
-    planName = FALLBACK_PRICES[planId].name;
-  } else {
-    res.status(400).json({ error: 'Unknown plan' }); return;
+  try {
+    const { data: plan } = await supabaseAdmin.from('plans').select('*').eq('id', planId).maybeSingle();
+    if (plan) {
+      usdPrice = billingCycle === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
+      planName = plan.name;
+    } else if (FALLBACK_PRICES[planId]) {
+      usdPrice = billingCycle === 'yearly' ? FALLBACK_PRICES[planId].yearly : FALLBACK_PRICES[planId].monthly;
+      planName = FALLBACK_PRICES[planId].name;
+    } else {
+      res.status(400).json({ error: 'Unknown plan' }); return;
+    }
+  } catch (err: any) {
+    console.error('[Paystack] plan lookup threw:', err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? 'Could not look up plan pricing' });
+    return;
   }
 
   // Convert USD to NGN for Paystack (Nigerian merchant accounts transact in NGN)
