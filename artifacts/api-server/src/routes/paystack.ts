@@ -8,9 +8,6 @@
  *   GET  /api/paystack/plans       → list available plans with pricing
  *   GET  /api/paystack/subscription → get the user's current Paystack subscription
  *   POST /api/paystack/cancel      → cancel the user's subscription
- *
- * Requires env vars: PAYSTACK_SECRET_KEY (used for both API calls and webhook
- * HMAC-SHA512 signature verification — there is no separate webhook secret).
  */
 import { Router, type IRouter } from 'express';
 import crypto from 'crypto';
@@ -36,14 +33,65 @@ async function paystackRequest(path: string, options: RequestInit = {}): Promise
   return json;
 }
 
-// ─── Plans ──────────────────────────────────────────────────────────────────
+// ─── Helper: extend or create a user subscription period ─────────────────────
+
+async function activateOrRenewSubscription(opts: {
+  userId: string;
+  planId: string;
+  billingCycle: 'monthly' | 'yearly';
+  paystackCustomerCode?: string;
+  paystackSubscriptionCode?: string;
+  paystackPlanCode?: string;
+  reference: string;
+}): Promise<void> {
+  const { userId, planId, billingCycle, paystackCustomerCode, paystackSubscriptionCode, paystackPlanCode, reference } = opts;
+  const periodDays = billingCycle === 'yearly' ? 365 : 30;
+  const now = new Date();
+
+  // Fetch existing active subscription so we can extend it rather than reset it
+  const { data: existing } = await supabaseAdmin
+    .from('user_subscriptions')
+    .select('current_period_end, status')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // If subscription is still active, extend from current period end
+  // to avoid cutting the user short. If it's expired/null, start fresh.
+  let periodStart = now;
+  let periodEnd: Date;
+  if (existing?.status === 'active' && existing.current_period_end) {
+    const currentEnd = new Date(existing.current_period_end);
+    if (currentEnd > now) {
+      periodStart = currentEnd;
+    }
+  }
+  periodEnd = new Date(periodStart.getTime() + periodDays * 24 * 60 * 60 * 1000);
+
+  await supabaseAdmin.from('user_subscriptions').upsert({
+    user_id: userId,
+    plan_id: planId,
+    ...(paystackCustomerCode ? { paystack_customer_id: paystackCustomerCode } : {}),
+    ...(paystackSubscriptionCode ? { paystack_subscription_id: paystackSubscriptionCode } : {}),
+    ...(paystackPlanCode ? { paystack_plan_code: paystackPlanCode } : {}),
+    status: 'active',
+    current_period_start: periodStart.toISOString(),
+    current_period_end: periodEnd.toISOString(),
+    cancel_at_period_end: false,
+    updated_at: now.toISOString(),
+  }, { onConflict: 'user_id' });
+
+  // Ensure profile plan is set to pro
+  await supabaseAdmin.from('profiles').update({ plan_id: planId }).eq('id', userId);
+}
+
+// ─── Plans ────────────────────────────────────────────────────────────────────
 
 router.get('/api/paystack/plans', async (_req, res): Promise<void> => {
   const { data: plans } = await supabaseAdmin.from('plans').select('*').order('price_monthly');
   res.json(plans ?? []);
 });
 
-// ─── Initialize Checkout ────────────────────────────────────────────────────
+// ─── Initialize Checkout ──────────────────────────────────────────────────────
 
 router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<void> => {
   if (!PAYSTACK_SECRET_KEY) {
@@ -53,10 +101,6 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
 
   const { planId, billingCycle = 'monthly', frontendUrl } = req.body as { planId: string; billingCycle?: 'monthly' | 'yearly'; frontendUrl?: string };
 
-  // Get the user's profile for their email — auto-create if missing (new Google OAuth users).
-  // Wrapped in try/catch: any failure here (e.g. the Supabase Auth admin API call)
-  // must return a specific, real error instead of falling through to the
-  // generic global "Internal server error" handler.
   let userEmail = '';
   let userName = '';
   try {
@@ -71,10 +115,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
       userEmail = authData.user.email ?? '';
       userName = (authData.user.user_metadata?.full_name as string | undefined) ?? '';
       const { error: upsertError } = await supabaseAdmin.from('profiles').upsert({
-        id: req.userId,
-        email: userEmail,
-        full_name: userName,
-        plan_id: 'free',
+        id: req.userId, email: userEmail, full_name: userName, plan_id: 'free',
       }, { onConflict: 'id' });
       if (upsertError) {
         console.error('[Paystack] profile auto-create failed:', upsertError.message);
@@ -93,7 +134,6 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
 
   if (planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
 
-  // Hardcoded fallback prices (USD) — used when DB plans table is unavailable
   const FALLBACK_PRICES: Record<string, { monthly: number; yearly: number; name: string }> = {
     pro: { monthly: 5.99, yearly: 59.99, name: 'Pro' },
   };
@@ -117,10 +157,8 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     return;
   }
 
-  // Convert USD to NGN for Paystack (Nigerian merchant accounts transact in NGN)
-  // Rate: approximate mid-market; update periodically for accuracy.
   const USD_TO_NGN = 1600;
-  const amountKobo = Math.round(usdPrice * USD_TO_NGN * 100); // NGN kobo
+  const amountKobo = Math.round(usdPrice * USD_TO_NGN * 100);
 
   const reference = `rg_${req.userId.slice(0, 8)}_${Date.now()}`;
   const baseUrl = frontendUrl ?? process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -152,7 +190,6 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     return;
   }
 
-  // Store pending payment record in USD (the currency users see)
   const { error: insertError } = await supabaseAdmin.from('payments').insert({
     user_id: req.userId,
     paystack_reference: reference,
@@ -166,7 +203,6 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   });
   if (insertError) {
     console.error('[Paystack] payments insert failed:', insertError.message);
-    // Non-fatal — checkout URL is still valid; log and continue
   }
 
   const authorizationUrl = data?.data?.authorization_url;
@@ -179,7 +215,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   res.json({ authorizationUrl, reference });
 });
 
-// ─── Verify Payment ─────────────────────────────────────────────────────────
+// ─── Verify Payment (called after Paystack redirect) ─────────────────────────
 
 router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Promise<void> => {
   if (!PAYSTACK_SECRET_KEY) {
@@ -210,49 +246,43 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
       res.status(502).json({ error: 'Payment succeeded but could not be linked to your account. Contact support with reference ' + reference });
       return;
     }
-    const isYearly = meta.billingCycle === 'yearly';
-    const periodDays = isYearly ? 365 : 30;
 
-    // Update payment record to success
-    await supabaseAdmin.from('payments').update({ status: 'success', paid_at: new Date().toISOString() }).eq('paystack_reference', reference);
+    const billingCycle = (meta.billingCycle ?? 'monthly') as 'monthly' | 'yearly';
 
-    // Upgrade user plan
-    await supabaseAdmin.from('profiles').update({ plan_id: meta.planId }).eq('id', meta.userId);
+    // Update payment record
+    await supabaseAdmin.from('payments').update({
+      status: 'success',
+      paid_at: new Date().toISOString(),
+    }).eq('paystack_reference', reference);
 
-    // Upsert user_subscription with correct period end date
-    await supabaseAdmin.from('user_subscriptions').upsert({
-      user_id: meta.userId,
-      plan_id: meta.planId,
-      paystack_customer_id: txn.customer?.customer_code,
-      status: 'active',
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000).toISOString(),
-    }, { onConflict: 'user_id' });
+    // Activate/extend subscription and update profile
+    await activateOrRenewSubscription({
+      userId: meta.userId,
+      planId: meta.planId,
+      billingCycle,
+      paystackCustomerCode: txn.customer?.customer_code,
+      reference,
+    });
 
     await supabaseAdmin.from('activity_logs').insert({
       user_id: meta.userId,
       type: 'plan_upgraded',
-      description: `Upgraded to ${meta.planId} plan (${meta.billingCycle ?? 'monthly'})`,
-      metadata: { reference, planId: meta.planId, billingCycle: meta.billingCycle },
+      description: `Upgraded to ${meta.planId} plan (${billingCycle})`,
+      metadata: { reference, planId: meta.planId, billingCycle },
     });
   }
 
   res.json({ status: txn.status, planId: txn.metadata?.planId });
 });
 
-// ─── Webhook ────────────────────────────────────────────────────────────────
+// ─── Webhook ──────────────────────────────────────────────────────────────────
 
 router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
-  // Paystack signs webhook payloads with HMAC-SHA512 using your secret key.
-  // Verify using x-paystack-signature header against PAYSTACK_SECRET_KEY.
   if (!PAYSTACK_SECRET_KEY) {
     res.status(503).json({ error: 'PAYSTACK_SECRET_KEY not configured' });
     return;
   }
 
-  // req.body is a Buffer here because app.ts registers express.raw() on this path
-  // before express.json(). Paystack signs the raw request bytes, so we must verify
-  // against the original body, not a re-serialized object.
   const rawBody: Buffer = Buffer.isBuffer(req.body)
     ? req.body
     : Buffer.from(JSON.stringify(req.body));
@@ -277,66 +307,166 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
 
   try {
     switch (event.event) {
+
+      // ── Initial payment via checkout ──────────────────────────────────────
       case 'charge.success': {
-        const meta = event.data.metadata as { userId?: string; planId?: string };
-        if (meta?.userId && meta?.planId) {
-          await supabaseAdmin.from('profiles').update({ plan_id: meta.planId }).eq('id', meta.userId);
-          await supabaseAdmin.from('payments').update({ status: 'success' }).eq('paystack_reference', event.data.reference);
+        const meta = (event.data.metadata ?? {}) as { userId?: string; planId?: string; billingCycle?: string };
+        if (!meta.userId || !meta.planId) {
+          console.warn('[Paystack] charge.success webhook missing metadata — skipping (may be handled by verify endpoint)', JSON.stringify(meta));
+          break;
+        }
+        const billingCycle = (meta.billingCycle ?? 'monthly') as 'monthly' | 'yearly';
+
+        // Mark payment success
+        await supabaseAdmin.from('payments').update({ status: 'success' })
+          .eq('paystack_reference', event.data.reference);
+
+        // Activate / extend subscription and upgrade profile
+        await activateOrRenewSubscription({
+          userId: meta.userId,
+          planId: meta.planId,
+          billingCycle,
+          paystackCustomerCode: event.data.customer?.customer_code,
+          reference: event.data.reference,
+        });
+
+        await supabaseAdmin.from('activity_logs').insert({
+          user_id: meta.userId, type: 'payment_received',
+          description: `Payment confirmed: ${event.data.currency} ${(event.data.amount ?? 0) / 100}`,
+          metadata: { reference: event.data.reference, planId: meta.planId, billingCycle },
+        });
+        break;
+      }
+
+      // ── Recurring invoice paid (subscription renewal) ─────────────────────
+      // Paystack fires this event for every successful recurring charge.
+      // This is the primary mechanism for extending the subscription period.
+      case 'invoice.payment_succeeded':
+      case 'invoice.update': {
+        const invoiceData = event.data;
+        const custCode = invoiceData.customer?.customer_code;
+        if (!custCode) break;
+
+        // Look up user by customer code
+        const { data: subRow } = await supabaseAdmin
+          .from('user_subscriptions')
+          .select('user_id, plan_id')
+          .eq('paystack_customer_id', custCode)
+          .maybeSingle();
+
+        if (!subRow?.user_id) {
+          console.warn('[Paystack] invoice.payment_succeeded — no user found for customer:', custCode);
+          break;
+        }
+
+        // Determine billing cycle from subscription amount
+        const paidAmountNgn = (invoiceData.amount ?? 0) / 100;
+        // Yearly if >= 4x monthly NGN equivalent (rough heuristic)
+        const billingCycle = paidAmountNgn >= 50_000 ? 'yearly' : 'monthly';
+
+        await activateOrRenewSubscription({
+          userId: subRow.user_id,
+          planId: subRow.plan_id ?? 'pro',
+          billingCycle,
+          paystackCustomerCode: custCode,
+          reference: invoiceData.transaction?.reference ?? `renewal_${Date.now()}`,
+        });
+
+        // Record the payment
+        await supabaseAdmin.from('payments').insert({
+          user_id: subRow.user_id,
+          paystack_reference: invoiceData.transaction?.reference ?? `renewal_${Date.now()}`,
+          amount: paidAmountNgn / 1600, // convert NGN back to USD approx
+          currency: 'USD',
+          status: 'success',
+          plan_id: subRow.plan_id ?? 'pro',
+          billing_cycle: billingCycle,
+          description: `ReceiptGuard Pro renewal (${billingCycle})`,
+          paid_at: new Date().toISOString(),
+          metadata: { amountNgn: paidAmountNgn, event: event.event },
+        }).catch(e => console.warn('[Paystack] payment insert for renewal failed:', e.message));
+
+        await supabaseAdmin.from('activity_logs').insert({
+          user_id: subRow.user_id, type: 'subscription_renewed',
+          description: `Pro subscription renewed (${billingCycle})`,
+          metadata: { custCode, event: event.event },
+        });
+        break;
+      }
+
+      // ── Subscription cancelled / disabled ─────────────────────────────────
+      case 'subscription.disable': {
+        const custCode = event.data.customer?.customer_code;
+        if (!custCode) break;
+
+        const { data: subRow } = await supabaseAdmin
+          .from('user_subscriptions')
+          .select('user_id, id')
+          .eq('paystack_customer_id', custCode)
+          .maybeSingle();
+
+        if (subRow?.user_id) {
+          await supabaseAdmin.from('user_subscriptions')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('paystack_customer_id', custCode);
+
+          await supabaseAdmin.from('profiles').update({ plan_id: 'free' }).eq('id', subRow.user_id);
+
           await supabaseAdmin.from('activity_logs').insert({
-            user_id: meta.userId,
-            type: 'payment_received',
-            description: `Payment confirmed: ${event.data.currency} ${event.data.amount / 100}`,
-            metadata: { reference: event.data.reference },
+            user_id: subRow.user_id, type: 'subscription_cancelled',
+            description: 'Subscription cancelled via Paystack',
+            metadata: { custCode },
           });
         }
         break;
       }
-      case 'subscription.disable': {
-        const custCode = event.data.customer?.customer_code;
-        if (custCode) {
-          await supabaseAdmin.from('user_subscriptions')
-            .update({ status: 'cancelled' })
-            .eq('paystack_customer_id', custCode);
+
+      // ── Recurring payment failed ──────────────────────────────────────────
+      case 'invoice.payment_failed': {
+        const meta2 = (event.data.metadata ?? {}) as { userId?: string };
+        const custCode2 = event.data.customer?.customer_code;
+
+        // Resolve user via metadata OR customer code
+        let failedUserId = meta2.userId;
+        if (!failedUserId && custCode2) {
           const { data: subRow } = await supabaseAdmin
             .from('user_subscriptions')
             .select('user_id')
-            .eq('paystack_customer_id', custCode)
-            .single();
-          if (subRow?.user_id) {
-            await supabaseAdmin.from('profiles').update({ plan_id: 'free' }).eq('id', subRow.user_id);
-          }
+            .eq('paystack_customer_id', custCode2)
+            .maybeSingle();
+          failedUserId = subRow?.user_id;
         }
-        break;
-      }
-      case 'invoice.payment_failed': {
-        const meta2 = event.data.metadata as { userId?: string };
-        if (meta2?.userId) {
+
+        if (failedUserId) {
           await supabaseAdmin.from('payments').insert({
-            user_id: meta2.userId,
+            user_id: failedUserId,
             paystack_reference: event.data.transaction?.reference ?? `failed_${Date.now()}`,
-            // event.data.amount is in kobo; divide by 100 → NGN (major units)
-            amount: (event.data.amount ?? 0) / 100,
-            currency: 'NGN',
+            amount: (event.data.amount ?? 0) / 100 / 1600,
+            currency: 'USD',
             status: 'failed',
-            description: 'Subscription renewal failed',
-            metadata: event.data,
-          });
-          await supabaseAdmin.from('activity_logs').insert({
-            user_id: meta2.userId,
-            type: 'payment_failed',
             description: 'Subscription renewal payment failed',
+            metadata: event.data,
+          }).catch(() => {});
+
+          await supabaseAdmin.from('activity_logs').insert({
+            user_id: failedUserId, type: 'payment_failed',
+            description: 'Subscription renewal payment failed',
+            metadata: { custCode: custCode2 },
           });
+
+          // Notify the user in-app
+          await supabaseAdmin.from('notifications').insert({
+            user_id: failedUserId, type: 'payment_failed',
+            title: 'Subscription renewal failed',
+            body: 'Your Pro subscription renewal payment failed. Please update your payment method to keep Pro access.',
+            is_read: false,
+            metadata: { event: event.event },
+          }).catch(() => {});
         }
         break;
       }
     }
   } catch (err: any) {
-    // A downstream DB/logic error means the event was NOT fully applied (e.g. a
-    // plan downgrade or failed-payment record could be missing). Returning 5xx
-    // here is intentional — it tells Paystack to retry the webhook so we don't
-    // silently lose state. The handlers above are safe to re-run: profile/plan
-    // updates are idempotent (same value set again), and duplicate activity_log
-    // rows are a low-cost outcome we accept in exchange for not losing state.
     console.error(`[Paystack] webhook handler error for event "${event.event}", returning 500 for retry:`, err.message);
     res.sendStatus(500);
     return;
@@ -345,7 +475,7 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
   res.sendStatus(200);
 });
 
-// ─── Cancel Subscription ────────────────────────────────────────────────────
+// ─── Cancel Subscription ──────────────────────────────────────────────────────
 
 router.post('/api/paystack/cancel', requireAuth, async (req, res): Promise<void> => {
   const { data: sub } = await supabaseAdmin
@@ -359,25 +489,24 @@ router.post('/api/paystack/cancel', requireAuth, async (req, res): Promise<void>
 
   if (sub.paystack_subscription_id && PAYSTACK_SECRET_KEY) {
     try {
-      await paystackRequest(`/subscription/disable`, {
+      await paystackRequest('/subscription/disable', {
         method: 'POST',
         body: JSON.stringify({ code: sub.paystack_subscription_id, token: sub.paystack_plan_code }),
       });
     } catch (err: any) {
       console.error('[Paystack] subscription disable failed:', err.message);
-      // Non-fatal — still mark cancelled locally even if Paystack call fails
     }
   }
 
   await supabaseAdmin.from('user_subscriptions').update({
     status: 'cancelled',
     cancel_at_period_end: true,
+    updated_at: new Date().toISOString(),
   }).eq('id', sub.id);
 
   await supabaseAdmin.from('activity_logs').insert({
-    user_id: req.userId,
-    type: 'subscription_cancelled',
-    description: 'Pro subscription cancelled',
+    user_id: req.userId, type: 'subscription_cancelled',
+    description: 'Pro subscription cancelled by user',
   });
 
   res.json({ message: 'Subscription cancelled. You retain Pro access until the end of the billing period.' });

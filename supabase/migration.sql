@@ -137,5 +137,39 @@ alter table public.user_subscriptions add column if not exists paystack_customer
 alter table public.user_subscriptions add column if not exists current_period_start timestamptz;
 alter table public.user_subscriptions add column if not exists current_period_end timestamptz;
 
+-- ─── Phase 2: user_subscriptions additional columns ──────────────────────────
+alter table public.user_subscriptions add column if not exists paystack_plan_code text;
+alter table public.user_subscriptions add column if not exists cancel_at_period_end boolean not null default false;
+alter table public.user_subscriptions add column if not exists paystack_subscription_id text;
+
+-- ─── Phase 2: payments — description column ───────────────────────────────────
+alter table public.payments add column if not exists description text;
+
+-- ─── Phase 2: feedback — admin_notes, priority columns ───────────────────────
+alter table public.feedback add column if not exists admin_notes text;
+alter table public.feedback add column if not exists priority text not null default 'normal';
+
+-- ─── Phase 2: notifications — metadata column ────────────────────────────────
+alter table public.notifications add column if not exists metadata jsonb;
+
+-- ─── Phase 2: settings — browser_notifications, reminder window columns ──────
+alter table public.settings add column if not exists browser_notifications boolean not null default true;
+alter table public.settings add column if not exists renewal_reminder boolean not null default true;
+alter table public.settings add column if not exists warranty_reminder boolean not null default true;
+alter table public.settings add column if not exists return_window_reminder boolean not null default true;
+alter table public.settings add column if not exists days_before_30 boolean not null default true;
+alter table public.settings add column if not exists days_before_14 boolean not null default true;
+alter table public.settings add column if not exists days_before_7 boolean not null default true;
+alter table public.settings add column if not exists days_before_3 boolean not null default true;
+alter table public.settings add column if not exists days_before_1 boolean not null default false;
+
+-- ─── Phase 2: receipts — mark malformed high-value receipts ──────────────────
+-- Flag receipts with amounts outside the valid range ($0.50–$50,000).
+-- These were likely imported from crypto exchange emails before domain blocklisting.
+-- We flag rather than delete to preserve billing history and let users review.
+update public.receipts
+set status = 'flagged', notes = coalesce(notes || ' | ', '') || 'Amount outside valid range — please review'
+where (amount > 50000 or amount < 0.50) and status != 'flagged';
+
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

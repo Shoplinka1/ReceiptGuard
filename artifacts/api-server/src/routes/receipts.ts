@@ -4,6 +4,8 @@ import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
+const FREE_RECEIPT_LIMIT = 50;
+
 function mapReceipt(r: any) {
   return {
     id: r.id, merchantName: r.merchant_name, merchantLogoUrl: r.merchant_logo_url ?? null,
@@ -30,12 +32,16 @@ router.get('/api/receipts', requireAuth, async (req, res): Promise<void> => {
   query = query.range((pageNum - 1) * size, pageNum * size - 1);
 
   const { data, count, error } = await query;
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to load receipts. Please try again.' }); return; }
 
   let items = (data ?? []).map(mapReceipt);
   if (search) {
     const s = search.toLowerCase();
-    items = items.filter(r => r.merchantName.toLowerCase().includes(s) || r.category.toLowerCase().includes(s) || (r.invoiceNumber ?? '').toLowerCase().includes(s));
+    items = items.filter(r =>
+      r.merchantName.toLowerCase().includes(s) ||
+      r.category.toLowerCase().includes(s) ||
+      (r.invoiceNumber ?? '').toLowerCase().includes(s)
+    );
   }
 
   res.json({ items, total: count ?? 0, page: pageNum, pageSize: size });
@@ -43,14 +49,22 @@ router.get('/api/receipts', requireAuth, async (req, res): Promise<void> => {
 
 router.post('/api/receipts', requireAuth, async (req, res): Promise<void> => {
   const { merchantName, merchantLogoUrl, amount, currency, purchaseDate, category, invoiceNumber, notes } = req.body;
-  if (!merchantName || !amount || !purchaseDate || !category) { res.status(400).json({ error: 'merchantName, amount, purchaseDate, and category are required' }); return; }
+  if (!merchantName || !amount || !purchaseDate || !category) {
+    res.status(400).json({ error: 'merchantName, amount, purchaseDate, and category are required' });
+    return;
+  }
 
   // Free plan: max 50 receipts
   const { data: profile } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
   if (profile?.plan_id !== 'pro') {
     const { count } = await supabaseAdmin.from('receipts').select('*', { count: 'exact', head: true }).eq('user_id', req.userId);
-    if ((count ?? 0) >= 50) {
-      res.status(403).json({ error: 'Free plan limit reached (50 receipts). Upgrade to Pro for unlimited.', limitReached: true, limit: 50 });
+    if ((count ?? 0) >= FREE_RECEIPT_LIMIT) {
+      res.status(403).json({
+        error: `You've reached the Free plan limit of ${FREE_RECEIPT_LIMIT} receipts. Upgrade to Pro for unlimited receipt storage.`,
+        limitReached: true,
+        limit: FREE_RECEIPT_LIMIT,
+        feature: 'receipts',
+      });
       return;
     }
   }
@@ -61,7 +75,7 @@ router.post('/api/receipts', requireAuth, async (req, res): Promise<void> => {
     invoice_number: invoiceNumber ?? null, notes: notes ?? null,
   }).select().single();
 
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to save receipt. Please try again.' }); return; }
   res.status(201).json(mapReceipt(data));
 });
 
@@ -89,7 +103,7 @@ router.patch('/api/receipts/:id', requireAuth, async (req, res): Promise<void> =
 
 router.delete('/api/receipts/:id', requireAuth, async (req, res): Promise<void> => {
   const { error } = await supabaseAdmin.from('receipts').delete().eq('id', req.params.id).eq('user_id', req.userId);
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to delete receipt. Please try again.' }); return; }
   res.sendStatus(204);
 });
 

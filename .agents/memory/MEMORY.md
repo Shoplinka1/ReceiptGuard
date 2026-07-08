@@ -1,8 +1,8 @@
 - [Paystack webhook verification](paystack-webhook.md) — uses PAYSTACK_SECRET_KEY (not a separate webhook secret) with HMAC-SHA512 on x-paystack-signature header.
 - [Google OAuth for Supabase](supabase-google-auth.md) — Supabase Google sign-in requires manual config in Supabase Dashboard; redirect URLs must be allowlisted there.
-- [Email reminder scheduler](reminder-scheduler.md) — runs hourly in api-server, checks renewals table for items due in 3 days, creates notifications + sends email via nodemailer.
-- [Plan enforcement](plan-enforcement.md) — Free limits enforced server-side: 50 receipts (receipts.ts POST), 5 subs (subscriptions.ts POST), 1 Gmail (gmail.ts auth-url). Returns 403 + limitReached:true.
-- [Auto-downgrade scheduler](auto-downgrade.md) — reminder-scheduler.ts runs runExpiryDowngrade() hourly; finds expired user_subscriptions, sets plan_id=free in profiles.
+- [Plan enforcement](plan-enforcement.md) — Free limits enforced server-side: 50 receipts (receipts.ts POST), 5 subs (subscriptions.ts POST), 1 Gmail (gmail.ts auth-url), 5 warranties (warranties.ts POST). Returns 403 + limitReached:true.
+- [Gmail scan limits](gmail-scan-limits.md) — FREE_SCAN_LIMIT=150, FREE_RECEIPT_LIMIT=50, FREE_WARRANTY_LIMIT=5 exported from gmail.ts. Background rescans use after: date filter (new emails only). Scan checks receipt count per-batch and stops importing when Free limit reached.
+- [Auto-downgrade scheduler](auto-downgrade.md) — reminder-scheduler.ts runs runExpiryDowngrade() hourly; cancel_at_period_end=true subs or subs expired 3+ days are downgraded to free.
 - [DB tables not yet created](db-tables.md) — supabase/schema.sql must be run in Supabase SQL Editor before any data routes work; missing tables cause PGRST205 errors.
 - [Settings page](settings-tabs.md) — 7 tabs: Profile, Gmail, Billing, General, Appearance, Security, Help & Support.
 - [Feedback API shape](feedback-api.md) — POST /api/feedback expects { type, subject, body } not { type, message }. Settings FeedbackForm corrected accordingly.
@@ -15,3 +15,7 @@
 - [Paystack response shape hardening](paystack-response-hardening.md) — always null-check nested `data.data.*` from Paystack API calls and `metadata` from webhook/verify payloads before use; unguarded access was the root cause of "upgrade returns 500".
 - [Webhook failure HTTP status](webhook-retry-semantics.md) — payment webhook handlers should return 5xx (not 200) on internal failure so the provider retries; swallowing errors into a 200 ack causes silent state loss (e.g. missed plan downgrade).
 - [Supabase SQL migration idempotency](supabase-sql-idempotency.md) — schema.sql/migration.sql must use matching dollar-quote tags (DO $tag$...$tag$) and guard CREATE POLICY with DROP POLICY IF EXISTS so reruns on partially-migrated DBs don't fail.
+- [Supabase stub proxy](supabase-stub-proxy.md) — dev stub uses function-based Proxy so chaining works (.from().select().eq()…). Object.assign+Proxy fails because Proxy has no own enumerable keys. Fix: makeChain() with apply trap.
+- [Paystack recurring renewal](paystack-recurring.md) — charge.success AND invoice.payment_succeeded both call activateOrRenewSubscription() which extends current_period_end from current end if still active. Lookup by paystack_customer_id on user_subscriptions.
+- [Dashboard gmailConnected fix](dashboard-gmail.md) — gmailConnected queries email_accounts table (not hardcoded false). Dashboard summary includes validReceiptCount filtering amounts $0.50–$50k.
+- [Phase 2 migration](phase2-migration.md) — supabase/migration.sql Phase 2 block adds: user_subscriptions(paystack_plan_code, cancel_at_period_end, paystack_subscription_id), payments(description), feedback(admin_notes, priority), notifications(metadata), settings(browser_notifications + all reminder window columns). Also flags receipts with amount>50k or <0.50.

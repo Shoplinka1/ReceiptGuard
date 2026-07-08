@@ -20,25 +20,38 @@ if (supabaseUrl && supabaseServiceKey) {
   );
 }
 
-// Proxy that throws a clean 503 when Supabase is not configured.
+// Proxy that returns a graceful no-op when Supabase is not configured.
+// The stub supports full chaining (.from().select().eq()…) and resolves to
+// { data: null, error: { message: '...' }, count: null } when awaited —
+// exactly the same shape as real Supabase responses.
 export const supabaseAdmin: SupabaseClient = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
     if (!_supabaseAdmin) {
-      // Return a function that yields a standard Supabase-style error object
-      return (..._args: unknown[]) => {
-        const errResult = { data: null, error: { message: 'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' }, count: null };
-        // Support chaining like .from().select().eq()…
-        const chain: any = new Proxy({}, {
-          get: (_t, _p) => {
-            if (_p === 'then') return undefined; // not a thenable until awaited
-            return (..._a: unknown[]) => chain;
-          },
-        });
-        // Override the final await to return the error result
-        chain.then = undefined;
-        const promise = Promise.resolve(errResult);
-        return Object.assign(promise, chain);
+      const errResult = {
+        data: null,
+        error: { message: 'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' },
+        count: null,
       };
+      // Build a chainable thenable: any method call returns the same object.
+      // Using a function-based approach so the proxy has a callable [[Call]] slot
+      // (required for chaining like .from(...).select(...).eq(...)...).
+      function makeChain(): any {
+        const p: any = new Proxy(function chain() {}, {
+          get(_t, key) {
+            if (key === 'then') {
+              // Make it a thenable that resolves to the error result
+              return (onFulfilled: any) => Promise.resolve(errResult).then(onFulfilled);
+            }
+            if (key === 'catch') return (f: any) => Promise.resolve(errResult).catch(f);
+            if (key === 'finally') return (f: any) => Promise.resolve(errResult).finally(f);
+            return () => p;
+          },
+          apply() { return p; },
+        });
+        return p;
+      }
+      // Return a function for any top-level property access (e.g. .from, .auth, .storage)
+      return () => makeChain();
     }
     return (_supabaseAdmin as any)[prop];
   },

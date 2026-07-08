@@ -10,6 +10,9 @@
  *
  * All reminders respect the user's email_notifications setting.
  * Deduplication: at most one notification per (type, reference, day-window) per calendar day.
+ * Timezone: reminders are scheduled in UTC. Per-user timezone is stored in settings
+ * but scheduling in individual timezones would require a per-user job queue.
+ * The current approach fires reminders within ±12 hours of the user's local date.
  */
 import { supabaseAdmin } from './supabase';
 import { sendEmail } from './email';
@@ -18,7 +21,6 @@ import { runGmailScan } from '../routes/gmail';
 
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-// Day windows we check. Must match the settings column names.
 const REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
   { days: 30, settingKey: 'days_before_30' },
   { days: 14, settingKey: 'days_before_14' },
@@ -27,7 +29,7 @@ const REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
   { days: 1,  settingKey: 'days_before_1' },
 ];
 
-// ─── Email templates ─────────────────────────────────────────────────────────
+// ─── Email templates ──────────────────────────────────────────────────────────
 
 function reminderEmailHtml(opts: {
   firstName: string; companyName: string; amount: number; currency: string;
@@ -80,7 +82,7 @@ function reminderEmailHtml(opts: {
       <td style="padding:20px 32px;border-top:1px solid #e5e7eb;">
         <p style="margin:0;color:#9ca3af;font-size:13px;">
           You're receiving this because you have a ReceiptGuard account.
-          <a href="${appUrl}/reminders" style="color:#10b981;">Manage notifications</a>
+          <a href="${appUrl}/settings?tab=reminders" style="color:#10b981;">Manage notifications</a>
         </p>
       </td>
     </tr>
@@ -89,7 +91,7 @@ function reminderEmailHtml(opts: {
 </html>`;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function targetDateRange(daysAway: number): { start: string; end: string } {
   const target = new Date();
@@ -112,7 +114,7 @@ async function alreadyNotifiedToday(userId: string, type: string, refId: string,
   return !!data;
 }
 
-// ─── Renewal reminders ───────────────────────────────────────────────────────
+// ─── Renewal reminders ────────────────────────────────────────────────────────
 
 async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): Promise<void> {
   const { start, end } = targetDateRange(daysAway);
@@ -128,7 +130,6 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
   if (!renewals?.length) return;
 
   for (const renewal of renewals) {
-    // Check if user has renewal_reminder enabled and this window enabled
     const { data: settings } = await supabaseAdmin
       .from('settings')
       .select('renewal_reminder, email_notifications, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
@@ -137,17 +138,17 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
 
     if (settings?.renewal_reminder === false) continue;
 
-    // Check the specific day-window is enabled (default true)
     const windowKey = `days_before_${daysAway}` as keyof typeof settings;
     if (settings && settings[windowKey] === false) continue;
 
+    // Deduplicate: skip if already notified today for this exact (type, ref, window)
     if (await alreadyNotifiedToday(renewal.user_id, 'renewal_reminder', renewal.id, daysAway)) continue;
 
     const renewalDateFormatted = new Date(renewal.renewal_date).toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
 
-    await supabaseAdmin.from('notifications').insert({
+    const { error: notifError } = await supabaseAdmin.from('notifications').insert({
       user_id: renewal.user_id, type: 'renewal_reminder',
       title: `${renewal.merchant_name} renews ${daysAway === 1 ? 'tomorrow' : `in ${daysAway} days`}`,
       body: `Your ${renewal.merchant_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.`,
@@ -155,12 +156,16 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
       metadata: { refId: renewal.id, daysAway, subscriptionId: renewal.subscription_id, merchantName: renewal.merchant_name, renewalDate: renewal.renewal_date },
     });
 
+    if (notifError) {
+      logger.error({ err: notifError, renewalId: renewal.id }, '[reminders] notification insert failed');
+    }
+
     if (settings?.email_notifications === false) continue;
 
     const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', renewal.user_id).single();
     if (!profile?.email) continue;
 
-    await sendEmail({
+    const sent = await sendEmail({
       to: profile.email,
       subject: `Reminder: ${renewal.merchant_name} renews in ${daysAway} day${daysAway === 1 ? '' : 's'}`,
       html: reminderEmailHtml({
@@ -171,10 +176,14 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
       }),
       text: `Hi ${profile.full_name?.split(' ')[0] ?? 'there'},\n\nYour ${renewal.merchant_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.\n\nManage at ${appUrl}/subscriptions`,
     });
+
+    if (!sent) {
+      logger.warn({ userId: renewal.user_id, merchantName: renewal.merchant_name }, '[reminders] Email delivery failed for renewal reminder');
+    }
   }
 }
 
-// ─── Warranty reminders ──────────────────────────────────────────────────────
+// ─── Warranty reminders ───────────────────────────────────────────────────────
 
 async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): Promise<void> {
   const { start, end } = targetDateRange(daysAway);
@@ -208,7 +217,7 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
     });
     const name = warranty.product_name;
 
-    await supabaseAdmin.from('notifications').insert({
+    const { error: notifError } = await supabaseAdmin.from('notifications').insert({
       user_id: warranty.user_id, type: 'warranty_reminder',
       title: `${name} warranty expires ${daysAway === 1 ? 'tomorrow' : `in ${daysAway} days`}`,
       body: `The warranty for ${name} (from ${warranty.merchant_name ?? 'unknown merchant'}) expires on ${expiryFormatted}.`,
@@ -216,12 +225,16 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
       metadata: { refId: warranty.id, daysAway, productName: name, warrantyEndDate: warranty.warranty_end_date },
     });
 
+    if (notifError) {
+      logger.error({ err: notifError, warrantyId: warranty.id }, '[reminders] warranty notification insert failed');
+    }
+
     if (settings?.email_notifications === false) continue;
 
     const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', warranty.user_id).single();
     if (!profile?.email) continue;
 
-    await sendEmail({
+    const sent = await sendEmail({
       to: profile.email,
       subject: `Warranty alert: ${name} expires in ${daysAway} day${daysAway === 1 ? '' : 's'}`,
       html: reminderEmailHtml({
@@ -232,6 +245,10 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
       }),
       text: `Hi ${profile.full_name?.split(' ')[0] ?? 'there'},\n\nThe warranty for ${name} expires on ${expiryFormatted}.\n\nView at ${appUrl}/warranties`,
     });
+
+    if (!sent) {
+      logger.warn({ userId: warranty.user_id, productName: name }, '[reminders] Email delivery failed for warranty reminder');
+    }
   }
 }
 
@@ -244,19 +261,47 @@ async function runExpiryDowngrade(): Promise<void> {
       .from('user_subscriptions')
       .select('id, user_id')
       .eq('status', 'active')
+      .eq('cancel_at_period_end', true) // Only auto-downgrade explicitly cancelled subs
       .lte('current_period_end', now);
 
     if (error) { logger.error({ error }, '[reminders] Expiry check failed'); return; }
-    if (!expired?.length) return;
 
-    logger.info({ count: expired.length }, '[reminders] Downgrading expired subscriptions');
-    for (const sub of expired) {
-      await supabaseAdmin.from('user_subscriptions').update({ status: 'expired' }).eq('id', sub.id);
+    // Also check for subs that are active but have been expired for more than 3 days
+    // (covers cases where a recurring payment failed but no webhook was received)
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: staleExpired } = await supabaseAdmin
+      .from('user_subscriptions')
+      .select('id, user_id')
+      .eq('status', 'active')
+      .eq('cancel_at_period_end', false)
+      .lte('current_period_end', threeDaysAgo);
+
+    const allExpired = [...(expired ?? []), ...(staleExpired ?? [])];
+    if (!allExpired.length) return;
+
+    logger.info({ count: allExpired.length }, '[reminders] Downgrading expired subscriptions');
+    for (const sub of allExpired) {
+      await supabaseAdmin.from('user_subscriptions').update({
+        status: 'expired',
+        updated_at: new Date().toISOString(),
+      }).eq('id', sub.id);
+
       await supabaseAdmin.from('profiles').update({ plan_id: 'free' }).eq('id', sub.user_id);
+
       await supabaseAdmin.from('activity_logs').insert({
         user_id: sub.user_id, type: 'plan_downgraded',
         description: 'Subscription expired — downgraded to Free plan automatically.',
       });
+
+      // In-app notification for the downgrade
+      await supabaseAdmin.from('notifications').insert({
+        user_id: sub.user_id, type: 'plan_downgraded',
+        title: 'Your Pro plan has expired',
+        body: 'Your ReceiptGuard Pro subscription has ended. Your data is safe. Upgrade to Pro to restore unlimited access.',
+        is_read: false,
+        metadata: { subscriptionId: sub.id },
+      }).catch(() => {});
+
       logger.info({ userId: sub.user_id }, '[reminders] Downgraded to free on expiry');
     }
   } catch (err) {
@@ -265,7 +310,6 @@ async function runExpiryDowngrade(): Promise<void> {
 }
 
 // ─── Gmail periodic rescan ────────────────────────────────────────────────────
-// Runs daily: rescans accounts not scanned in the last 23 hours for new emails.
 
 async function runGmailRescan(): Promise<void> {
   try {
@@ -281,11 +325,11 @@ async function runGmailRescan(): Promise<void> {
 
     logger.info({ count: accounts.length }, '[gmail-rescan] Starting periodic inbox rescan');
 
-    // Run scans sequentially to avoid hammering Gmail API
     for (const account of accounts) {
       try {
-        logger.info({ email: account.email }, '[gmail-rescan] Rescanning account');
-        await runGmailScan(account, account.user_id, false);
+        logger.info({ email: account.email }, '[gmail-rescan] Rescanning account (new emails only)');
+        // isInitialScan=false so it only checks new emails since last_scanned_at
+        await runGmailScan(account, account.user_id, false, false);
       } catch (scanErr: any) {
         logger.warn({ email: account.email, err: scanErr.message }, '[gmail-rescan] Scan failed for account');
       }
@@ -295,12 +339,11 @@ async function runGmailRescan(): Promise<void> {
   }
 }
 
-// ─── Main check ──────────────────────────────────────────────────────────────
+// ─── Main check ───────────────────────────────────────────────────────────────
 
 async function runAllReminders(): Promise<void> {
   const appUrl = process.env.FRONTEND_URL ?? 'https://receiptguard.app';
   try {
-    // Run all reminder windows in parallel
     await Promise.all([
       ...REMINDER_WINDOWS.map(w => runRenewalRemindersForWindow(w.days, appUrl)),
       ...REMINDER_WINDOWS.map(w => runWarrantyRemindersForWindow(w.days, appUrl)),
@@ -311,7 +354,7 @@ async function runAllReminders(): Promise<void> {
   }
 }
 
-// ─── Scheduler entry ─────────────────────────────────────────────────────────
+// ─── Scheduler entry ──────────────────────────────────────────────────────────
 
 let runCount = 0;
 
@@ -326,7 +369,6 @@ export function startReminderScheduler(): void {
     if (runCount % 24 === 1) await runGmailRescan();
   };
 
-  // Run immediately on startup, then every hour
   tick();
   setInterval(tick, INTERVAL_MS);
 }
