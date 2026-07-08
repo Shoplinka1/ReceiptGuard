@@ -4,6 +4,11 @@
 - [Plan enforcement](plan-enforcement.md) — Free limits enforced server-side: 50 receipts (receipts.ts POST), 5 subs (subscriptions.ts POST), 1 Gmail (gmail.ts auth-url). Returns 403 + limitReached:true.
 - [Auto-downgrade scheduler](auto-downgrade.md) — reminder-scheduler.ts runs runExpiryDowngrade() hourly; finds expired user_subscriptions, sets plan_id=free in profiles.
 - [DB tables not yet created](db-tables.md) — supabase/schema.sql must be run in Supabase SQL Editor before any data routes work; missing tables cause PGRST205 errors.
-- [Settings page](settings-tabs.md) — 6 tabs: General (currency/timezone/language/notifications), Gmail (connect/disconnect/scan accounts), Appearance, Security, Data (delete account), Feedback.
+- [Settings page](settings-tabs.md) — 7 tabs: Profile, Gmail, Billing, General, Appearance, Security, Help & Support.
 - [Feedback API shape](feedback-api.md) — POST /api/feedback expects { type, subject, body } not { type, message }. Settings FeedbackForm corrected accordingly.
-- [Delete account](delete-account.md) — DELETE /api/user/account in user.ts; deletes in dependency order then supabaseAdmin.auth.admin.deleteUser(uid). Requires user to type "DELETE" to confirm in UI.
+- [Delete account](delete-account.md) — DELETE /api/user/account in user.ts; deletes in dependency order then supabaseAdmin.auth.admin.deleteUser(uid). Requires user to type "DELETE" to confirm in UI (Settings → Security tab).
+- [Subscriptions table column](subscriptions-schema.md) — schema column is `name` (not `company_name`). subscriptions.ts and search in user.ts both fixed to use `name`. mapSub reads `s.name ?? s.company_name` for backward compat.
+- [Settings table columns](settings-schema.md) — settings table required ALTER TABLE to add `language` and `browser_notifications` (DO $$ migration in schema.sql). Settings PATCH has fallback for pre-migration DBs.
+- [Gmail callback safety](gmail-callback.md) — /api/gmail/callback must wrap token exchange + downstream in try/catch that does res.redirect(frontendUrl + ?error=server_error). Any uncaught async throw otherwise returns JSON 500 to an OAuth redirect browser tab.
+- [Reminder scheduler columns](reminder-scheduler-columns.md) — renewals table uses `merchant_name` (not `company_name`); notifications table uses `body` and `is_read` (not `message`/`read`).
+- [Railway GOOGLE_REDIRECT_URI bug](railway-redirect-uri.md) — Railway env var GOOGLE_REDIRECT_URI was set to the Replit dev domain; must be https://workspaceapi-server-production-1c35.up.railway.app/api/gmail/callback. Also needs that URI added as Authorized redirect URI in Google Cloud Console.
