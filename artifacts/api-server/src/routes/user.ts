@@ -1,6 +1,7 @@
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const router: IRouter = Router();
 
@@ -78,16 +79,54 @@ router.patch('/api/user/settings', requireAuth, async (req, res): Promise<void> 
 });
 
 router.get('/api/reminders/settings', requireAuth, async (req, res): Promise<void> => {
-  // Reminders are stored as profile settings for simplicity
+  const { data } = await supabaseAdmin.from('settings').select('*').eq('user_id', req.userId).maybeSingle();
   res.json({
-    id: req.userId, userId: req.userId, renewalReminder: true, warrantyReminder: true,
-    returnWindowReminder: true, daysBefore30: true, daysBefore14: true, daysBefore7: true, daysBefore3: true, daysBefore1: false,
-    emailNotifications: true, browserNotifications: true,
+    id: req.userId, userId: req.userId,
+    renewalReminder:       data?.renewal_reminder       ?? true,
+    warrantyReminder:      data?.warranty_reminder      ?? true,
+    returnWindowReminder:  data?.return_window_reminder ?? true,
+    daysBefore30:          data?.days_before_30         ?? true,
+    daysBefore14:          data?.days_before_14         ?? true,
+    daysBefore7:           data?.days_before_7          ?? true,
+    daysBefore3:           data?.days_before_3          ?? true,
+    daysBefore1:           data?.days_before_1          ?? false,
+    emailNotifications:    data?.email_notifications    ?? true,
+    browserNotifications:  data?.browser_notifications  ?? true,
   });
 });
 
 router.patch('/api/reminders/settings', requireAuth, async (req, res): Promise<void> => {
-  // Could persist to a separate table; for now reflect back the request
+  const {
+    renewalReminder, warrantyReminder, returnWindowReminder,
+    daysBefore30, daysBefore14, daysBefore7, daysBefore3, daysBefore1,
+    emailNotifications, browserNotifications,
+  } = req.body;
+
+  const updates: Record<string, any> = { user_id: req.userId, updated_at: new Date().toISOString() };
+  if (renewalReminder       !== undefined) updates.renewal_reminder       = renewalReminder;
+  if (warrantyReminder      !== undefined) updates.warranty_reminder      = warrantyReminder;
+  if (returnWindowReminder  !== undefined) updates.return_window_reminder = returnWindowReminder;
+  if (daysBefore30          !== undefined) updates.days_before_30         = daysBefore30;
+  if (daysBefore14          !== undefined) updates.days_before_14         = daysBefore14;
+  if (daysBefore7           !== undefined) updates.days_before_7          = daysBefore7;
+  if (daysBefore3           !== undefined) updates.days_before_3          = daysBefore3;
+  if (daysBefore1           !== undefined) updates.days_before_1          = daysBefore1;
+  if (emailNotifications    !== undefined) updates.email_notifications    = emailNotifications;
+  if (browserNotifications  !== undefined) updates.browser_notifications  = browserNotifications;
+
+  const { error } = await supabaseAdmin.from('settings').upsert(updates, { onConflict: 'user_id' });
+  if (error) {
+    // If the extended reminder columns don't exist yet, log and report partial failure
+    if (error.message?.includes('column') || error.message?.includes('schema cache') || error.code === 'PGRST205' || error.code === '42703') {
+      logger.warn({ error: error.message }, '[reminders] Settings schema migration not yet applied — run schema.sql migrations in Supabase');
+      res.status(503).json({
+        error: 'Reminder settings schema not yet applied. Run the migration in supabase/schema.sql.',
+        migrationRequired: true,
+      });
+      return;
+    }
+    res.status(500).json({ error: error.message }); return;
+  }
   res.json({ userId: req.userId, ...req.body });
 });
 

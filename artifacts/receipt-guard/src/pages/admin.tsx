@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import {
   Users, DollarSign, TrendingUp, Activity, Mail, ShieldAlert,
   UserX, Search, MessageSquare, Bug, Lightbulb, LifeBuoy, RefreshCw,
-  AlertTriangle, CheckCircle2, Sparkles, Calendar,
+  AlertTriangle, CheckCircle2, Sparkles, Calendar, Inbox,
 } from 'lucide-react'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
@@ -53,9 +53,16 @@ function useAdminPayments() {
 function useAdminFeedback() {
   return useQuery({ queryKey: ['admin', 'feedback'], queryFn: () => apiFetch('/api/admin/feedback?limit=30'), retry: false })
 }
+function useAdminGmailAccounts(search: string) {
+  return useQuery({
+    queryKey: ['admin', 'gmail', search],
+    queryFn: () => apiFetch(`/api/admin/gmail-accounts?search=${encodeURIComponent(search)}&pageSize=50`),
+    retry: false,
+  })
+}
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions'>('overview')
+  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail'>('overview')
   const [search, setSearch] = useState('')
   const qc = useQueryClient()
 
@@ -65,6 +72,7 @@ export default function AdminPage() {
   const users = usersData?.users ?? []
   const { data: payments, isLoading: loadingPayments } = useAdminPayments()
   const { data: feedback, isLoading: loadingFeedback } = useAdminFeedback()
+  const { data: gmailData, isLoading: loadingGmail } = useAdminGmailAccounts(search)
 
   const patchUser = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
@@ -84,6 +92,7 @@ export default function AdminPage() {
     { id: 'users' as const, label: 'Users' },
     { id: 'payments' as const, label: 'Payments' },
     { id: 'subscriptions' as const, label: 'Subscriptions' },
+    { id: 'gmail' as const, label: 'Gmail Accounts' },
     { id: 'feedback' as const, label: 'Feedback' },
   ]
 
@@ -348,6 +357,78 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             )}
+          </div>
+        )}
+
+        {/* GMAIL ACCOUNTS */}
+        {tab === 'gmail' && (
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by Gmail address…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <Card>
+              <CardContent className="p-0">
+                {loadingGmail ? (
+                  <div className="p-6 space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                ) : !(gmailData?.accounts as any[])?.length ? (
+                  <div className="p-12 text-center text-muted-foreground">No Gmail accounts connected.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <th className="px-4 py-3">Gmail</th>
+                          <th className="px-4 py-3">Owner</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Last Scanned</th>
+                          <th className="px-4 py-3">Connected</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {((gmailData?.accounts ?? []) as any[]).map((acc: any) => (
+                          <tr key={acc.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Inbox className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium">{acc.email}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              <div>
+                                <p>{acc.profiles?.full_name || '—'}</p>
+                                <p className="text-xs">{acc.profiles?.email || String(acc.user_id).slice(0, 12) + '…'}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={acc.is_active ? 'outline' : 'secondary'} className={`text-xs ${acc.is_active ? 'text-emerald-600 border-emerald-500/30' : ''}`}>
+                                {acc.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">
+                              {acc.last_scanned_at ? new Date(acc.last_scanned_at).toLocaleString() : 'Never'}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">
+                              {new Date(acc.created_at).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
+                      {gmailData?.total ?? 0} connected account{(gmailData?.total ?? 0) !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 

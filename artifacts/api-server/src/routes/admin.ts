@@ -87,8 +87,13 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 router.get('/api/admin/users', ...adminGuard, async (req, res): Promise<void> => {
-  const { search, plan, page = '1', pageSize = '20' } = req.query as Record<string, string>;
-  const offset = (parseInt(page) - 1) * parseInt(pageSize);
+  const { search, plan, page: pageRaw = '1', pageSize: pageSizeRaw = '20' } = req.query as Record<string, string>;
+  const page = parseInt(pageRaw, 10);
+  const pageSize = Math.min(parseInt(pageSizeRaw, 10), 100);
+  if (isNaN(page) || page < 1 || isNaN(pageSize) || pageSize < 1) {
+    res.status(400).json({ error: 'Invalid page or pageSize' }); return;
+  }
+  const offset = (page - 1) * pageSize;
 
   let query = supabaseAdmin
     .from('profiles')
@@ -146,6 +151,31 @@ router.get('/api/admin/payments', ...adminGuard, async (_req, res): Promise<void
 
   if (error) { res.status(500).json({ error: error.message }); return; }
   res.json(data ?? []);
+});
+
+// ─── Gmail Accounts ──────────────────────────────────────────────────────────
+
+router.get('/api/admin/gmail-accounts', ...adminGuard, async (req, res): Promise<void> => {
+  const { search, page: pageRaw = '1', pageSize: pageSizeRaw = '20' } = req.query as Record<string, string>;
+  const page = parseInt(pageRaw, 10);
+  const pageSize = Math.min(parseInt(pageSizeRaw, 10), 100);
+  if (isNaN(page) || page < 1 || isNaN(pageSize) || pageSize < 1) {
+    res.status(400).json({ error: 'Invalid page or pageSize' }); return;
+  }
+  const offset = (page - 1) * pageSize;
+
+  let query = supabaseAdmin
+    .from('email_accounts')
+    .select('id, email, provider, is_active, last_scanned_at, created_at, user_id, profiles!email_accounts_user_id_fkey(email, full_name)', { count: 'exact' })
+    .eq('provider', 'gmail')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + parseInt(pageSize) - 1);
+
+  if (search) query = (query as any).or(`email.ilike.%${search}%`);
+
+  const { data, count, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json({ accounts: data ?? [], total: count ?? 0, page: parseInt(page), pageSize: parseInt(pageSize) });
 });
 
 // ─── Feedback ────────────────────────────────────────────────────────────────

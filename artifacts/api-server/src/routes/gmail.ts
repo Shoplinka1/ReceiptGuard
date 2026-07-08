@@ -416,7 +416,7 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
   );
 });
 
-async function runGmailScan(account: any, userId: string, forceRescan: boolean): Promise<void> {
+export async function runGmailScan(account: any, userId: string, forceRescan: boolean): Promise<void> {
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken(account);
@@ -508,6 +508,35 @@ async function runGmailScan(account: any, userId: string, forceRescan: boolean):
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {
   const { id } = req.params;
+
+  // Fetch account first so we can revoke the token with Google before deleting
+  const { data: account } = await supabaseAdmin
+    .from('email_accounts')
+    .select('access_token_enc, refresh_token_enc, email')
+    .eq('id', id)
+    .eq('user_id', req.userId)
+    .single();
+
+  // Revoke the Google token — best-effort, never block disconnect on failure
+  if (account && ENCRYPTION_KEY) {
+    try {
+      const tokenToRevoke = account.refresh_token_enc
+        ? decrypt(account.refresh_token_enc)
+        : account.access_token_enc
+          ? decrypt(account.access_token_enc)
+          : null;
+
+      if (tokenToRevoke) {
+        await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokenToRevoke)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        }).catch(e => console.warn('[Gmail] Token revocation request failed:', e.message));
+      }
+    } catch (e: any) {
+      console.warn('[Gmail] Could not revoke token during disconnect:', e.message);
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('email_accounts')
     .delete()
@@ -519,7 +548,7 @@ router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<
   await supabaseAdmin.from('activity_logs').insert({
     user_id: req.userId,
     type: 'gmail_disconnected',
-    description: 'Gmail account disconnected',
+    description: `Gmail account disconnected${account?.email ? ` (${account.email})` : ''}`,
     metadata: { accountId: id },
   });
 

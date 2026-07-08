@@ -11,6 +11,7 @@ import gmailRouter from './gmail';
 import paystackRouter from './paystack';
 import adminRouter from './admin';
 import feedbackRouter from './feedback';
+import notificationsRouter from './notifications';
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.use(renewalsRouter);
 router.use(merchantsRouter);
 router.use(userRouter);
 router.use(feedbackRouter);
+router.use(notificationsRouter);
 router.use(adminRouter);
 
 export default router;

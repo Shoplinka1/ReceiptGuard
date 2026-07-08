@@ -1,0 +1,81 @@
+Do a complete production audit of ReceiptGuard. Do not stop at the Gmail OAuth callback error.
+	1.	Gmail OAuth
+
+	•	Use Railway runtime logs to identify the exact exception thrown by /api/gmail/callback after Google returns the authorization code.
+	•	Fix the root cause.
+	•	Verify Google tokens are exchanged successfully.
+	•	Verify tokens are encrypted with ENCRYPTION_KEY.
+	•	Verify Gmail accounts are saved to Supabase.
+	•	Verify connected Gmail accounts appear in Settings.
+	•	Verify reconnect, disconnect, and rescan flows.
+
+	2.	Gmail Scanning
+
+	•	Verify that when a user connects Gmail, existing receipts, invoices, warranties, subscriptions, and order confirmations already in the mailbox are scanned and imported.
+	•	Verify that newly arriving emails after connection are automatically scanned on an ongoing basis.
+	•	Verify scan limits differ correctly between Free and Pro plans.
+	•	Verify background jobs, cron jobs, queues, and schedulers are running in production.
+
+	3.	Email Delivery
+
+	•	Fully implement production email sending.
+	•	If Resend is already supported, configure and use it.
+	•	Otherwise configure Gmail SMTP.
+	•	Verify feedback emails arrive at receiptguard01@gmail.com.
+	•	Verify support emails arrive at receiptguard01@gmail.com.
+	•	Verify password reset emails send successfully.
+	•	Verify warranty reminder emails send successfully.
+	•	Verify subscription reminder emails send successfully.
+	•	Verify receipt reminder emails send successfully.
+	•	Add any missing Railway environment variables.
+
+	4.	Settings Page
+
+	•	Audit every Settings tab.
+	•	Fix language settings persistence.
+	•	Fix currency settings persistence.
+	•	Fix notification settings persistence.
+	•	Fix profile settings persistence.
+	•	Verify changes save to Supabase and reload correctly.
+
+	5.	Billing & Subscriptions
+
+	•	Audit Paystack integration end-to-end.
+	•	Verify monthly subscriptions expire correctly and automatically downgrade users back to Free when the billing period ends.
+	•	Verify yearly subscriptions expire correctly and automatically downgrade users back to Free when the billing period ends.
+	•	Verify cancellations work.
+	•	Verify renewal dates are tracked correctly.
+	•	Verify webhook handling and failed payment handling.
+
+	6.	Admin Features
+
+	•	Verify an admin page exists.
+	•	Verify I can view registered users.
+	•	Verify I can view subscription status.
+	•	Verify I can view connected Gmail accounts.
+	•	Verify I can view feedback and support submissions.
+	•	If missing, implement the required admin functionality.
+
+	7.	Notifications
+
+	•	Verify users receive in-app notifications.
+	•	Verify users receive email reminders.
+	•	Verify reminder schedules work daily.
+	•	Verify warranty expiry reminders.
+	•	Verify subscription renewal reminders.
+	•	Verify receipt-related reminders.
+
+	8.	Production Verification
+
+	•	Do not guess.
+	•	Use Railway logs, database checks, and live testing.
+	•	Provide exact root causes.
+	•	Fix every issue found.
+	•	Commit all changes.
+	•	Push to GitHub.
+	•	Return a report showing:
+	•	Issues found
+	•	Files changed
+	•	Railway variables required
+	•	Tests performed
+	•	Git commit hash

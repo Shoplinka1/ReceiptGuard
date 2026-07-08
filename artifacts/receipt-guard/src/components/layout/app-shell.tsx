@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { NotificationBell } from "./notification-bell"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
@@ -70,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto px-4 py-6 border-t border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">Account</p>
           <nav className="space-y-1">
+            <NotificationBell />
             {bottomItems.map((item) => {
               const isActive = location === item.href
               return (
@@ -107,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       
       {/* Mobile Bottom Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-6 py-3 safe-area-bottom">
-        {[navItems[0], navItems[1], navItems[2], bottomItems[1]].map((item) => {
+        {[navItems[0], navItems[1], navItems[2], bottomItems[0]].map((item) => {
           const isActive = location === item.href
           return (
             <Link key={item.name} href={item.href}>

@@ -420,9 +420,39 @@ BEGIN
   END IF;
 END $;
 
+-- Add is_suspended to profiles (added after initial deploy)
+DO $body$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'is_suspended'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN is_suspended boolean NOT NULL DEFAULT false;
+  END IF;
+END $body$;
+
+-- Add reminder preference boolean columns to settings (added after initial deploy)
+DO $body$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'settings' AND column_name = 'renewal_reminder'
+  ) THEN
+    ALTER TABLE public.settings
+      ADD COLUMN renewal_reminder      boolean NOT NULL DEFAULT true,
+      ADD COLUMN warranty_reminder     boolean NOT NULL DEFAULT true,
+      ADD COLUMN return_window_reminder boolean NOT NULL DEFAULT true,
+      ADD COLUMN days_before_30        boolean NOT NULL DEFAULT true,
+      ADD COLUMN days_before_14        boolean NOT NULL DEFAULT true,
+      ADD COLUMN days_before_7         boolean NOT NULL DEFAULT true,
+      ADD COLUMN days_before_3         boolean NOT NULL DEFAULT true,
+      ADD COLUMN days_before_1         boolean NOT NULL DEFAULT false;
+  END IF;
+END $body$;
+
 -- ─── Done ────────────────────────────────────────────────────────────────────
 -- All tables, RLS policies, indexes, and triggers have been created.
 -- Next: In Supabase > Auth > Providers, enable Google OAuth and set your
 -- Google Client ID and Secret.
--- Run the migrations DO $ blocks above on existing databases to add the
--- language and browser_notifications columns to the settings table.
+-- Run all the DO $body$ migration blocks above on existing databases to add
+-- new columns: language, browser_notifications, is_suspended, and reminder flags.
