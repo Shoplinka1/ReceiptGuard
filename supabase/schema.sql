@@ -21,9 +21,11 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select using (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
@@ -67,6 +69,7 @@ create table if not exists public.plans (
 );
 
 alter table public.plans enable row level security;
+drop policy if exists "Anyone can view plans" on public.plans;
 create policy "Anyone can view plans" on public.plans for select using (true);
 
 insert into public.plans (id, name, description, price_monthly, price_yearly, features) values
@@ -96,8 +99,10 @@ create table if not exists public.email_accounts (
 );
 
 alter table public.email_accounts enable row level security;
+drop policy if exists "Users can view own email accounts" on public.email_accounts;
 create policy "Users can view own email accounts"
   on public.email_accounts for select using (auth.uid() = user_id);
+drop policy if exists "Users can delete own email accounts" on public.email_accounts;
 create policy "Users can delete own email accounts"
   on public.email_accounts for delete using (auth.uid() = user_id);
 
@@ -134,12 +139,16 @@ create index if not exists receipts_category_idx on public.receipts(user_id, cat
 create index if not exists receipts_merchant_trgm on public.receipts using gin(merchant_name gin_trgm_ops);
 
 alter table public.receipts enable row level security;
+drop policy if exists "Users can view own receipts" on public.receipts;
 create policy "Users can view own receipts"
   on public.receipts for select using (auth.uid() = user_id);
+drop policy if exists "Users can insert own receipts" on public.receipts;
 create policy "Users can insert own receipts"
   on public.receipts for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update own receipts" on public.receipts;
 create policy "Users can update own receipts"
   on public.receipts for update using (auth.uid() = user_id);
+drop policy if exists "Users can delete own receipts" on public.receipts;
 create policy "Users can delete own receipts"
   on public.receipts for delete using (auth.uid() = user_id);
 
@@ -170,6 +179,7 @@ create index if not exists subscriptions_user_id_idx on public.subscriptions(use
 create index if not exists subscriptions_renewal_idx on public.subscriptions(user_id, renewal_date);
 
 alter table public.subscriptions enable row level security;
+drop policy if exists "Users can manage own subscriptions" on public.subscriptions;
 create policy "Users can manage own subscriptions"
   on public.subscriptions for all using (auth.uid() = user_id);
 
@@ -191,6 +201,7 @@ create table if not exists public.renewals (
 create index if not exists renewals_user_date_idx on public.renewals(user_id, renewal_date);
 
 alter table public.renewals enable row level security;
+drop policy if exists "Users can manage own renewals" on public.renewals;
 create policy "Users can manage own renewals"
   on public.renewals for all using (auth.uid() = user_id);
 
@@ -215,6 +226,7 @@ create index if not exists warranties_user_id_idx on public.warranties(user_id);
 create index if not exists warranties_end_date_idx on public.warranties(user_id, warranty_end_date);
 
 alter table public.warranties enable row level security;
+drop policy if exists "Users can manage own warranties" on public.warranties;
 create policy "Users can manage own warranties"
   on public.warranties for all using (auth.uid() = user_id);
 
@@ -236,6 +248,7 @@ create table if not exists public.reminders (
 create index if not exists reminders_user_idx on public.reminders(user_id, remind_at);
 
 alter table public.reminders enable row level security;
+drop policy if exists "Users can manage own reminders" on public.reminders;
 create policy "Users can manage own reminders"
   on public.reminders for all using (auth.uid() = user_id);
 
@@ -259,6 +272,7 @@ create table if not exists public.payments (
 create index if not exists payments_user_id_idx on public.payments(user_id);
 
 alter table public.payments enable row level security;
+drop policy if exists "Users can view own payments" on public.payments;
 create policy "Users can view own payments"
   on public.payments for select using (auth.uid() = user_id);
 
@@ -280,6 +294,7 @@ create table if not exists public.user_subscriptions (
 );
 
 alter table public.user_subscriptions enable row level security;
+drop policy if exists "Users can view own subscription" on public.user_subscriptions;
 create policy "Users can view own subscription"
   on public.user_subscriptions for select using (auth.uid() = user_id);
 
@@ -298,6 +313,7 @@ create table if not exists public.notifications (
 create index if not exists notifications_user_idx on public.notifications(user_id, created_at desc);
 
 alter table public.notifications enable row level security;
+drop policy if exists "Users can manage own notifications" on public.notifications;
 create policy "Users can manage own notifications"
   on public.notifications for all using (auth.uid() = user_id);
 
@@ -317,6 +333,7 @@ create table if not exists public.settings (
 );
 
 alter table public.settings enable row level security;
+drop policy if exists "Users can manage own settings" on public.settings;
 create policy "Users can manage own settings"
   on public.settings for all using (auth.uid() = user_id);
 
@@ -349,6 +366,7 @@ create index if not exists activity_logs_user_idx on public.activity_logs(user_i
 create index if not exists activity_logs_type_idx on public.activity_logs(type, created_at desc);
 
 alter table public.activity_logs enable row level security;
+drop policy if exists "Users can view own activity" on public.activity_logs;
 create policy "Users can view own activity"
   on public.activity_logs for select using (auth.uid() = user_id);
 
@@ -371,8 +389,10 @@ create index if not exists feedback_status_idx on public.feedback(status, create
 create index if not exists feedback_user_idx on public.feedback(user_id);
 
 alter table public.feedback enable row level security;
+drop policy if exists "Users can insert feedback" on public.feedback;
 create policy "Users can insert feedback"
   on public.feedback for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can view own feedback" on public.feedback;
 create policy "Users can view own feedback"
   on public.feedback for select using (auth.uid() = user_id);
 
@@ -387,12 +407,14 @@ create table if not exists public.support_messages (
 );
 
 alter table public.support_messages enable row level security;
+drop policy if exists "Users can view support messages for their feedback" on public.support_messages;
 create policy "Users can view support messages for their feedback"
   on public.support_messages for select
   using (exists (
     select 1 from public.feedback f
     where f.id = feedback_id and f.user_id = auth.uid()
   ));
+drop policy if exists "Users can send support messages" on public.support_messages;
 create policy "Users can send support messages"
   on public.support_messages for insert
   with check (auth.uid() = user_id and is_admin = false);
