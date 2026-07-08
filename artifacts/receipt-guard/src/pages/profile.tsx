@@ -6,10 +6,12 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { useGetUserProfile, useGetUserSettings } from "@workspace/api-client-react"
 import { User, Mail, CreditCard, HardDrive, Shield, AlertTriangle } from "lucide-react"
+import { useLocation } from "wouter"
 
 export default function ProfilePage() {
   const { data: profile } = useGetUserProfile()
   const { data: settings } = useGetUserSettings()
+  const [, setLocation] = useLocation()
 
   return (
     <AppShell>
@@ -106,7 +108,10 @@ export default function ProfilePage() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Permanently delete your account and all associated data. This action cannot be undone.
                 </p>
-                <Button variant="destructive">Delete Account</Button>
+                {/* Redirect to Settings → Security tab which has the full delete-account confirmation dialog */}
+                <Button variant="destructive" onClick={() => setLocation('/settings?tab=security')}>
+                  Delete Account
+                </Button>
               </CardContent>
             </Card>
           </div>

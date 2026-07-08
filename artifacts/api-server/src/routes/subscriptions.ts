@@ -6,7 +6,10 @@ const router: IRouter = Router();
 
 function mapSub(s: any) {
   return {
-    id: s.id, companyName: s.company_name, companyLogoUrl: s.company_logo_url ?? null,
+    id: s.id,
+    // Schema uses `name`; fall back to `company_name` for rows inserted before the migration
+    companyName: s.name ?? s.company_name,
+    companyLogoUrl: s.merchant_logo_url ?? s.company_logo_url ?? null,
     monthlyPrice: Number(s.monthly_price), yearlyPrice: s.yearly_price ? Number(s.yearly_price) : null,
     billingCycle: s.billing_cycle, renewalDate: s.renewal_date, status: s.status,
     category: s.category, reminderEnabled: s.reminder_enabled, notes: s.notes ?? null,
@@ -27,13 +30,13 @@ router.get('/api/subscriptions', requireAuth, async (req, res): Promise<void> =>
   if (error) { res.status(500).json({ error: error.message }); return; }
 
   let items = (data ?? []).map(mapSub);
-  if (search) items = items.filter(s => s.companyName.toLowerCase().includes(search.toLowerCase()));
+  if (search) items = items.filter(s => (s.companyName ?? '').toLowerCase().includes(search.toLowerCase()));
   res.json(items);
 });
 
 router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> => {
   const { companyName, companyLogoUrl, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
-  if (!companyName || !monthlyPrice || !renewalDate || !category) { res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' }); return; }
+  if (!companyName || monthlyPrice == null || !renewalDate || !category) { res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' }); return; }
 
   // Free plan: max 5 active subscriptions
   const { data: profile } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
@@ -46,7 +49,9 @@ router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> =
   }
 
   const { data, error } = await supabaseAdmin.from('subscriptions').insert({
-    user_id: req.userId, company_name: companyName, company_logo_url: companyLogoUrl ?? null,
+    user_id: req.userId,
+    name: companyName,           // schema column is `name`
+    merchant_logo_url: companyLogoUrl ?? null,
     monthly_price: monthlyPrice, yearly_price: yearlyPrice ?? null, billing_cycle: billingCycle ?? 'monthly',
     renewal_date: renewalDate, status: status ?? 'active', category,
     reminder_enabled: reminderEnabled ?? true, notes: notes ?? null,
@@ -85,7 +90,7 @@ router.get('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void
 router.patch('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
   const { companyName, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
   const updates: Record<string, any> = {};
-  if (companyName) updates.company_name = companyName;
+  if (companyName) updates.name = companyName;  // schema column is `name`
   if (monthlyPrice) updates.monthly_price = monthlyPrice;
   if (yearlyPrice !== undefined) updates.yearly_price = yearlyPrice;
   if (billingCycle) updates.billing_cycle = billingCycle;

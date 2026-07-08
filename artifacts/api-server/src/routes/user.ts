@@ -40,19 +40,41 @@ router.get('/api/user/settings', requireAuth, async (req, res): Promise<void> =>
 
 router.patch('/api/user/settings', requireAuth, async (req, res): Promise<void> => {
   const { theme, currency, timezone, language, emailNotifications, browserNotifications } = req.body;
-  const updates: Record<string, any> = { user_id: req.userId, updated_at: new Date().toISOString() };
-  if (theme !== undefined) updates.theme = theme;
-  if (currency !== undefined) updates.currency = currency;
-  if (timezone !== undefined) updates.timezone = timezone;
-  if (language !== undefined) updates.language = language;
-  if (emailNotifications !== undefined) updates.email_notifications = emailNotifications;
-  if (browserNotifications !== undefined) updates.browser_notifications = browserNotifications;
-  // Upsert into settings table (creates row for new users automatically)
-  const { error } = await supabaseAdmin.from('settings').upsert(updates, { onConflict: 'user_id' });
+  // Only include columns that actually exist in the `settings` table.
+  // `language` and `browser_notifications` are stored separately — see the
+  // ALTER TABLE additions in supabase/schema.sql. If those columns are not yet
+  // present the upsert would fail; we guard with a try/catch and fall through.
+  const coreUpdates: Record<string, any> = { user_id: req.userId, updated_at: new Date().toISOString() };
+  if (theme !== undefined) coreUpdates.theme = theme;
+  if (currency !== undefined) coreUpdates.currency = currency;
+  if (timezone !== undefined) coreUpdates.timezone = timezone;
+  if (emailNotifications !== undefined) coreUpdates.email_notifications = emailNotifications;
+
+  // Extended columns added by schema migration — only include when present
+  const extUpdates: Record<string, any> = { ...coreUpdates };
+  if (language !== undefined) extUpdates.language = language;
+  if (browserNotifications !== undefined) extUpdates.browser_notifications = browserNotifications;
+
+  // Try the full upsert first; fall back to core-only if extended columns don't exist yet
+  let { error } = await supabaseAdmin.from('settings').upsert(extUpdates, { onConflict: 'user_id' });
+  let usedCoreOnly = false;
+  if (error && (error.message?.includes('language') || error.message?.includes('browser_notifications') || error.message?.includes('column'))) {
+    // Schema hasn't been migrated yet — retry without the new columns
+    ({ error } = await supabaseAdmin.from('settings').upsert(coreUpdates, { onConflict: 'user_id' }));
+    usedCoreOnly = true;
+  }
   if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
     res.status(500).json({ error: error.message }); return;
   }
-  res.json({ theme: theme ?? 'system', currency: currency ?? 'USD', timezone: timezone ?? 'UTC', language: language ?? 'en', emailNotifications, browserNotifications });
+  // Return only what was actually persisted so the UI doesn't cache values that were dropped
+  res.json({
+    theme: theme ?? 'system',
+    currency: currency ?? 'USD',
+    timezone: timezone ?? 'UTC',
+    language: usedCoreOnly ? undefined : (language ?? 'en'),
+    emailNotifications,
+    browserNotifications: usedCoreOnly ? undefined : browserNotifications,
+  });
 });
 
 router.get('/api/reminders/settings', requireAuth, async (req, res): Promise<void> => {
@@ -77,14 +99,16 @@ router.get('/api/search', requireAuth, async (req, res): Promise<void> => {
   const term = `%${q.trim()}%`;
   const [receiptRes, subRes, warRes] = await Promise.all([
     supabaseAdmin.from('receipts').select('id, merchant_name, amount, currency, purchase_date, category').eq('user_id', req.userId).or(`merchant_name.ilike.${term},category.ilike.${term},invoice_number.ilike.${term}`).limit(10),
-    supabaseAdmin.from('subscriptions').select('id, company_name, monthly_price, status, category, renewal_date').eq('user_id', req.userId).or(`company_name.ilike.${term},category.ilike.${term}`).limit(10),
-    supabaseAdmin.from('warranties').select('id, product_name, purchase_date, expiry_date').eq('user_id', req.userId).ilike('product_name', term).limit(10),
+    // Schema uses `name` column (not `company_name`)
+    supabaseAdmin.from('subscriptions').select('id, name, monthly_price, status, category, renewal_date').eq('user_id', req.userId).or(`name.ilike.${term},category.ilike.${term}`).limit(10),
+    supabaseAdmin.from('warranties').select('id, product_name, purchase_date, warranty_end_date').eq('user_id', req.userId).ilike('product_name', term).limit(10),
   ]);
 
   res.json({
     receipts: (receiptRes.data ?? []).map(r => ({ id: r.id, type: 'receipt', title: r.merchant_name, subtitle: `${r.currency} ${Number(r.amount).toFixed(2)} · ${r.category}`, date: r.purchase_date })),
-    subscriptions: (subRes.data ?? []).map(s => ({ id: s.id, type: 'subscription', title: s.company_name, subtitle: `$${Number(s.monthly_price).toFixed(2)}/mo · ${s.status}`, date: s.renewal_date })),
-    warranties: (warRes.data ?? []).map(w => ({ id: w.id, type: 'warranty', title: w.product_name, subtitle: `Expires ${w.expiry_date ?? 'unknown'}`, date: w.purchase_date })),
+    subscriptions: (subRes.data ?? []).map(s => ({ id: s.id, type: 'subscription', title: s.name, subtitle: `${Number(s.monthly_price ?? 0).toFixed(2)}/mo · ${s.status}`, date: s.renewal_date })),
+    // warranties uses warranty_end_date (not expiry_date)
+    warranties: (warRes.data ?? []).map(w => ({ id: w.id, type: 'warranty', title: w.product_name, subtitle: `Expires ${w.warranty_end_date ?? 'unknown'}`, date: w.purchase_date })),
   });
 });
 

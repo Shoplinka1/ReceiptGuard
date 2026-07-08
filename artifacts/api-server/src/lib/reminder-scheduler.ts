@@ -84,13 +84,13 @@ async function runReminderCheck(): Promise<void> {
     const dayEnd = new Date(targetDate);
     dayEnd.setHours(23, 59, 59, 999);
 
-    // Find subscriptions renewing in 3 days that are still active
+    // Find renewals coming up in 3 days that are still upcoming
     const { data: renewals, error } = await supabaseAdmin
       .from('renewals')
       .select(`
         id,
         user_id,
-        company_name,
+        merchant_name,
         amount,
         currency,
         renewal_date,
@@ -137,17 +137,17 @@ async function runReminderCheck(): Promise<void> {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       });
 
-      // Create notification in DB
+      // Create notification in DB — schema uses `body` and `is_read` (not `message`/`read`)
       await supabaseAdmin.from('notifications').insert({
         user_id: renewal.user_id,
         type: 'renewal_reminder',
-        title: `${renewal.company_name} renews in 3 days`,
-        message: `Your ${renewal.company_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.`,
-        read: false,
+        title: `${renewal.merchant_name} renews in 3 days`,
+        body: `Your ${renewal.merchant_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.`,
+        is_read: false,
         metadata: {
           renewalId: renewal.id,
           subscriptionId: renewal.subscription_id,
-          companyName: renewal.company_name,
+          merchantName: renewal.merchant_name,
           amount: renewal.amount,
           renewalDate: renewal.renewal_date,
         },
@@ -167,16 +167,16 @@ async function runReminderCheck(): Promise<void> {
       // Send reminder email
       await sendEmail({
         to: profile.email,
-        subject: `Reminder: ${renewal.company_name} renews in 3 days`,
+        subject: `Reminder: ${renewal.merchant_name} renews in 3 days`,
         html: reminderEmailHtml({
           firstName,
-          companyName: renewal.company_name,
+          companyName: renewal.merchant_name,
           amount: Number(renewal.amount),
           currency: renewal.currency ?? 'USD',
           renewalDate: renewalDateFormatted,
           appUrl,
         }),
-        text: `Hi ${firstName},\n\nThis is a reminder that your ${renewal.company_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.\n\nManage your subscriptions at ${appUrl}/subscriptions`,
+        text: `Hi ${firstName},\n\nThis is a reminder that your ${renewal.merchant_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.\n\nManage your subscriptions at ${appUrl}/subscriptions`,
       });
     }
   } catch (err) {

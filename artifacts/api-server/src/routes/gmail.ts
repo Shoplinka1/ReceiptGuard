@@ -303,64 +303,75 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
     return;
   }
 
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: GOOGLE_REDIRECT_URI, grant_type: 'authorization_code',
-    }),
-  });
+  // Wrap everything from here in try/catch — any uncaught error must redirect
+  // back to the frontend with an error param instead of surfacing as a JSON 500.
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI, grant_type: 'authorization_code',
+      }),
+    });
 
-  if (!tokenRes.ok) {
-    const errBody = await tokenRes.json().catch(() => ({})) as any;
-    console.error('[Gmail] Token exchange failed:', JSON.stringify(errBody));
-    res.redirect(`${frontendUrl}/settings?tab=gmail&error=token_exchange_failed`);
-    return;
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.json().catch(() => ({})) as any;
+      console.error('[Gmail] Token exchange failed:', JSON.stringify(errBody));
+      res.redirect(`${frontendUrl}/settings?tab=gmail&error=token_exchange_failed`);
+      return;
+    }
+
+    const tokens = await tokenRes.json() as {
+      access_token: string; refresh_token?: string; expires_in: number;
+    };
+
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!userInfoRes.ok) {
+      res.redirect(`${frontendUrl}/settings?tab=gmail&error=userinfo_failed`);
+      return;
+    }
+    const userInfo = await userInfoRes.json() as { email: string };
+
+    const { data: newAccount, error: dbError } = await supabaseAdmin.from('email_accounts').upsert({
+      user_id: userId, email: userInfo.email, provider: 'gmail',
+      access_token_enc: encrypt(tokens.access_token),
+      refresh_token_enc: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+      token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      scopes: GMAIL_SCOPES.split(' '), is_active: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,email' }).select().single();
+
+    if (dbError) {
+      console.error('[Gmail] DB error:', dbError.message);
+      res.redirect(`${frontendUrl}/settings?tab=gmail&error=db_error`);
+      return;
+    }
+
+    try {
+      await supabaseAdmin.from('activity_logs').insert({
+        user_id: userId, type: 'gmail_connected',
+        description: `Gmail ${userInfo.email} connected`,
+        metadata: { email: userInfo.email },
+      });
+    } catch (logErr: any) {
+      console.error('[Gmail] activity_logs insert failed:', logErr?.message);
+    }
+
+    // Kick off background scan immediately after connection
+    if (newAccount) {
+      runGmailScan(newAccount, userId, false).catch(err =>
+        console.error('[Gmail] Initial scan error:', err)
+      );
+    }
+
+    res.redirect(`${frontendUrl}/settings?tab=gmail&connected=true`);
+  } catch (err: any) {
+    console.error('[Gmail] Callback unhandled error:', err?.message ?? err);
+    res.redirect(`${frontendUrl}/settings?tab=gmail&error=server_error`);
   }
-
-  const tokens = await tokenRes.json() as {
-    access_token: string; refresh_token?: string; expires_in: number;
-  };
-
-  const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
-  });
-  if (!userInfoRes.ok) {
-    res.redirect(`${frontendUrl}/settings?tab=gmail&error=userinfo_failed`);
-    return;
-  }
-  const userInfo = await userInfoRes.json() as { email: string };
-
-  const { data: newAccount, error: dbError } = await supabaseAdmin.from('email_accounts').upsert({
-    user_id: userId, email: userInfo.email, provider: 'gmail',
-    access_token_enc: encrypt(tokens.access_token),
-    refresh_token_enc: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
-    token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-    scopes: GMAIL_SCOPES.split(' '), is_active: true,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,email' }).select().single();
-
-  if (dbError) {
-    console.error('[Gmail] DB error:', dbError.message);
-    res.redirect(`${frontendUrl}/settings?tab=gmail&error=db_error`);
-    return;
-  }
-
-  await supabaseAdmin.from('activity_logs').insert({
-    user_id: userId, type: 'gmail_connected',
-    description: `Gmail ${userInfo.email} connected`,
-    metadata: { email: userInfo.email },
-  });
-
-  // Kick off background scan immediately after connection
-  if (newAccount) {
-    runGmailScan(newAccount, userId, false).catch(err =>
-      console.error('[Gmail] Initial scan error:', err)
-    );
-  }
-
-  res.redirect(`${frontendUrl}/settings?tab=gmail&connected=true`);
 });
 
 router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> => {

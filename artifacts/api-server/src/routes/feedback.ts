@@ -41,12 +41,12 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     // Table doesn't exist yet — fall through and still send email
   } else {
     feedbackId = data?.id ?? null;
-    await supabaseAdmin.from('activity_logs').insert({
+    supabaseAdmin.from('activity_logs').insert({
       user_id: req.userId,
       type: `feedback_submitted`,
       description: `${type.replace('_', ' ')} submitted: ${subject}`,
       metadata: { feedbackId, type },
-    }).catch(() => {});
+    }).then(undefined, () => {/* non-fatal */});
   }
 
   // Fire-and-forget email notification to admin

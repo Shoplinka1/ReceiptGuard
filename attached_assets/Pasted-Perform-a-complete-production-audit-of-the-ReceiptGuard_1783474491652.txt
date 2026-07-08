@@ -1,0 +1,87 @@
+Perform a complete production audit of the ReceiptGuard application. Do not guess—trace every feature from the frontend through the Railway backend, Supabase, and third-party services. Identify the exact root cause of every failure, fix it, verify it with tests, then commit and push only after everything passes.
+
+1. Gmail OAuth
+	•	Audit the /api/gmail/callback endpoint.
+	•	Trace the callback from receiving Google’s authorization code through:
+	•	exchanging it for Google tokens,
+	•	encrypting the tokens,
+	•	storing them in Supabase,
+	•	redirecting back to the frontend.
+	•	Identify the exact exception causing the “Internal server error” after Google redirects back.
+	•	Verify that these Railway environment variables exist and are being used correctly:
+	•	GOOGLE_CLIENT_ID
+	•	GOOGLE_CLIENT_SECRET
+	•	GOOGLE_REDIRECT_URI
+	•	ENCRYPTION_KEY
+	•	SUPABASE_SERVICE_ROLE_KEY
+	•	SESSION_SECRET
+	•	Verify the production redirect URI matches the Google OAuth client exactly.
+	•	Report the actual exception from the callback route instead of guessing.
+
+2. Paystack Billing
+	•	Audit every Paystack endpoint.
+	•	Find why upgrading a plan returns HTTP 500.
+	•	Verify:
+	•	PAYSTACK_SECRET_KEY
+	•	PAYSTACK_PUBLIC_KEY (if required by the frontend)
+	•	PAYSTACK_WEBHOOK_SECRET (if webhooks are implemented)
+	•	Trace transaction initialization, verification, webhook handling, and subscription logic.
+	•	Fix any unhandled exceptions and return proper JSON errors.
+
+3. Feedback & Support
+	•	Audit the feedback and support forms end-to-end.
+	•	Verify the frontend submits correctly.
+	•	Verify the backend receives the requests.
+	•	Verify email sending works.
+	•	Verify these email variables are configured and used:
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	If emails fail, identify the exact SMTP error instead of silently failing.
+	•	Confirm feedback reaches the configured email address.
+
+4. Settings Page
+
+Audit every feature on the Settings page, including:
+	•	profile updates
+	•	password changes
+	•	notification settings
+	•	preferences
+	•	account settings
+	•	Gmail connection status
+	•	any save/update actions
+
+Trace every API request and fix any broken endpoints, validation issues, database errors, or frontend bugs.
+
+5. Railway Environment Variables
+
+Verify every required production variable exists on Railway and is actually being used by the application. Report any missing, unused, duplicated, or incorrect variables.
+
+6. Production Verification
+
+After fixes:
+	•	Build the frontend.
+	•	Build the backend.
+	•	Run type checking.
+	•	Verify no runtime errors.
+	•	Verify Gmail OAuth completes successfully.
+	•	Verify Paystack checkout works.
+	•	Verify feedback/support emails are delivered.
+	•	Verify all Settings page actions work.
+	•	Verify the dashboard loads correctly.
+	•	Check Railway logs for remaining errors.
+
+7. Deployment
+
+Only after all issues are fixed:
+	•	Commit the changes.
+	•	Push to GitHub.
+	•	Wait for Vercel and Railway deployments to complete.
+	•	Provide a final report listing:
+	•	every root cause found,
+	•	every file changed,
+	•	every environment variable used,
+	•	every fix applied,
+	•	and confirmation that all production features are working.

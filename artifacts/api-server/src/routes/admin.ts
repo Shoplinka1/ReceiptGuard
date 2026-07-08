@@ -122,7 +122,7 @@ router.delete('/api/admin/users/:id', ...adminGuard, async (req, res): Promise<v
   const { id } = req.params;
 
   // Delete auth user (cascades to profile via trigger)
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(id as string);
   if (error) { res.status(500).json({ error: error.message }); return; }
 
   await supabaseAdmin.from('audit_logs').insert({

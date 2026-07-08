@@ -57,6 +57,8 @@ const GMAIL_ERRORS: Record<string, string> = {
   invalid_state: 'Security check failed. Please try again.',
   db_error: 'Could not save your Gmail connection. Please retry.',
   userinfo_failed: 'Could not fetch your Gmail address. Please retry.',
+  encryption_not_configured: 'Server encryption not configured — contact support.',
+  server_error: 'An unexpected error occurred during Gmail connection. Please try again.',
 }
 
 function GmailTab() {
@@ -146,10 +148,10 @@ function GmailTab() {
                     <div>
                       <p className="text-sm font-medium">{acc.email}</p>
                       <p className="text-xs text-muted-foreground">
-                        Last scanned: {acc.lastSyncAt ? new Date(acc.lastSyncAt).toLocaleDateString() : 'Never'}
+                        Last scanned: {acc.last_scanned_at ? new Date(acc.last_scanned_at).toLocaleDateString() : 'Never'}
                       </p>
                     </div>
-                    {acc.isActive && <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/30 bg-emerald-500/5">Active</Badge>}
+                    {acc.is_active && <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/30 bg-emerald-500/5">Active</Badge>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={() => scanMutation.mutate(acc.id)} disabled={scanMutation.isPending}>

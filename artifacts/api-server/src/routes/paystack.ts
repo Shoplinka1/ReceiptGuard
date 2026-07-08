@@ -30,8 +30,8 @@ async function paystackRequest(path: string, options: RequestInit = {}): Promise
       ...((options.headers as Record<string, string>) ?? {}),
     },
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message ?? 'Paystack API error');
+  const json = await res.json() as any;
+  if (!res.ok) throw new Error((json as any).message ?? 'Paystack API error');
   return json;
 }
 
@@ -158,7 +158,7 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
   const { reference } = req.params;
   let data: any;
   try {
-    data = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
+    data = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference as string)}`);
   } catch (err: any) {
     console.error('[Paystack] verify failed:', err.message);
     res.status(502).json({ error: err.message ?? 'Payment verification error. Please try again.' });

@@ -397,7 +397,32 @@ create policy "Users can send support messages"
   on public.support_messages for insert
   with check (auth.uid() = user_id and is_admin = false);
 
+-- ─── Schema migrations (safe to run on existing databases) ──────────────────
+
+-- Add language and browser_notifications to settings (added after initial deploy)
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'settings' AND column_name = 'language'
+  ) THEN
+    ALTER TABLE public.settings ADD COLUMN language text NOT NULL DEFAULT 'en';
+  END IF;
+END $;
+
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'settings' AND column_name = 'browser_notifications'
+  ) THEN
+    ALTER TABLE public.settings ADD COLUMN browser_notifications boolean NOT NULL DEFAULT true;
+  END IF;
+END $;
+
 -- ─── Done ────────────────────────────────────────────────────────────────────
 -- All tables, RLS policies, indexes, and triggers have been created.
 -- Next: In Supabase > Auth > Providers, enable Google OAuth and set your
 -- Google Client ID and Secret.
+-- Run the migrations DO $ blocks above on existing databases to add the
+-- language and browser_notifications columns to the settings table.
