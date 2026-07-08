@@ -1,0 +1,136 @@
+Production Audit – Fix Every Production Issue
+
+Perform a complete production audit of the ReceiptGuard application and verify every issue using the running Railway deployment and the production codebase.
+
+1. Gmail OAuth callback
+
+Audit the /api/gmail/callback endpoint from beginning to end.
+
+Trace every step:
+	•	Receive Google’s authorization code
+	•	Validate the OAuth state
+	•	Exchange the code for access/refresh tokens
+	•	Retrieve the Gmail account email
+	•	Encrypt the tokens
+	•	Save them into Supabase
+	•	Log activity
+	•	Redirect back to the frontend
+
+Do not guess.
+
+Report the exact line that throws the “Internal server error” after Google redirects back.
+
+Include the full exception, stack trace, HTTP status, and failing operation.
+
+⸻
+
+2. Railway environment variables
+
+Verify these variables actually exist on Railway and are not empty:
+	•	GOOGLE_CLIENT_ID
+	•	GOOGLE_CLIENT_SECRET
+	•	GOOGLE_REDIRECT_URI
+	•	ENCRYPTION_KEY
+	•	SUPABASE_SERVICE_ROLE_KEY
+	•	SESSION_SECRET
+	•	FRONTEND_URL
+	•	PAYSTACK_SECRET_KEY
+
+For each variable report:
+	•	Present or missing
+	•	Empty or populated
+	•	Whether its value matches what the application expects
+
+⸻
+
+3. Google OAuth configuration
+
+Verify that:
+	•	GOOGLE_REDIRECT_URI exactly matches the callback route
+	•	The same URI exists in Google Cloud Authorized Redirect URIs
+	•	The runtime callback uses that exact URI during token exchange
+	•	The OAuth client ID being used is the production client
+
+⸻
+
+4. Paystack
+
+Audit every Paystack endpoint.
+
+Investigate why upgrading a subscription returns HTTP 500.
+
+Trace:
+	•	Incoming request
+	•	Validation
+	•	Paystack API request
+	•	Response
+	•	Database writes
+	•	Returned JSON
+
+Return the exact exception if one occurs.
+
+⸻
+
+5. Feedback / Support
+
+Audit the feedback endpoint.
+
+Verify:
+	•	Form submission reaches the backend
+	•	Email is actually sent
+	•	SMTP/Resend provider is configured correctly
+	•	Errors are logged
+	•	Messages arrive in the configured inbox
+
+If email sending fails, report the exact exception.
+
+⸻
+
+6. Settings page
+
+Audit every Settings action.
+
+Verify that:
+	•	Save Profile
+	•	Notifications
+	•	Gmail connection
+	•	Subscription management
+	•	Feedback
+	•	Billing
+	•	Delete account
+
+all work correctly.
+
+For every broken button or API call:
+	•	identify the failing endpoint
+	•	explain why it fails
+	•	fix it
+
+⸻
+
+7. Logs
+
+Check Railway runtime logs while reproducing:
+	•	Connect Gmail
+	•	Upgrade plan
+	•	Submit feedback
+
+Capture the exact production exceptions.
+
+Do not summarize.
+
+Include the complete stack traces.
+
+⸻
+
+8. Final report
+
+Return a table containing:
+	•	Issue
+	•	Root cause
+	•	File
+	•	Line number
+	•	Fix applied
+	•	Commit hash
+
+Do not stop until every production issue has either been fixed or proven to be caused by missing production configuration.
