@@ -66,7 +66,7 @@ export default function Dashboard() {
   const safeActivities  = toSafeArray<typeof activities extends (infer U)[] | undefined ? U : never>(activities,  'activities')
   const safeRenewals    = toSafeArray<typeof renewals   extends (infer U)[] | undefined ? U : never>(renewals,    'renewals')
   const safeMerchants   = toSafeArray<typeof merchants  extends (infer U)[] | undefined ? U : never>(merchants,   'merchants')
-  const safeCategoryBreakdown = toSafeArray<NonNullable<typeof breakdown>['categoryBreakdown'][number]>(
+  const safeCategoryBreakdown = toSafeArray<NonNullable<NonNullable<typeof breakdown>['categoryBreakdown']>[number]>(
     breakdown?.categoryBreakdown, 'breakdown.categoryBreakdown'
   )
   const safeTrends = toSafeArray<typeof trends extends (infer U)[] | undefined ? U : never>(trends, 'trends')

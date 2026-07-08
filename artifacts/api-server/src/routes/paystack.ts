@@ -9,7 +9,8 @@
  *   GET  /api/paystack/subscription → get the user's current Paystack subscription
  *   POST /api/paystack/cancel      → cancel the user's subscription
  *
- * Requires env vars: PAYSTACK_SECRET_KEY, PAYSTACK_WEBHOOK_SECRET
+ * Requires env vars: PAYSTACK_SECRET_KEY (used for both API calls and webhook
+ * HMAC-SHA512 signature verification — there is no separate webhook secret).
  */
 import { Router, type IRouter } from 'express';
 import crypto from 'crypto';
@@ -144,7 +145,14 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     // Non-fatal — checkout URL is still valid; log and continue
   }
 
-  res.json({ authorizationUrl: data.data.authorization_url, reference });
+  const authorizationUrl = data?.data?.authorization_url;
+  if (!authorizationUrl) {
+    console.error('[Paystack] initialize returned no authorization_url:', JSON.stringify(data));
+    res.status(502).json({ error: 'Payment provider did not return a checkout URL. Please try again.' });
+    return;
+  }
+
+  res.json({ authorizationUrl, reference });
 });
 
 // ─── Verify Payment ─────────────────────────────────────────────────────────
@@ -164,10 +172,20 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
     res.status(502).json({ error: err.message ?? 'Payment verification error. Please try again.' });
     return;
   }
-  const txn = data.data;
+  const txn = data?.data;
+  if (!txn) {
+    console.error('[Paystack] verify returned no transaction data:', JSON.stringify(data));
+    res.status(502).json({ error: 'Payment verification returned no data. Please try again or contact support.' });
+    return;
+  }
 
   if (txn.status === 'success') {
-    const meta = txn.metadata as { userId: string; planId: string; billingCycle?: string };
+    const meta = (txn.metadata ?? {}) as { userId?: string; planId?: string; billingCycle?: string };
+    if (!meta.userId || !meta.planId) {
+      console.error('[Paystack] verify success payload missing metadata:', JSON.stringify(txn.metadata));
+      res.status(502).json({ error: 'Payment succeeded but could not be linked to your account. Contact support with reference ' + reference });
+      return;
+    }
     const isYearly = meta.billingCycle === 'yearly';
     const periodDays = isYearly ? 365 : 30;
 
@@ -233,54 +251,71 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
     return;
   }
 
-  switch (event.event) {
-    case 'charge.success': {
-      const meta = event.data.metadata as { userId?: string; planId?: string };
-      if (meta?.userId && meta?.planId) {
-        await supabaseAdmin.from('profiles').update({ plan_id: meta.planId }).eq('id', meta.userId);
-        await supabaseAdmin.from('payments').update({ status: 'success' }).eq('paystack_reference', event.data.reference);
-        await supabaseAdmin.from('activity_logs').insert({
-          user_id: meta.userId,
-          type: 'payment_received',
-          description: `Payment confirmed: ${event.data.currency} ${event.data.amount / 100}`,
-          metadata: { reference: event.data.reference },
-        });
+  try {
+    switch (event.event) {
+      case 'charge.success': {
+        const meta = event.data.metadata as { userId?: string; planId?: string };
+        if (meta?.userId && meta?.planId) {
+          await supabaseAdmin.from('profiles').update({ plan_id: meta.planId }).eq('id', meta.userId);
+          await supabaseAdmin.from('payments').update({ status: 'success' }).eq('paystack_reference', event.data.reference);
+          await supabaseAdmin.from('activity_logs').insert({
+            user_id: meta.userId,
+            type: 'payment_received',
+            description: `Payment confirmed: ${event.data.currency} ${event.data.amount / 100}`,
+            metadata: { reference: event.data.reference },
+          });
+        }
+        break;
       }
-      break;
-    }
-    case 'subscription.disable': {
-      const custCode = event.data.customer?.customer_code;
-      if (custCode) {
-        await supabaseAdmin.from('user_subscriptions')
-          .update({ status: 'cancelled' })
-          .eq('paystack_customer_id', custCode);
-        await supabaseAdmin.from('profiles')
-          .update({ plan_id: 'free' })
-          .eq('id', (await supabaseAdmin.from('user_subscriptions').select('user_id').eq('paystack_customer_id', custCode).single()).data?.user_id);
+      case 'subscription.disable': {
+        const custCode = event.data.customer?.customer_code;
+        if (custCode) {
+          await supabaseAdmin.from('user_subscriptions')
+            .update({ status: 'cancelled' })
+            .eq('paystack_customer_id', custCode);
+          const { data: subRow } = await supabaseAdmin
+            .from('user_subscriptions')
+            .select('user_id')
+            .eq('paystack_customer_id', custCode)
+            .single();
+          if (subRow?.user_id) {
+            await supabaseAdmin.from('profiles').update({ plan_id: 'free' }).eq('id', subRow.user_id);
+          }
+        }
+        break;
       }
-      break;
-    }
-    case 'invoice.payment_failed': {
-      const meta2 = event.data.metadata as { userId?: string };
-      if (meta2?.userId) {
-        await supabaseAdmin.from('payments').insert({
-          user_id: meta2.userId,
-          paystack_reference: event.data.transaction?.reference ?? `failed_${Date.now()}`,
-          // event.data.amount is in kobo; divide by 100 → NGN (major units)
-          amount: (event.data.amount ?? 0) / 100,
-          currency: 'NGN',
-          status: 'failed',
-          description: 'Subscription renewal failed',
-          metadata: event.data,
-        });
-        await supabaseAdmin.from('activity_logs').insert({
-          user_id: meta2.userId,
-          type: 'payment_failed',
-          description: 'Subscription renewal payment failed',
-        });
+      case 'invoice.payment_failed': {
+        const meta2 = event.data.metadata as { userId?: string };
+        if (meta2?.userId) {
+          await supabaseAdmin.from('payments').insert({
+            user_id: meta2.userId,
+            paystack_reference: event.data.transaction?.reference ?? `failed_${Date.now()}`,
+            // event.data.amount is in kobo; divide by 100 → NGN (major units)
+            amount: (event.data.amount ?? 0) / 100,
+            currency: 'NGN',
+            status: 'failed',
+            description: 'Subscription renewal failed',
+            metadata: event.data,
+          });
+          await supabaseAdmin.from('activity_logs').insert({
+            user_id: meta2.userId,
+            type: 'payment_failed',
+            description: 'Subscription renewal payment failed',
+          });
+        }
+        break;
       }
-      break;
     }
+  } catch (err: any) {
+    // A downstream DB/logic error means the event was NOT fully applied (e.g. a
+    // plan downgrade or failed-payment record could be missing). Returning 5xx
+    // here is intentional — it tells Paystack to retry the webhook so we don't
+    // silently lose state. The handlers above are safe to re-run: profile/plan
+    // updates are idempotent (same value set again), and duplicate activity_log
+    // rows are a low-cost outcome we accept in exchange for not losing state.
+    console.error(`[Paystack] webhook handler error for event "${event.event}", returning 500 for retry:`, err.message);
+    res.sendStatus(500);
+    return;
   }
 
   res.sendStatus(200);

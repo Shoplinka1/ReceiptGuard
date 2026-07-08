@@ -4,13 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { useGetUserProfile, useGetUserSettings } from "@workspace/api-client-react"
+import { useGetUserProfile, useGetUserSettings, useUpdateUserSettings } from "@workspace/api-client-react"
+import { useTheme } from "@/components/theme-provider"
 import { User, Mail, CreditCard, HardDrive, Shield, AlertTriangle } from "lucide-react"
 import { useLocation } from "wouter"
 
 export default function ProfilePage() {
   const { data: profile } = useGetUserProfile()
   const { data: settings } = useGetUserSettings()
+  const updateSettings = useUpdateUserSettings()
+  const { theme, setTheme } = useTheme()
   const [, setLocation] = useLocation()
 
   return (
@@ -68,9 +71,9 @@ export default function ProfilePage() {
                     </div>
                   </div>
                   {profile?.gmailConnected ? (
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-transparent">Disconnect</Button>
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-transparent" onClick={() => setLocation('/settings?tab=gmail')}>Disconnect</Button>
                   ) : (
-                    <Button size="sm">Connect</Button>
+                    <Button size="sm" onClick={() => setLocation('/settings?tab=gmail')}>Connect</Button>
                   )}
                 </div>
               </CardContent>
@@ -86,14 +89,24 @@ export default function ProfilePage() {
                     <p className="font-medium text-sm">Dark Mode</p>
                     <p className="text-xs text-muted-foreground">Use dark theme across the application</p>
                   </div>
-                  <Switch checked={settings?.theme === 'dark'} />
+                  <Switch
+                    checked={theme === 'dark'}
+                    onCheckedChange={(checked) => {
+                      const next = checked ? 'dark' : 'light'
+                      setTheme(next)
+                      updateSettings.mutate({ data: { theme: next } })
+                    }}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-sm">Email Notifications</p>
                     <p className="text-xs text-muted-foreground">Receive alerts for renewals and warranties</p>
                   </div>
-                  <Switch checked={settings?.emailNotifications} />
+                  <Switch
+                    checked={settings?.emailNotifications ?? true}
+                    onCheckedChange={(checked) => updateSettings.mutate({ data: { emailNotifications: checked } })}
+                  />
                 </div>
               </CardContent>
             </Card>
