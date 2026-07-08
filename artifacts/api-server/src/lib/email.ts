@@ -30,6 +30,22 @@ function createTransport() {
   });
 }
 
+// TEMPORARY DIAGNOSTIC — logs only metadata about the SMTP config (never the
+// password) so we can see exactly why delivery is failing in production.
+// Safe to remove once email delivery is confirmed working.
+function logEmailConfigDiagnostics() {
+  logger.warn({
+    emailHostSet: !!EMAIL_HOST,
+    emailPort: EMAIL_PORT,
+    emailUserSet: !!EMAIL_USER,
+    emailUserLooksLikeGmail: !!EMAIL_USER && /@gmail\.com$/i.test(EMAIL_USER),
+    emailPassSet: !!EMAIL_PASS,
+    emailPassLength: EMAIL_PASS?.length ?? 0,
+    emailPassHasSpaces: !!EMAIL_PASS && /\s/.test(EMAIL_PASS),
+    emailFrom: EMAIL_FROM,
+  }, '[email][DEBUG] SMTP config diagnostic');
+}
+
 export async function sendEmail(opts: {
   to: string;
   subject: string;
@@ -39,20 +55,50 @@ export async function sendEmail(opts: {
   const transport = createTransport();
   if (!transport) {
     logger.info({ to: opts.to, subject: opts.subject }, '[email] SMTP not configured — email not sent (set EMAIL_HOST, EMAIL_USER, EMAIL_PASS)');
+    logEmailConfigDiagnostics();
     return false;
   }
   try {
-    await transport.sendMail({
+    await transport.verify();
+    logger.info('[email] transporter.verify() succeeded — SMTP auth is valid');
+  } catch (verifyErr: any) {
+    logger.error({
+      message: verifyErr?.message,
+      code: verifyErr?.code,
+      command: verifyErr?.command,
+      responseCode: verifyErr?.responseCode,
+      response: verifyErr?.response,
+    }, '[email] transporter.verify() FAILED — SMTP auth/connection is broken');
+    logEmailConfigDiagnostics();
+    // Continue to attempt sendMail anyway — verify() can be overly strict with
+    // some providers, and we want the real sendMail error if verify was wrong.
+  }
+  try {
+    const info = await transport.sendMail({
       from: EMAIL_FROM,
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
       text: opts.text,
     });
-    logger.info({ to: opts.to, subject: opts.subject }, '[email] sent');
+    logger.info({
+      to: opts.to,
+      subject: opts.subject,
+      messageId: info?.messageId,
+      response: info?.response,
+      accepted: info?.accepted,
+      rejected: info?.rejected,
+    }, '[email] sent');
     return true;
-  } catch (err) {
-    logger.error({ err, to: opts.to }, '[email] send failed');
+  } catch (err: any) {
+    logger.error({
+      to: opts.to,
+      message: err?.message,
+      code: err?.code,
+      command: err?.command,
+      responseCode: err?.responseCode,
+      response: err?.response,
+    }, '[email] send failed');
     return false;
   }
 }

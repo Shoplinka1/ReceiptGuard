@@ -15,6 +15,7 @@ import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
 import crypto from 'crypto';
+import { logger } from '../lib/logger';
 
 const router: IRouter = Router();
 
@@ -31,6 +32,25 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // 32-byte hex key
 // surfaced as a generic `server_error` redirect with no way to diagnose it.
 const isValidEncryptionKey = (key: string | undefined): boolean =>
   !!key && /^[0-9a-fA-F]{64}$/.test(key);
+
+// TEMPORARY DIAGNOSTIC — logs only metadata about ENCRYPTION_KEY (never the
+// value itself) so we can see exactly why validation fails in production.
+// Safe to remove once the Railway env var is confirmed fixed.
+function logEncryptionKeyDiagnostics(context: string) {
+  const key = process.env.ENCRYPTION_KEY;
+  logger.warn({
+    context,
+    exists: key !== undefined,
+    isEmptyString: key === '',
+    length: key?.length ?? 0,
+    hasWhitespace: !!key && /\s/.test(key),
+    matchesHexRegex: !!key && /^[0-9a-fA-F]{64}$/.test(key),
+    firstCharIsHex: !!key && /^[0-9a-fA-F]/.test(key[0] ?? ''),
+    nodeEnv: process.env.NODE_ENV ?? 'not set',
+    railwayEnvironmentName: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.RAILWAY_ENVIRONMENT ?? 'not set (not on Railway or var not injected)',
+    railwayServiceName: process.env.RAILWAY_SERVICE_NAME ?? 'not set',
+  }, '[Gmail][DEBUG] ENCRYPTION_KEY diagnostic');
+}
 
 const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -348,6 +368,7 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 
   if (!isValidEncryptionKey(ENCRYPTION_KEY)) {
     console.error('[Gmail] ENCRYPTION_KEY is missing or is not a valid 64-character hex string');
+    logEncryptionKeyDiagnostics('oauth_callback');
     res.redirect(`${frontendUrl}/settings?tab=gmail&error=encryption_key_invalid`);
     return;
   }
@@ -442,6 +463,7 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
     return;
   }
   if (!isValidEncryptionKey(ENCRYPTION_KEY)) {
+    logEncryptionKeyDiagnostics('gmail_scan');
     res.status(503).json({ error: 'Encryption not configured correctly. ENCRYPTION_KEY must be a 64-character hex string.' });
     return;
   }
