@@ -1,0 +1,114 @@
+Gmail OAuth now reaches Google successfully, but after login the callback returns “Server encryption is misconfigured - contact support.” Please verify the Railway ENCRYPTION_KEY validation. Confirm that the key is exactly 64 hexadecimal characters (32 bytes), and verify the encryption/decryption code is using the same format. Report the exact validation result before changing any code.
+
+⸻
+
+2. Feedback emails
+
+Since feedback is now saving, the database is probably fixed.
+
+Now only email delivery remains.
+
+Ask the agent:
+
+Feedback is now saved successfully, but no email is received. Audit only the email sending pipeline. Verify SMTP authentication, Gmail App Password usage, transporter verification, EMAIL_FROM, EMAIL_USER, EMAIL_HOST, EMAIL_PORT, and whether sendMail() is actually succeeding or throwing an error. Log the exact SMTP response instead of silently failing. Report the root cause before making changes.
+
+⸻
+
+3. Receipt scanning
+
+You also need to verify that Gmail actually scans receipts.
+
+Ask the agent to verify:
+	•	Gmail OAuth succeeds
+	•	Tokens are stored
+	•	Tokens are encrypted
+	•	Initial scan starts
+	•	Receipts are inserted
+	•	Duplicate protection works
+	•	Merchant extraction works
+	•	Categories work
+	•	Warranty creation works
+	•	Subscription detection works
+
+⸻
+
+4. Reminder system
+
+You should also verify:
+	•	renewal reminders
+	•	warranty reminders
+	•	scheduled reminder worker
+	•	email reminders
+	•	in-app notifications
+
+⸻
+
+5. Free vs Pro limits
+
+You also mentioned something very important.
+
+You need to verify that limits actually work.
+
+Examples:
+
+Free user:
+	•	Connect only one Gmail account
+	•	Maximum receipts
+	•	Maximum subscriptions
+	•	Upgrade banner appears
+
+Pro user:
+	•	Unlimited Gmail accounts
+	•	Unlimited receipts
+	•	Unlimited subscriptions
+
+⸻
+
+6. Subscription expiration
+
+You also need to verify billing.
+
+When Paystack subscription expires:
+	•	user automatically becomes Free
+	•	limits are re-applied
+	•	UI updates correctly
+	•	billing history remains
+
+⸻
+
+7. Make yourself a production checklist
+
+Before launching ReceiptGuard, I would verify all of these:
+	•	✅ Sign up / Login
+	•	✅ Forgot password
+	•	✅ Profile
+	•	✅ Settings save
+	•	✅ Language
+	•	✅ Currency
+	•	✅ Theme
+	•	✅ Gmail OAuth
+	•	✅ Gmail token encryption
+	•	✅ Receipt scanning
+	•	✅ Receipt parsing
+	•	✅ Duplicate prevention
+	•	✅ Subscription detection
+	•	✅ Warranty detection
+	•	✅ Search
+	•	✅ Dashboard statistics
+	•	✅ Reminder scheduler
+	•	✅ Reminder emails
+	•	✅ In-app notifications
+	•	✅ Feedback form
+	•	✅ Feedback email delivery
+	•	✅ Paystack checkout
+	•	✅ Payment verification
+	•	✅ Upgrade to Pro
+	•	✅ Free plan limits
+	•	✅ Pro plan limits
+	•	✅ Subscription renewal
+	•	✅ Subscription cancellation
+	•	✅ Downgrade back to Free
+	•	✅ Admin dashboard
+	•	✅ Security
+	•	✅ Error handling
+	•	✅ Mobile responsiveness
