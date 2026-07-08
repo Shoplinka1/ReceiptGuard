@@ -43,8 +43,11 @@ create table if not exists public.settings (
   updated_at            timestamptz not null default now()
 );
 alter table public.settings enable row level security;
-create policy if not exists "Users can manage own settings"
-  on public.settings for all using (auth.uid() = user_id);
+do $ begin
+  if not exists (select 1 from pg_policies where tablename = 'settings' and policyname = 'Users can manage own settings') then
+    create policy "Users can manage own settings" on public.settings for all using (auth.uid() = user_id);
+  end if;
+end $;
 
 -- Add language column if settings table already existed without it
 alter table public.settings add column if not exists language text not null default 'en';

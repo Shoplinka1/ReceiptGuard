@@ -400,7 +400,7 @@ create policy "Users can send support messages"
 -- ─── Schema migrations (safe to run on existing databases) ──────────────────
 
 -- Add language and browser_notifications to settings (added after initial deploy)
-DO $
+DO $body$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -408,9 +408,9 @@ BEGIN
   ) THEN
     ALTER TABLE public.settings ADD COLUMN language text NOT NULL DEFAULT 'en';
   END IF;
-END $;
+END $body$;
 
-DO $
+DO $body$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -418,7 +418,7 @@ BEGIN
   ) THEN
     ALTER TABLE public.settings ADD COLUMN browser_notifications boolean NOT NULL DEFAULT true;
   END IF;
-END $;
+END $body$;
 
 -- Add is_suspended to profiles (added after initial deploy)
 DO $body$
