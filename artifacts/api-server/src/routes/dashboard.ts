@@ -30,20 +30,32 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
 
   const [
     { data: profile },
+    { data: settings },
     { data: receipts },
     { data: activeSubs },
     { data: warranties },
     { data: gmailAccounts },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('full_name, plan_id').eq('id', userId).single(),
-    supabaseAdmin.from('receipts').select('amount, purchase_date').eq('user_id', userId),
-    supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
+    supabaseAdmin.from('settings').select('currency').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('receipts').select('amount, currency, purchase_date').eq('user_id', userId),
+    supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, currency, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
     supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
     supabaseAdmin.from('email_accounts').select('id, email').eq('user_id', userId).eq('is_active', true),
   ]);
 
-  // Only sum receipts with valid amounts to prevent malformed data corrupting stats
-  const validReceipts = (receipts ?? []).map(r => ({
+  // The dashboard reports money totals in a single currency (the user's
+  // preferred currency, default USD). Receipts/subscriptions recorded in a
+  // different currency (e.g. a Flutterwave charge in NGN) must NOT be summed
+  // in with USD amounts — treating "30000" NGN as "$30000" would massively
+  // inflate spending totals. Non-primary-currency rows are excluded from the
+  // monetary aggregates (they still count towards totalReceipts).
+  const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
+  const isPrimaryCurrency = (c: unknown) => (typeof c === 'string' ? c.toUpperCase() : 'USD') === primaryCurrency;
+
+  // Only sum receipts with valid amounts (and matching currency) to prevent
+  // malformed/foreign-currency data from corrupting stats
+  const validReceipts = (receipts ?? []).filter(r => isPrimaryCurrency(r.currency)).map(r => ({
     ...r,
     validAmount: validAmount(r.amount),
   })).filter(r => r.validAmount !== null);
@@ -53,7 +65,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     .reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
 
   const upcomingRenewals = (activeSubs ?? []).filter(
-    s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater
+    s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater && isPrimaryCurrency(s.currency)
   ).length;
 
   const activeWarranties = (warranties ?? []).filter(w => w.warranty_end_date >= today).length;
@@ -66,10 +78,12 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     return n < 0 || n > 50_000 ? 0 : n;
   };
 
-  const monthlySubTotal = (activeSubs ?? []).reduce((sum, s) => {
-    if (s.billing_cycle === 'yearly') return sum + validPrice(s.yearly_price) / 12;
-    return sum + validPrice(s.monthly_price);
-  }, 0);
+  const monthlySubTotal = (activeSubs ?? [])
+    .filter(s => isPrimaryCurrency(s.currency))
+    .reduce((sum, s) => {
+      if (s.billing_cycle === 'yearly') return sum + validPrice(s.yearly_price) / 12;
+      return sum + validPrice(s.monthly_price);
+    }, 0);
 
   // "Money saved" = estimated savings vs. paying for each subscription month-to-month
   // at full list price, assuming an average 15% discount for annual/bundled plans.
@@ -97,14 +111,17 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     gmailConnected,
     gmailAccounts: (gmailAccounts ?? []).map(a => ({ id: a.id, email: a.email })),
     plan: (profile?.plan_id ?? 'free') as 'free' | 'pro',
+    currency: primaryCurrency,
   });
 });
 
 router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promise<void> => {
-  const { data: receipts } = await supabaseAdmin
-    .from('receipts')
-    .select('amount, purchase_date')
-    .eq('user_id', req.userId);
+  const [{ data: receipts }, { data: settings }] = await Promise.all([
+    supabaseAdmin.from('receipts').select('amount, currency, purchase_date').eq('user_id', req.userId),
+    supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
+  ]);
+  const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
+  const isPrimaryCurrency = (c: unknown) => (typeof c === 'string' ? c.toUpperCase() : 'USD') === primaryCurrency;
 
   const now = new Date();
   const months = [];
@@ -119,7 +136,7 @@ router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promi
     const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 
     const total = (receipts ?? [])
-      .filter(r => r.purchase_date >= first && r.purchase_date <= last)
+      .filter(r => r.purchase_date >= first && r.purchase_date <= last && isPrimaryCurrency(r.currency))
       .reduce((s, r) => {
         const amt = validAmount(r.amount);
         return s + (amt ?? 0);
@@ -137,14 +154,18 @@ router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promi
 });
 
 router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promise<void> => {
-  const { data: receipts } = await supabaseAdmin
-    .from('receipts')
-    .select('merchant_name, merchant_logo_url, amount, purchase_date')
-    .eq('user_id', req.userId);
+  const [{ data: receipts }, { data: settings }] = await Promise.all([
+    supabaseAdmin.from('receipts').select('merchant_name, merchant_logo_url, amount, currency, purchase_date').eq('user_id', req.userId),
+    supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
+  ]);
+  const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
 
   const map = new Map<string, { name: string; logo: string | null; total: number; count: number; last: string }>();
 
   for (const r of receipts ?? []) {
+    // Skip receipts in a different currency than the user's primary — summing
+    // NGN/EUR amounts alongside USD would inflate merchant totals.
+    if ((typeof r.currency === 'string' ? r.currency.toUpperCase() : 'USD') !== primaryCurrency) continue;
     const amt = validAmount(r.amount);
     if (amt === null) continue; // Skip malformed amounts
 
@@ -183,21 +204,32 @@ router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promis
 router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Promise<void> => {
   const today = new Date().toISOString().split('T')[0];
   const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const { data: subs } = await supabaseAdmin
-    .from('subscriptions')
-    .select('*')
-    .eq('user_id', req.userId)
-    .eq('status', 'active')
-    .gte('renewal_date', today)
-    .lte('renewal_date', thirtyDaysLater);
+  const [{ data: subs }, { data: settings }] = await Promise.all([
+    supabaseAdmin
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', req.userId)
+      .eq('status', 'active')
+      .gte('renewal_date', today)
+      .lte('renewal_date', thirtyDaysLater),
+    supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
+  ]);
+  const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
+
+  // Keep this list consistent with the summary card's upcomingRenewalsCount,
+  // which only counts primary-currency subscriptions (see /api/dashboard/summary).
+  const primarySubs = (subs ?? []).filter(
+    s => (typeof s.currency === 'string' ? s.currency.toUpperCase() : 'USD') === primaryCurrency
+  );
 
   const now = Date.now();
-  const result = (subs ?? []).map((s, i) => ({
+  const result = primarySubs.map((s, i) => ({
     id: i + 1,
     subscriptionId: s.id,
     companyName: s.name ?? s.company_name,
     companyLogoUrl: s.company_logo_url ?? null,
     amount: s.billing_cycle === 'yearly' ? safeNum(s.yearly_price) : safeNum(s.monthly_price),
+    currency: primaryCurrency,
     renewalDate: s.renewal_date,
     daysUntilRenewal: Math.max(0, Math.ceil((new Date(s.renewal_date).getTime() - now) / 86400000)),
     reminderEnabled: s.reminder_enabled,
