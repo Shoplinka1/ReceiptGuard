@@ -1092,6 +1092,34 @@ export async function runGmailScan(
           const yearlyPrice = isYearly ? parsed.amount : null;
           const monthlyPrice = isYearly ? Math.round((parsed.amount! / 12) * 100) / 100 : parsed.amount;
 
+          // Estimate the next renewal date from the purchase date.
+          // This is the most important field for the Upcoming Renewals widget —
+          // without it every auto-imported subscription shows renewal_date = null
+          // and the Upcoming Renewals count is always 0.
+          //
+          // Month-end safety: JS setMonth(+1) overflows (e.g. Jan 31 → Mar 2).
+          // We compute the date manually: cap the day at the last day of the
+          // target month so Jan 31 → Feb 28/29, Mar 31 → Apr 30, etc.
+          const renewalDate = parsed.purchaseDate ? (() => {
+            const src = new Date(parsed.purchaseDate);
+            const srcYear  = src.getFullYear();
+            const srcMonth = src.getMonth(); // 0-based
+            const srcDay   = src.getDate();
+            if (billingCycle === 'yearly') {
+              // Same day next year; Feb 29 in a non-leap target year → Feb 28
+              const tgtYear = srcYear + 1;
+              const lastDay = new Date(tgtYear, srcMonth + 1, 0).getDate();
+              const tgtDay  = Math.min(srcDay, lastDay);
+              return `${tgtYear}-${String(srcMonth + 1).padStart(2, '0')}-${String(tgtDay).padStart(2, '0')}`;
+            }
+            // Monthly: same day next month, clamped to that month's last day
+            const tgtMonth = (srcMonth + 1) % 12;
+            const tgtYear  = srcMonth === 11 ? srcYear + 1 : srcYear;
+            const lastDay  = new Date(tgtYear, tgtMonth + 1, 0).getDate();
+            const tgtDay   = Math.min(srcDay, lastDay);
+            return `${tgtYear}-${String(tgtMonth + 1).padStart(2, '0')}-${String(tgtDay).padStart(2, '0')}`;
+          })() : null;
+
           const canAddSub = isPro || await (async () => {
             const { count } = await supabaseAdmin.from('subscriptions')
               .select('*', { count: 'exact', head: true })
@@ -1104,8 +1132,20 @@ export async function runGmailScan(
               monthly_price: monthlyPrice, yearly_price: yearlyPrice,
               currency: parsed.currency,
               billing_cycle: billingCycle,
+              renewal_date: renewalDate,
               category: parsed.category, status: 'active',
             }, { onConflict: 'user_id,name', ignoreDuplicates: true });
+
+            // Backfill renewal_date for subscriptions that were imported before
+            // this field was added. ignoreDuplicates:true skips the full row on
+            // conflict, so we do a targeted UPDATE only when renewal_date is null.
+            if (renewalDate) {
+              await supabaseAdmin.from('subscriptions')
+                .update({ renewal_date: renewalDate })
+                .eq('user_id', userId)
+                .eq('name', parsed.merchantName)
+                .is('renewal_date', null);
+            }
           }
         }
 

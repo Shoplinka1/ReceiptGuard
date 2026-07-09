@@ -64,28 +64,44 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     logger.error({ err: profileErr }, '[Feedback] profile lookup for email failed — continuing without sender name');
   }
   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-  sendEmail({
-    to: 'receiptguard01@gmail.com',
-    subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#1a1a1a">New ${typeLabel} Submitted</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-          <tr><td style="padding:6px 0;color:#666;width:100px">From</td><td style="padding:6px 0;font-weight:500">${userProfile?.full_name || 'Unknown'}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${userProfile?.email || '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Type</td><td style="padding:6px 0">${typeLabel}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Subject</td><td style="padding:6px 0;font-weight:500">${subject.trim()}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Time</td><td style="padding:6px 0">${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} (WAT)</td></tr>
-        </table>
-        <div style="background:#f5f5f5;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin-bottom:24px">
-          <p style="margin:0;color:#333;white-space:pre-wrap">${body.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-        </div>
-        <p style="font-size:12px;color:#999">This is an automated notification from ReceiptGuard.</p>
-      </div>
-    `,
-  }).catch(() => {});
+  // Race the email against a 3-second timeout so slow/broken SMTP can't stall
+  // the user-facing POST. If SMTP is healthy, emailSent reflects the real result.
+  // If SMTP is slow (>3s) or unconfigured, we respond immediately and the send
+  // continues in the background (Promise is not cancelled, just not awaited).
+  let emailSent = false;
+  const emailTimeout = new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000));
+  try {
+    emailSent = await Promise.race([
+      emailTimeout,
+      sendEmail({
+        to: 'receiptguard01@gmail.com',
+        subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1a1a1a">New ${typeLabel} Submitted</h2>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+              <tr><td style="padding:6px 0;color:#666;width:100px">From</td><td style="padding:6px 0;font-weight:500">${userProfile?.full_name || 'Unknown'}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${userProfile?.email || '—'}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Type</td><td style="padding:6px 0">${typeLabel}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Subject</td><td style="padding:6px 0;font-weight:500">${subject.trim()}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Time</td><td style="padding:6px 0">${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} (WAT)</td></tr>
+            </table>
+            <div style="background:#f5f5f5;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin-bottom:24px">
+              <p style="margin:0;color:#333;white-space:pre-wrap">${body.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+            </div>
+            <p style="font-size:12px;color:#999">This is an automated notification from ReceiptGuard.</p>
+          </div>
+        `,
+      }),
+    ]);
+  } catch {
+    // sendEmail already logs internally; swallow here so response always sends
+  }
 
-  res.status(201).json(data ?? { type, subject, body, status: 'open', created_at: new Date().toISOString() });
+  res.status(201).json({
+    ...(data ?? { type, subject, body, status: 'open', created_at: new Date().toISOString() }),
+    emailSent,
+  });
 });
 
 router.get('/api/feedback', requireAuth, async (req, res): Promise<void> => {

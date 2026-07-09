@@ -26,3 +26,5 @@
 - [Receipt duplicate detection tiers](receipt-duplicate-detection.md) — prefer order/invoice ID over merchant+amount+date, which has real false-positive risk.
 - [next-themes class attribute](next-themes-class-attribute.md) — next-themes defaults to data-theme, not class; class-based Tailwind dark variants need attribute="class" explicitly or dark mode silently never applies.
 - [Gmail parsing & dashboard fixes](gmail-parsing-fixes.md) — rawBody must be on ParsedMessage; yearly subs need both yearly_price AND monthly_price; merchant normalization at parse+aggregation; warranty key = orderId/invoiceNumber or product+date.
+- [Subscription renewal_date backfill](subscription-renewal-date.md) — Gmail scan never set renewal_date; added calendar-safe calculation + a separate UPDATE to backfill null rows (ignoreDuplicates skips conflicts entirely).
+- [Dashboard metrics design](dashboard-metrics.md) — what each widget queries, the validAmount filter, and why "Money Saved" was renamed to "Monthly Subs".

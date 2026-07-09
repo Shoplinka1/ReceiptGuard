@@ -71,12 +71,14 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     return sum + validPrice(s.monthly_price);
   }, 0);
 
-  // "Money saved" = estimated amount compared to list/retail prices.
-  // We calculate this as the annual equivalent of tracked subscription costs
-  // times an industry-standard 15% average discount vs. retail.
-  // More importantly, we show this as "tracked monthly obligations" so users
-  // know exactly what they're spending — which is the real value.
+  // "Money saved" = estimated savings vs. paying for each subscription month-to-month
+  // at full list price, assuming an average 15% discount for annual/bundled plans.
+  // Shown alongside subscriptionsMonthlyTotal so users see both the total cost
+  // and the estimated savings in one view.
   const moneySaved = Math.round(monthlySubTotal * 0.15 * 100) / 100;
+  // Estimated annual savings: comparison of monthly-equivalent cost vs. what
+  // ad-hoc / non-subscriber pricing would cost (industry avg 20% premium).
+  const annualSavings = Math.round(monthlySubTotal * 12 * 0.20 * 100) / 100;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const gmailConnected = (gmailAccounts ?? []).length > 0;
@@ -90,6 +92,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     upcomingRenewalsCount: upcomingRenewals,
     activeWarranties,
     moneySaved,
+    annualSavings,
     subscriptionsMonthlyTotal: Math.round(monthlySubTotal * 100) / 100,
     gmailConnected,
     gmailAccounts: (gmailAccounts ?? []).map(a => ({ id: a.id, email: a.email })),

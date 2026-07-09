@@ -129,18 +129,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       
-      {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-6 py-3 safe-area-bottom">
-        {[navItems[0], navItems[1], navItems[2], bottomItems[0], bottomItems[1]].map((item) => {
+      {/* Mobile Bottom Nav — Dashboard, Receipts, Subscriptions, Warranties, Settings.
+          Omits Search/Renewals/Reminders from the tab bar (accessible via sidebar on desktop).
+          Five items is the practical max for a bottom nav before labels become unreadable. */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-4 py-2 safe-area-bottom">
+        {[navItems[0], navItems[2], navItems[3], navItems[5], bottomItems[1]].map((item) => {
           const isActive = location === item.href
           return (
             <Link key={item.name} href={item.href}>
               <div className={cn(
-                "flex flex-col items-center gap-1 cursor-pointer",
+                "flex flex-col items-center gap-1 cursor-pointer px-2 py-1 rounded-md transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground"
               )}>
-                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "opacity-70")} />
-                <span className="text-[10px] font-medium">{item.name}</span>
+                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "opacity-60")} />
+                <span className="text-[9px] font-medium leading-none">{item.name}</span>
               </div>
             </Link>
           )
