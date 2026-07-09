@@ -44,14 +44,17 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     supabaseAdmin.from('email_accounts').select('id, email').eq('user_id', userId).eq('is_active', true),
   ]);
 
-  // The dashboard reports money totals in a single currency (the user's
-  // preferred currency, default USD). Receipts/subscriptions recorded in a
-  // different currency (e.g. a Flutterwave charge in NGN) must NOT be summed
-  // in with USD amounts — treating "30000" NGN as "$30000" would massively
-  // inflate spending totals. Non-primary-currency rows are excluded from the
-  // monetary aggregates (they still count towards totalReceipts).
+  // The dashboard's headline numbers (monthlySpending, subscriptionsMonthlyTotal,
+  // etc.) are reported in the user's preferred currency ("primary currency").
+  // Receipts/subscriptions recorded in OTHER currencies (e.g. a Flutterwave
+  // charge in NGN) are never summed into those primary-currency totals —
+  // treating ₦30,000 as $30,000 would massively inflate spending. But per the
+  // requirement that no valid receipt be discarded, every currency present is
+  // also summed separately and returned in `currencyBreakdown`, so a user with
+  // mixed-currency receipts can see ALL of their spending, grouped correctly.
   const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
-  const isPrimaryCurrency = (c: unknown) => (typeof c === 'string' ? c.toUpperCase() : 'USD') === primaryCurrency;
+  const currencyOf = (c: unknown) => (typeof c === 'string' && c.trim() ? c.toUpperCase() : 'USD');
+  const isPrimaryCurrency = (c: unknown) => currencyOf(c) === primaryCurrency;
 
   // Only sum receipts with valid amounts (and matching currency) to prevent
   // malformed/foreign-currency data from corrupting stats
@@ -64,8 +67,11 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     .filter(r => r.purchase_date >= firstOfMonth)
     .reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
 
+  // upcomingRenewals count spans ALL currencies (it's a count, not a sum, so
+  // there is no currency-mixing risk) — matches the full list returned by
+  // /api/dashboard/upcoming-renewals.
   const upcomingRenewals = (activeSubs ?? []).filter(
-    s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater && isPrimaryCurrency(s.currency)
+    s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater
   ).length;
 
   const activeWarranties = (warranties ?? []).filter(w => w.warranty_end_date >= today).length;
@@ -97,6 +103,31 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const gmailConnected = (gmailAccounts ?? []).length > 0;
 
+  // currencyBreakdown: monthly spending + receipt count for every currency
+  // present in this user's receipts, not just the primary one. No exchange
+  // rate is applied — each bucket is the literal sum in that currency. This
+  // is how "don't discard non-primary-currency receipts" is satisfied without
+  // risking a currency-mixed total.
+  const breakdownMap = new Map<string, { monthlySpending: number; totalSpending: number; receiptCount: number }>();
+  for (const r of receipts ?? []) {
+    const cur = currencyOf(r.currency);
+    const amt = validAmount(r.amount);
+    if (amt === null) continue;
+    const bucket = breakdownMap.get(cur) ?? { monthlySpending: 0, totalSpending: 0, receiptCount: 0 };
+    bucket.totalSpending += amt;
+    bucket.receiptCount += 1;
+    if (r.purchase_date >= firstOfMonth) bucket.monthlySpending += amt;
+    breakdownMap.set(cur, bucket);
+  }
+  const currencyBreakdown = Array.from(breakdownMap.entries())
+    .map(([currency, v]) => ({
+      currency,
+      monthlySpending: Math.round(v.monthlySpending * 100) / 100,
+      totalSpending: Math.round(v.totalSpending * 100) / 100,
+      receiptCount: v.receiptCount,
+    }))
+    .sort((a, b) => (a.currency === primaryCurrency ? -1 : b.currency === primaryCurrency ? 1 : 0));
+
   res.json({
     firstName,
     monthlySpending: Math.round(monthlySpending * 100) / 100,
@@ -112,6 +143,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     gmailAccounts: (gmailAccounts ?? []).map(a => ({ id: a.id, email: a.email })),
     plan: (profile?.plan_id ?? 'free') as 'free' | 'pro',
     currency: primaryCurrency,
+    currencyBreakdown,
   });
 });
 
@@ -121,7 +153,8 @@ router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promi
     supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
   ]);
   const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
-  const isPrimaryCurrency = (c: unknown) => (typeof c === 'string' ? c.toUpperCase() : 'USD') === primaryCurrency;
+  const currencyOf = (c: unknown) => (typeof c === 'string' && c.trim() ? c.toUpperCase() : 'USD');
+  const isPrimaryCurrency = (c: unknown) => currencyOf(c) === primaryCurrency;
 
   const now = new Date();
   const months = [];
@@ -135,14 +168,36 @@ router.get('/api/dashboard/spending-trend', requireAuth, async (req, res): Promi
     const last = `${y}-${ms}-${String(lastDay).padStart(2, '0')}`;
     const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 
-    const total = (receipts ?? [])
-      .filter(r => r.purchase_date >= first && r.purchase_date <= last && isPrimaryCurrency(r.currency))
+    const monthReceipts = (receipts ?? []).filter(r => r.purchase_date >= first && r.purchase_date <= last);
+
+    const total = monthReceipts
+      .filter(r => isPrimaryCurrency(r.currency))
       .reduce((s, r) => {
         const amt = validAmount(r.amount);
         return s + (amt ?? 0);
       }, 0);
 
-    months.push({ month: m, year: y, label, total: Math.round(total * 100) / 100, previousTotal: 0 });
+    // Per the "don't discard other currencies" requirement, also report each
+    // non-primary currency's total for this month separately (never merged
+    // into `total`) so the trend can still show all spending if the UI wants it.
+    const otherMap = new Map<string, number>();
+    for (const r of monthReceipts) {
+      const cur = currencyOf(r.currency);
+      if (cur === primaryCurrency) continue;
+      const amt = validAmount(r.amount);
+      if (amt === null) continue;
+      otherMap.set(cur, (otherMap.get(cur) ?? 0) + amt);
+    }
+    const otherCurrencyTotals = Array.from(otherMap.entries()).map(([currency, t]) => ({
+      currency, total: Math.round(t * 100) / 100,
+    }));
+
+    months.push({
+      month: m, year: y, label,
+      total: Math.round(total * 100) / 100,
+      previousTotal: 0,
+      otherCurrencyTotals,
+    });
   }
 
   // Fill in previousTotal for each month (the prior month's total)
@@ -159,20 +214,26 @@ router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promis
     supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
   ]);
   const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
+  const currencyOf = (c: unknown) => (typeof c === 'string' && c.trim() ? c.toUpperCase() : 'USD');
 
-  const map = new Map<string, { name: string; logo: string | null; total: number; count: number; last: string }>();
+  // Group by merchant name AND currency — a merchant can legitimately be
+  // charged in more than one currency (e.g. Amazon US in USD vs Amazon UK in
+  // GBP), and those must never be summed into one total. Non-primary-currency
+  // merchant totals are still returned (isPrimary: false) rather than dropped,
+  // so no valid receipt is discarded — the ranking/"top 8" is computed on the
+  // primary-currency totals only, matching the rest of the dashboard.
+  const map = new Map<string, { name: string; logo: string | null; total: number; count: number; last: string; currency: string }>();
 
   for (const r of receipts ?? []) {
-    // Skip receipts in a different currency than the user's primary — summing
-    // NGN/EUR amounts alongside USD would inflate merchant totals.
-    if ((typeof r.currency === 'string' ? r.currency.toUpperCase() : 'USD') !== primaryCurrency) continue;
     const amt = validAmount(r.amount);
     if (amt === null) continue; // Skip malformed amounts
 
     // Normalize merchant name so "Amazon", "Amazon.com", "Amazon Marketplace" all
     // aggregate under the same canonical key — without this, top-merchants shows
     // duplicate entries for the same retailer with split totals.
-    const key = normalizeMerchantName(r.merchant_name ?? '');
+    const name = normalizeMerchantName(r.merchant_name ?? '');
+    const currency = currencyOf(r.currency);
+    const key = `${name}::${currency}`;
     const ex = map.get(key);
     if (ex) {
       ex.total += amt;
@@ -180,23 +241,35 @@ router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promis
       if (r.purchase_date > ex.last) ex.last = r.purchase_date;
     } else {
       map.set(key, {
-        name: key, logo: r.merchant_logo_url,
-        total: amt, count: 1, last: r.purchase_date,
+        name, logo: r.merchant_logo_url,
+        total: amt, count: 1, last: r.purchase_date, currency,
       });
     }
   }
 
-  const result = Array.from(map.values())
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8)
-    .map((m, i) => ({
-      id: i + 1,
-      name: m.name,
-      logoUrl: m.logo,
-      totalSpent: Math.round(m.total * 100) / 100,
-      purchaseCount: m.count,
-      lastPurchaseDate: m.last,
-    }));
+  // Response stays an array (same shape as before, for API-client compatibility)
+  // but now spans every currency instead of dropping non-primary ones: primary-
+  // currency merchants are ranked and capped at the usual top 8, then any
+  // non-primary-currency merchants are appended (marked isPrimary: false) so
+  // they are visible rather than silently discarded, per currency-safety rules.
+  const primaryMerchants = Array.from(map.values()).filter(m => m.currency === primaryCurrency);
+  const otherMerchants = Array.from(map.values()).filter(m => m.currency !== primaryCurrency);
+
+  const toItem = (m: typeof primaryMerchants[number], i: number, isPrimary: boolean) => ({
+    id: i + 1,
+    name: m.name,
+    logoUrl: m.logo,
+    totalSpent: Math.round(m.total * 100) / 100,
+    purchaseCount: m.count,
+    lastPurchaseDate: m.last,
+    currency: m.currency,
+    isPrimary,
+  });
+
+  const result = [
+    ...primaryMerchants.sort((a, b) => b.total - a.total).slice(0, 8).map((m, i) => toItem(m, i, true)),
+    ...otherMerchants.sort((a, b) => b.total - a.total).map((m, i) => toItem(m, i, false)),
+  ];
 
   res.json(result);
 });
@@ -204,32 +277,26 @@ router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promis
 router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Promise<void> => {
   const today = new Date().toISOString().split('T')[0];
   const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const [{ data: subs }, { data: settings }] = await Promise.all([
-    supabaseAdmin
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', req.userId)
-      .eq('status', 'active')
-      .gte('renewal_date', today)
-      .lte('renewal_date', thirtyDaysLater),
-    supabaseAdmin.from('settings').select('currency').eq('user_id', req.userId).maybeSingle(),
-  ]);
-  const primaryCurrency = (settings?.currency ?? 'USD').toUpperCase();
+  const { data: subs } = await supabaseAdmin
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('status', 'active')
+    .gte('renewal_date', today)
+    .lte('renewal_date', thirtyDaysLater);
 
-  // Keep this list consistent with the summary card's upcomingRenewalsCount,
-  // which only counts primary-currency subscriptions (see /api/dashboard/summary).
-  const primarySubs = (subs ?? []).filter(
-    s => (typeof s.currency === 'string' ? s.currency.toUpperCase() : 'USD') === primaryCurrency
-  );
-
+  // Renewals are individual line items, not a summed total, so there is no
+  // currency-mixing risk here — every renewal is returned with its own
+  // `currency` field regardless of the user's primary currency, matching the
+  // "don't discard non-primary-currency subscriptions" requirement.
   const now = Date.now();
-  const result = primarySubs.map((s, i) => ({
+  const result = (subs ?? []).map((s, i) => ({
     id: i + 1,
     subscriptionId: s.id,
     companyName: s.name ?? s.company_name,
     companyLogoUrl: s.company_logo_url ?? null,
     amount: s.billing_cycle === 'yearly' ? safeNum(s.yearly_price) : safeNum(s.monthly_price),
-    currency: primaryCurrency,
+    currency: (typeof s.currency === 'string' && s.currency.trim() ? s.currency.toUpperCase() : 'USD'),
     renewalDate: s.renewal_date,
     daysUntilRenewal: Math.max(0, Math.ceil((new Date(s.renewal_date).getTime() - now) / 86400000)),
     reminderEnabled: s.reminder_enabled,

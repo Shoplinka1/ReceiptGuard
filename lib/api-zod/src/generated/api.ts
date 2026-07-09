@@ -31,7 +31,14 @@ export const GetDashboardSummaryResponse = zod.object({
   "moneySaved": zod.number(),
   "subscriptionsMonthlyTotal": zod.number(),
   "gmailConnected": zod.boolean(),
-  "plan": zod.enum(['free', 'pro'])
+  "plan": zod.enum(['free', 'pro']),
+  "currency": zod.string().optional().describe('The user\'s primary currency (settings.currency, default USD). All money fields above (monthlySpending, subscriptionsMonthlyTotal, etc.) are in this currency only.'),
+  "currencyBreakdown": zod.array(zod.object({
+  "currency": zod.string(),
+  "monthlySpending": zod.number(),
+  "totalSpending": zod.number(),
+  "receiptCount": zod.number()
+})).optional().describe('Monthly\/total spending and receipt count for every currency present in the user\'s receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard.')
 })
 
 
@@ -42,8 +49,12 @@ export const GetSpendingTrendResponseItem = zod.object({
   "month": zod.number(),
   "year": zod.number(),
   "label": zod.string().optional(),
-  "total": zod.number(),
-  "previousTotal": zod.number()
+  "total": zod.number().describe('Total spending in the user\'s primary currency for this month.'),
+  "previousTotal": zod.number(),
+  "otherCurrencyTotals": zod.array(zod.object({
+  "currency": zod.string(),
+  "total": zod.number()
+})).optional().describe('Totals for this month in currencies other than the primary one — never merged into `total`.')
 })
 export const GetSpendingTrendResponse = zod.array(GetSpendingTrendResponseItem)
 
@@ -57,7 +68,9 @@ export const GetTopMerchantsResponseItem = zod.object({
   "logoUrl": zod.string().nullish(),
   "totalSpent": zod.number(),
   "purchaseCount": zod.number(),
-  "lastPurchaseDate": zod.string()
+  "lastPurchaseDate": zod.string(),
+  "currency": zod.string().optional(),
+  "isPrimary": zod.boolean().optional().describe('False when this merchant\'s totalSpent is in a currency other than the user\'s primary currency. Non-primary merchants are appended after the top 8 primary-currency merchants rather than discarded.')
 })
 export const GetTopMerchantsResponse = zod.array(GetTopMerchantsResponseItem)
 
@@ -74,7 +87,8 @@ export const GetUpcomingRenewalsResponseItem = zod.object({
   "renewalDate": zod.string(),
   "daysUntilRenewal": zod.number(),
   "reminderEnabled": zod.boolean(),
-  "reminderDaysBefore": zod.number().nullish()
+  "reminderDaysBefore": zod.number().nullish(),
+  "currency": zod.string().optional().describe('The subscription\'s own currency — renewals are individual line items (not summed), so every renewal is returned regardless of the user\'s primary currency.')
 })
 export const GetUpcomingRenewalsResponse = zod.array(GetUpcomingRenewalsResponseItem)
 
@@ -488,7 +502,8 @@ export const ListRenewalsResponseItem = zod.object({
   "renewalDate": zod.string(),
   "daysUntilRenewal": zod.number(),
   "reminderEnabled": zod.boolean(),
-  "reminderDaysBefore": zod.number().nullish()
+  "reminderDaysBefore": zod.number().nullish(),
+  "currency": zod.string().optional().describe('The subscription\'s own currency — renewals are individual line items (not summed), so every renewal is returned regardless of the user\'s primary currency.')
 })
 export const ListRenewalsResponse = zod.array(ListRenewalsResponseItem)
 
@@ -514,7 +529,8 @@ export const UpdateRenewalResponse = zod.object({
   "renewalDate": zod.string(),
   "daysUntilRenewal": zod.number(),
   "reminderEnabled": zod.boolean(),
-  "reminderDaysBefore": zod.number().nullish()
+  "reminderDaysBefore": zod.number().nullish(),
+  "currency": zod.string().optional().describe('The subscription\'s own currency — renewals are individual line items (not summed), so every renewal is returned regardless of the user\'s primary currency.')
 })
 
 

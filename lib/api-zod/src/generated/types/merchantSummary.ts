@@ -14,4 +14,7 @@ export interface MerchantSummary {
   totalSpent: number;
   purchaseCount: number;
   lastPurchaseDate: string;
+  currency?: string;
+  /** False when this merchant's totalSpent is in a currency other than the user's primary currency. Non-primary merchants are appended after the top 8 primary-currency merchants rather than discarded. */
+  isPrimary?: boolean;
 }

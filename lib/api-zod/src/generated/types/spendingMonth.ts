@@ -5,11 +5,15 @@
  * ReceiptGuard API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SpendingMonthOtherCurrencyTotalsItem } from './spendingMonthOtherCurrencyTotalsItem';
 
 export interface SpendingMonth {
   month: number;
   year: number;
   label?: string;
+  /** Total spending in the user's primary currency for this month. */
   total: number;
   previousTotal: number;
+  /** Totals for this month in currencies other than the primary one — never merged into `total`. */
+  otherCurrencyTotals?: SpendingMonthOtherCurrencyTotalsItem[];
 }

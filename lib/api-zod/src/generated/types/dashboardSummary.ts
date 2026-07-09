@@ -5,6 +5,7 @@
  * ReceiptGuard API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CurrencyBreakdownEntry } from './currencyBreakdownEntry';
 import type { DashboardSummaryPlan } from './dashboardSummaryPlan';
 
 export interface DashboardSummary {
@@ -20,4 +21,8 @@ export interface DashboardSummary {
   subscriptionsMonthlyTotal: number;
   gmailConnected: boolean;
   plan: DashboardSummaryPlan;
+  /** The user's primary currency (settings.currency, default USD). All money fields above (monthlySpending, subscriptionsMonthlyTotal, etc.) are in this currency only. */
+  currency?: string;
+  /** Monthly/total spending and receipt count for every currency present in the user's receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard. */
+  currencyBreakdown?: CurrencyBreakdownEntry[];
 }

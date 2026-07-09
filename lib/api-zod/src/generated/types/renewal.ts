@@ -18,4 +18,6 @@ export interface Renewal {
   reminderEnabled: boolean;
   /** @nullable */
   reminderDaysBefore?: number | null;
+  /** The subscription's own currency — renewals are individual line items (not summed), so every renewal is returned regardless of the user's primary currency. */
+  currency?: string;
 }
