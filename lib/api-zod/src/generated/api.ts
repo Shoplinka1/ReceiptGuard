@@ -38,7 +38,11 @@ export const GetDashboardSummaryResponse = zod.object({
   "monthlySpending": zod.number(),
   "totalSpending": zod.number(),
   "receiptCount": zod.number()
-})).optional().describe('Monthly\/total spending and receipt count for every currency present in the user\'s receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard.')
+})).optional().describe('Monthly\/total spending and receipt count for every currency present in the user\'s receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard.'),
+  "subscriptionCurrencyBreakdown": zod.array(zod.object({
+  "currency": zod.string(),
+  "monthlyTotal": zod.number()
+})).optional().describe('Monthly subscription cost totals for every non-primary currency among active subscriptions — ensures non-primary-currency subscriptions are never silently dropped from the response.')
 })
 
 

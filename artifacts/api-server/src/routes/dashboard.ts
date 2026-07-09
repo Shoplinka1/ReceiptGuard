@@ -56,12 +56,16 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
   const currencyOf = (c: unknown) => (typeof c === 'string' && c.trim() ? c.toUpperCase() : 'USD');
   const isPrimaryCurrency = (c: unknown) => currencyOf(c) === primaryCurrency;
 
-  // Only sum receipts with valid amounts (and matching currency) to prevent
-  // malformed/foreign-currency data from corrupting stats
-  const validReceipts = (receipts ?? []).filter(r => isPrimaryCurrency(r.currency)).map(r => ({
+  // validReceiptCount is a currency-agnostic COUNT (not a sum), so it is
+  // computed over every currency — only amount validity matters here. Only
+  // the actual monthlySpending SUM below is restricted to the primary
+  // currency, to avoid mixing currencies in a total.
+  const allValidReceipts = (receipts ?? []).map(r => ({
     ...r,
     validAmount: validAmount(r.amount),
   })).filter(r => r.validAmount !== null);
+
+  const validReceipts = allValidReceipts.filter(r => isPrimaryCurrency(r.currency));
 
   const monthlySpending = validReceipts
     .filter(r => r.purchase_date >= firstOfMonth)
@@ -128,11 +132,26 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     }))
     .sort((a, b) => (a.currency === primaryCurrency ? -1 : b.currency === primaryCurrency ? 1 : 0));
 
+  // Same non-discarding treatment for active-subscription monthly cost:
+  // subscriptionsMonthlyTotal above is primary-currency only; every other
+  // currency present among active subscriptions is summed here instead of
+  // being silently dropped from the response.
+  const subBreakdownMap = new Map<string, number>();
+  for (const s of activeSubs ?? []) {
+    const cur = currencyOf(s.currency);
+    if (cur === primaryCurrency) continue;
+    const monthly = s.billing_cycle === 'yearly' ? validPrice(s.yearly_price) / 12 : validPrice(s.monthly_price);
+    subBreakdownMap.set(cur, (subBreakdownMap.get(cur) ?? 0) + monthly);
+  }
+  const subscriptionCurrencyBreakdown = Array.from(subBreakdownMap.entries()).map(([currency, total]) => ({
+    currency, monthlyTotal: Math.round(total * 100) / 100,
+  }));
+
   res.json({
     firstName,
     monthlySpending: Math.round(monthlySpending * 100) / 100,
     totalReceipts: (receipts ?? []).length,
-    validReceiptCount: validReceipts.length,
+    validReceiptCount: allValidReceipts.length,
     activeSubscriptions: (activeSubs ?? []).length,
     upcomingRenewalsCount: upcomingRenewals,
     activeWarranties,
@@ -144,6 +163,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     plan: (profile?.plan_id ?? 'free') as 'free' | 'pro',
     currency: primaryCurrency,
     currencyBreakdown,
+    subscriptionCurrencyBreakdown,
   });
 });
 

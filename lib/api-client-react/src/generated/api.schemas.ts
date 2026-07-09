@@ -17,6 +17,11 @@ export const DashboardSummaryPlan = {
   pro: 'pro',
 } as const;
 
+export type DashboardSummarySubscriptionCurrencyBreakdownItem = {
+  currency: string;
+  monthlyTotal: number;
+};
+
 export interface CurrencyBreakdownEntry {
   currency: string;
   monthlySpending: number;
@@ -41,6 +46,8 @@ export interface DashboardSummary {
   currency?: string;
   /** Monthly/total spending and receipt count for every currency present in the user's receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard. */
   currencyBreakdown?: CurrencyBreakdownEntry[];
+  /** Monthly subscription cost totals for every non-primary currency among active subscriptions — ensures non-primary-currency subscriptions are never silently dropped from the response. */
+  subscriptionCurrencyBreakdown?: DashboardSummarySubscriptionCurrencyBreakdownItem[];
 }
 
 export type SpendingMonthOtherCurrencyTotalsItem = {

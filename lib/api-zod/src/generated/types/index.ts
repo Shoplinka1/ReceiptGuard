@@ -13,6 +13,7 @@ export * from './categoryTotal';
 export * from './currencyBreakdownEntry';
 export * from './dashboardSummary';
 export * from './dashboardSummaryPlan';
+export * from './dashboardSummarySubscriptionCurrencyBreakdownItem';
 export * from './gmailScanRequest';
 export * from './gmailScanResponse';
 export * from './healthStatus';

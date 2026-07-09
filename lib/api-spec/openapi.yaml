@@ -730,6 +730,17 @@ components:
           description: Monthly/total spending and receipt count for every currency present in the user's receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard.
           items:
             $ref: "#/components/schemas/CurrencyBreakdownEntry"
+        subscriptionCurrencyBreakdown:
+          type: array
+          description: Monthly subscription cost totals for every non-primary currency among active subscriptions — ensures non-primary-currency subscriptions are never silently dropped from the response.
+          items:
+            type: object
+            required: [currency, monthlyTotal]
+            properties:
+              currency:
+                type: string
+              monthlyTotal:
+                type: number
 
     CurrencyBreakdownEntry:
       type: object
