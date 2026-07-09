@@ -98,7 +98,11 @@ async function getValidAccessToken(account: any): Promise<string> {
       refresh_token: refreshToken, grant_type: 'refresh_token',
     }),
   });
-  if (!res.ok) throw new Error('Failed to refresh Gmail token. User must reconnect Gmail.');
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as any;
+    logger.error({ accountId: account.id, email: account.email, status: res.status, errBody }, '[Gmail] token refresh failed');
+    throw new Error('Failed to refresh Gmail token. User must reconnect Gmail.');
+  }
   const tokens = await res.json() as { access_token: string; expires_in: number };
   await supabaseAdmin.from('email_accounts').update({
     access_token_enc: encrypt(tokens.access_token),
@@ -110,13 +114,32 @@ async function getValidAccessToken(account: any): Promise<string> {
 
 // ─── Gmail REST API helper ────────────────────────────────────────────────────
 
+// Thrown for Gmail API failures so callers can distinguish "insufficient
+// permission / bad token" (which must abort the scan and surface a real
+// error) from "query matched zero messages" (which is a legitimate, silent
+// empty result).
+class GmailApiError extends Error {
+  status: number;
+  code: string | undefined;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function gmailFetch(path: string, accessToken: string): Promise<any> {
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as any;
-    throw new Error(`Gmail API: ${err.error?.message ?? res.status}`);
+    const message = err.error?.message ?? String(res.status);
+    const code = err.error?.status; // e.g. PERMISSION_DENIED, UNAUTHENTICATED
+    logger.error({
+      path, status: res.status, code, gmailErrorBody: err,
+    }, '[Gmail API] request failed');
+    throw new GmailApiError(`Gmail API: ${message}`, res.status, code);
   }
   return res.json();
 }
@@ -130,6 +153,7 @@ async function fetchAllMessageIds(
 ): Promise<string[]> {
   const ids: string[] = [];
   let pageToken: string | undefined;
+  let page = 0;
 
   do {
     const params = new URLSearchParams({ q: query, maxResults: '500' });
@@ -139,7 +163,13 @@ async function fetchAllMessageIds(
     const batch = (r.messages ?? []).map((m: any) => m.id as string);
     ids.push(...batch);
 
+    logger.info({
+      query, page, batchSize: batch.length, resultSizeEstimate: r.resultSizeEstimate,
+      hasNextPage: !!r.nextPageToken,
+    }, '[Gmail Scan] search page result');
+
     pageToken = r.nextPageToken as string | undefined;
+    page++;
 
     if (ids.length >= cap) break;
 
@@ -336,25 +366,36 @@ function extractBodyText(parts: any[]): string {
   return text;
 }
 
-function parseMessage(msg: any): {
+export type ParsedMessage = {
   merchantName: string; amount: number | null; currency: string; purchaseDate: string;
   category: string; invoiceNumber: string | null; orderId: string | null;
   paymentMethod: string | null; warrantyMonths: number | null; rawSubject: string; rawFrom: string;
-} | null {
+};
+
+// Skip reasons, surfaced in per-scan structured logs so "0 imported" always
+// comes with an explanation instead of a bare count. This was the second
+// half of the "0 imported / 0 candidates" launch blocker: even once messages
+// were found, a silent `return null` gave no way to tell whether they were
+// rejected as non-receipts, crypto noise, or simply had no parseable amount.
+export type ParseSkipReason =
+  | 'subject_not_receipt_like' | 'subject_marketing_or_crypto'
+  | 'crypto_sender_domain' | 'crypto_body_content' | 'no_amount_found';
+
+function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: ParseSkipReason } {
   const headers = msg.payload?.headers ?? [];
   const h = (n: string) => headers.find((x: any) => x.name.toLowerCase() === n)?.value ?? '';
   const subject = h('subject'), from = h('from'), date = h('date');
 
   // Check receipt subject patterns
-  if (!RECEIPT_SUBJECT_PATTERNS.some(p => p.test(subject))) return null;
+  if (!RECEIPT_SUBJECT_PATTERNS.some(p => p.test(subject))) return { result: null, skipReason: 'subject_not_receipt_like' };
   // Skip newsletters, digests, marketing, crypto alerts
-  if (SKIP_SUBJECT_PATTERNS.some(p => p.test(subject))) return null;
+  if (SKIP_SUBJECT_PATTERNS.some(p => p.test(subject))) return { result: null, skipReason: 'subject_marketing_or_crypto' };
 
   // Check sender domain — skip crypto exchanges entirely
   const domain = extractEmailDomain(from);
   const baseDomain = domain.split('.').slice(-2).join('.');
   if (CRYPTO_EXCHANGE_DOMAINS.has(domain) || CRYPTO_EXCHANGE_DOMAINS.has(baseDomain)) {
-    return null;
+    return { result: null, skipReason: 'crypto_sender_domain' };
   }
 
   let body = msg.payload?.body?.data
@@ -362,7 +403,7 @@ function parseMessage(msg: any): {
     : extractBodyText(msg.payload?.parts ?? []);
 
   // Skip if body contains clear crypto/trading signals
-  if (CRYPTO_BODY_PATTERNS.some(p => p.test(body))) return null;
+  if (CRYPTO_BODY_PATTERNS.some(p => p.test(body))) return { result: null, skipReason: 'crypto_body_content' };
 
   const combined = `${subject}\n${body}`;
 
@@ -382,7 +423,7 @@ function parseMessage(msg: any): {
   const warMo = combined.match(/(\d+)\s*-?\s*month\s*(?:limited\s*)?warranty/i);
   const warrantyMonths = warYr ? parseInt(warYr[1]) * 12 : warMo ? parseInt(warMo[1]) : null;
 
-  return {
+  const result: ParsedMessage = {
     merchantName: getMerchantName(domain, from),
     amount,
     currency,
@@ -395,6 +436,8 @@ function parseMessage(msg: any): {
     rawSubject: subject,
     rawFrom: from,
   };
+  if (amount === null) return { result, skipReason: 'no_amount_found' };
+  return { result };
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -484,7 +527,7 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
   }
 
   if (!isValidEncryptionKey(ENCRYPTION_KEY)) {
-    console.error('[Gmail] ENCRYPTION_KEY is missing or is not a valid 64-character hex string');
+    logger.error('[Gmail] ENCRYPTION_KEY is missing or is not a valid 64-character hex string');
     logEncryptionKeyDiagnostics('oauth_callback');
     res.redirect(`${frontendUrl}/settings?tab=gmail&error=encryption_key_invalid`);
     return;
@@ -502,7 +545,14 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 
     if (!tokenRes.ok) {
       const errBody = await tokenRes.json().catch(() => ({})) as any;
-      console.error('[Gmail] Token exchange failed:', JSON.stringify(errBody));
+      // A mismatched GOOGLE_REDIRECT_URI (registered in Google Cloud Console
+      // vs. the value this env var actually holds) is the single most common
+      // cause of failure here — log the exact redirect_uri we sent so it can
+      // be diffed against the Google Cloud Console "Authorized redirect URIs"
+      // list without guessing.
+      logger.error({
+        status: tokenRes.status, errBody, redirectUriUsed: GOOGLE_REDIRECT_URI,
+      }, '[Gmail] OAuth token exchange failed');
       res.redirect(`${frontendUrl}/settings?tab=gmail&error=token_exchange_failed`);
       return;
     }
@@ -511,10 +561,22 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
       access_token: string; refresh_token?: string; expires_in: number;
     };
 
+    if (!tokens.refresh_token) {
+      // Google only returns a refresh_token on the FIRST consent grant for a
+      // given user+client (or when prompt=consent forces re-consent, which
+      // auth-url already sets). If this ever fires, background rescans will
+      // silently fail forever once the short-lived access_token expires —
+      // log loudly so it's visible instead of surfacing only much later as
+      // "No refresh token. User must reconnect Gmail."
+      logger.warn({ userId, email: 'pending-userinfo-lookup' }, '[Gmail] OAuth exchange returned no refresh_token — background rescans will fail once the access token expires');
+    }
+
     const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     if (!userInfoRes.ok) {
+      const errBody = await userInfoRes.json().catch(() => ({})) as any;
+      logger.error({ status: userInfoRes.status, errBody }, '[Gmail] userinfo lookup failed');
       res.redirect(`${frontendUrl}/settings?tab=gmail&error=userinfo_failed`);
       return;
     }
@@ -530,10 +592,12 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
     }, { onConflict: 'user_id,email' }).select().single();
 
     if (dbError) {
-      console.error('[Gmail] DB error:', dbError.message);
+      logger.error({ err: dbError.message }, '[Gmail] email_accounts upsert failed');
       res.redirect(`${frontendUrl}/settings?tab=gmail&error=db_error`);
       return;
     }
+
+    logger.info({ userId, email: userInfo.email, hasRefreshToken: !!tokens.refresh_token }, '[Gmail] account connected');
 
     try {
       await supabaseAdmin.from('activity_logs').insert({
@@ -542,19 +606,19 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
         metadata: { email: userInfo.email },
       });
     } catch (logErr: any) {
-      console.error('[Gmail] activity_logs insert failed:', logErr?.message);
+      logger.error({ err: logErr?.message }, '[Gmail] activity_logs insert failed');
     }
 
     // Kick off initial scan immediately after connection
     if (newAccount) {
       runGmailScan(newAccount, userId, false, true).catch(err =>
-        console.error('[Gmail] Initial scan error:', err)
+        logger.error({ err: err?.message }, '[Gmail] initial scan threw')
       );
     }
 
     res.redirect(`${frontendUrl}/settings?tab=gmail&connected=true`);
   } catch (err: any) {
-    console.error('[Gmail] Callback unhandled error:', err?.message ?? err);
+    logger.error({ err: err?.message ?? err }, '[Gmail] callback unhandled error');
     res.redirect(`${frontendUrl}/settings?tab=gmail&error=server_error`);
   }
 });
@@ -607,7 +671,7 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
   });
 
   runGmailScan(account, req.userId, forceRescan, false).catch(err =>
-    console.error('[Gmail Scan] Unhandled error:', err)
+    logger.error({ err: err?.message }, '[Gmail Scan] scan threw unhandled error')
   );
 });
 
@@ -642,7 +706,7 @@ export async function runGmailScan(
   const totalCap = isPro ? PRO_SCAN_LIMIT : FREE_SCAN_LIMIT;
   const perQueryCap = isPro ? PRO_SCAN_LIMIT : FREE_SCAN_LIMIT * 2;
 
-  console.log(`[Gmail Scan] ${account.email}: plan=${profile?.plan_id ?? 'free'}, totalCap=${totalCap}, isInitial=${isInitialScan}, afterDate=${afterDate ?? 'none'}`);
+  logger.info({ email: account.email, plan: profile?.plan_id ?? 'free', totalCap, isInitialScan, afterDate }, '[Gmail Scan] starting');
 
   // How many receipts does this Free user already have?
   let currentReceiptCount = 0;
@@ -656,7 +720,7 @@ export async function runGmailScan(
         description: `Receipt storage limit reached (${FREE_RECEIPT_LIMIT}). No new receipts imported. Upgrade to Pro for unlimited storage.`,
         metadata: { currentCount: currentReceiptCount, limit: FREE_RECEIPT_LIMIT },
       });
-      console.log(`[Gmail Scan] ${account.email}: Free limit already reached (${currentReceiptCount}/${FREE_RECEIPT_LIMIT}), skipping scan`);
+      logger.info({ email: account.email, currentReceiptCount, limit: FREE_RECEIPT_LIMIT }, '[Gmail Scan] free receipt limit already reached, skipping scan');
       return;
     }
   }
@@ -675,21 +739,59 @@ export async function runGmailScan(
   ];
 
   let allIds: string[] = [];
+  // Distinguish "query matched nothing" (fine) from "the API call itself
+  // failed" (auth/permission/quota problem — must NOT be reported to the user
+  // as a normal empty scan). Root cause of the "0 imported / 0 candidates"
+  // launch blocker was that every query's failure was swallowed into a
+  // console.warn and the scan simply continued as if nothing were wrong, so a
+  // 401/403 from a bad or under-scoped token looked identical to "no receipts
+  // in this inbox".
+  const queryErrors: { query: string; status: number; code?: string; message: string }[] = [];
   for (const q of gmailQueries) {
     try {
       const ids = await fetchAllMessageIds(q, accessToken, perQueryCap);
       allIds.push(...ids);
-    } catch (e: any) { console.warn('[Gmail Scan] Search error:', e.message); }
+    } catch (e: any) {
+      const status = e instanceof GmailApiError ? e.status : 0;
+      const code = e instanceof GmailApiError ? e.code : undefined;
+      queryErrors.push({ query: q, status, code, message: e.message });
+      logger.error({ query: q, status, code, err: e.message }, '[Gmail Scan] search query failed');
+    }
     await new Promise(r => setTimeout(r, 250));
+  }
+
+  // If EVERY query failed — auth/permission (401/403), rate limiting (429), or
+  // a Gmail-side outage (5xx) — this is not "zero receipts", it's a broken or
+  // throttled connection. Surface it explicitly instead of writing a
+  // misleading "0 imported, 0 candidates" success-shaped log. (Only auth
+  // errors get a "reconnect Gmail" hint; 429/5xx are almost certainly
+  // transient and will resolve on the next scheduled rescan.)
+  if (queryErrors.length === gmailQueries.length && gmailQueries.length > 0) {
+    const summary = queryErrors.map(e => `${e.status} ${e.code ?? ''}`.trim()).join(', ');
+    const isAuthFailure = queryErrors.every(e => e.status === 401 || e.status === 403);
+    const userMessage = isAuthFailure
+      ? `Gmail scan failed: could not read your inbox (${summary}). This usually means the Gmail connection lost permission — please reconnect Gmail in Settings.`
+      : `Gmail scan failed: Gmail API requests failed (${summary}). This is likely a temporary rate limit or outage — it will retry on the next scheduled scan.`;
+    logger.error({ email: account.email, queryErrors, isAuthFailure }, '[Gmail Scan] all searches failed — treating as scan failure, not empty inbox');
+    await supabaseAdmin.from('activity_logs').insert({
+      user_id: userId, type: 'gmail_scan_failed',
+      description: userMessage,
+      metadata: { queryErrors, isAuthFailure },
+    });
+    return;
   }
 
   allIds = [...new Set(allIds)];
   if (!forceRescan) allIds = allIds.filter(id => !alreadyImported.has(id));
   allIds = allIds.slice(0, totalCap);
 
-  console.log(`[Gmail Scan] ${account.email}: ${allIds.length} candidate messages to process`);
+  logger.info({
+    email: account.email, candidateCount: allIds.length, alreadyImportedCount: alreadyImported.size,
+    queryErrorCount: queryErrors.length, gmailQueries,
+  }, '[Gmail Scan] candidate messages to process');
 
   let importedCount = 0, skippedCount = 0, failedCount = 0, limitStoppedCount = 0;
+  const skipReasonCounts: Record<string, number> = {};
 
   await supabaseAdmin.from('activity_logs').insert({
     user_id: userId, type: 'gmail_scan_started',
@@ -707,7 +809,7 @@ export async function runGmailScan(
       if ((nowCount ?? 0) >= FREE_RECEIPT_LIMIT) {
         freeLimitReached = true;
         limitStoppedCount = allIds.length - i;
-        console.log(`[Gmail Scan] ${account.email}: Free receipt limit reached at batch ${i}/${allIds.length}`);
+        logger.info({ email: account.email, batch: i, total: allIds.length }, '[Gmail Scan] free receipt limit reached mid-scan');
       }
     }
 
@@ -719,8 +821,12 @@ export async function runGmailScan(
       }
       try {
         const msg = await gmailFetch(`/messages/${msgId}?format=full`, accessToken);
-        const parsed = parseMessage(msg);
-        if (!parsed || !parsed.amount) { skippedCount++; return; }
+        const { result: parsed, skipReason } = parseMessage(msg);
+        if (!parsed || !parsed.amount) {
+          skippedCount++;
+          if (skipReason) skipReasonCounts[skipReason] = (skipReasonCounts[skipReason] ?? 0) + 1;
+          return;
+        }
 
         const warrantyEnd = parsed.warrantyMonths
           ? (() => {
@@ -780,12 +886,18 @@ export async function runGmailScan(
             }, { onConflict: 'user_id,product_name', ignoreDuplicates: true });
           }
         }
-      } catch (e: any) { console.warn('[Gmail Scan] Message error:', e.message); failedCount++; }
+      } catch (e: any) {
+        logger.warn({ email: account.email, msgId, err: e.message }, '[Gmail Scan] message processing error');
+        failedCount++;
+      }
     }));
 
     const processed = Math.min(i + 10, allIds.length);
     if (processed % 100 === 0 || processed === allIds.length) {
-      console.log(`[Gmail Scan] ${account.email}: progress ${processed}/${allIds.length} — ${importedCount} imported, ${skippedCount} skipped, ${freeLimitReached ? 'LIMIT REACHED' : ''}`);
+      logger.info({
+        email: account.email, processed, total: allIds.length, importedCount, skippedCount, failedCount,
+        freeLimitReached, skipReasonCounts,
+      }, '[Gmail Scan] progress');
     }
 
     if (i + 10 < allIds.length) await new Promise(r => setTimeout(r, 200));
@@ -795,10 +907,28 @@ export async function runGmailScan(
     .update({ last_scanned_at: new Date().toISOString() })
     .eq('id', account.id);
 
+  // When nothing was found at all, spell out the top skip reason instead of a
+  // bare "0 candidates" — this is what the launch-blocker report specifically
+  // asked for: "if scanning returns zero candidates, log exactly why."
+  let zeroResultHint = '';
+  if (allIds.length === 0) {
+    zeroResultHint = alreadyImported.size > 0
+      ? ' No new messages matched the receipt search since the last scan (all matches were already imported).'
+      : ' No messages in this inbox matched the receipt search patterns (subject containing receipt/invoice/order confirmation/etc.). If you expect receipts to be found, confirm the Gmail account actually has matching emails, or check server logs for [Gmail Scan] search query failed entries indicating a permission problem.';
+  } else if (importedCount === 0 && skippedCount > 0) {
+    const topReason = Object.entries(skipReasonCounts).sort((a, b) => b[1] - a[1])[0];
+    zeroResultHint = topReason ? ` Most common skip reason: ${topReason[0]} (${topReason[1]} messages).` : '';
+  }
+
   const completionDescription = freeLimitReached
     ? `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed. ` +
       `Free plan receipt limit (${FREE_RECEIPT_LIMIT}) reached — ${limitStoppedCount} emails not imported. Upgrade to Pro for unlimited receipt storage.`
-    : `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed (of ${allIds.length} candidates)`;
+    : `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed (of ${allIds.length} candidates).${zeroResultHint}`;
+
+  logger.info({
+    email: account.email, importedCount, skippedCount, failedCount, candidateCount: allIds.length,
+    skipReasonCounts, queryErrorCount: queryErrors.length,
+  }, '[Gmail Scan] complete');
 
   await supabaseAdmin.from('activity_logs').insert({
     user_id: userId, type: 'gmail_scan_complete',
@@ -806,7 +936,7 @@ export async function runGmailScan(
     metadata: {
       importedCount, skippedCount, failedCount, total: allIds.length,
       isPro, forceRescan, isInitialScan,
-      freeLimitReached, limitStoppedCount,
+      freeLimitReached, limitStoppedCount, skipReasonCounts,
     },
   });
 
@@ -822,7 +952,9 @@ export async function runGmailScan(
     }).then(undefined, () => {});
   }
 
-  console.log(`[Gmail Scan] ${account.email}: DONE — ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed${freeLimitReached ? ` (limit reached, ${limitStoppedCount} stopped)` : ''}`);
+  logger.info({
+    email: account.email, importedCount, skippedCount, failedCount, freeLimitReached, limitStoppedCount,
+  }, '[Gmail Scan] done');
 }
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {
@@ -847,10 +979,10 @@ router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<
         await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokenToRevoke)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        }).catch(e => console.warn('[Gmail] Token revocation request failed:', e.message));
+        }).catch(e => logger.warn({ err: e.message }, '[Gmail] token revocation request failed'));
       }
     } catch (e: any) {
-      console.warn('[Gmail] Could not revoke token during disconnect:', e.message);
+      logger.warn({ err: e.message }, '[Gmail] could not revoke token during disconnect');
     }
   }
 
