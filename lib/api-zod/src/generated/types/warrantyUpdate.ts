@@ -10,6 +10,7 @@ export interface WarrantyUpdate {
   productName?: string;
   merchantName?: string;
   warrantyEndDate?: string;
+  warrantyMonths?: number;
   reminderEnabled?: boolean;
   notes?: string;
 }

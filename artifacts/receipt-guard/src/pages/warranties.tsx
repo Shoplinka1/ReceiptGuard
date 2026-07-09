@@ -55,9 +55,16 @@ export default function WarrantiesPage() {
                         <p className="text-sm text-muted-foreground">{warranty.merchantName || 'Unknown Vendor'}</p>
                       </div>
                     </div>
-                    <Badge variant={getStatusColor(warranty.status, warranty.daysRemaining) as any} className="uppercase text-[10px]">
-                      {warranty.status === 'expired' ? 'Expired' : `${warranty.daysRemaining} days left`}
-                    </Badge>
+                    <div className="flex flex-col gap-1 items-end">
+                      <Badge variant={getStatusColor(warranty.status, warranty.daysRemaining) as any} className="uppercase text-[10px]">
+                        {warranty.status === 'expired' ? 'Expired' : `${warranty.daysRemaining} days left`}
+                      </Badge>
+                      {(warranty as any).isEstimated && (
+                        <Badge variant="outline" className="text-[10px]" title="Warranty length was estimated from the product category — the source email did not state a warranty term. Edit it if you know the actual length.">
+                          Estimated
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-border">

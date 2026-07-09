@@ -16,6 +16,8 @@ check("below min rejected", extractAmount("Total: $0.10"), { amount: null, curre
 check("above max rejected", extractAmount("Total: $75,000.00"), { amount: null, currency: "USD" });
 check("negative/refund rejected", extractAmount("Refund: -$12.99"), { amount: null, currency: "USD" });
 check("parenthesized negative rejected", extractAmount("Adjustment: ($12.99)"), { amount: null, currency: "USD" });
+check("labeled negative rejected", extractAmount("Amount charged: -$12.99"), { amount: null, currency: "USD" });
+check("labeled negative with 'total' rejected", extractAmount("Total: -$45.00"), { amount: null, currency: "USD" });
 check("no amount found", extractAmount("Thanks for your order, ship date pending"), { amount: null, currency: "USD" });
 check("NaN-proof garbage", extractAmount("$$$ ---- ,,,,"), { amount: null, currency: "USD" });
 check("multi-currency body picks first symbol seen", extractAmount("Total: $19.99 (approx €18.20)"), { amount: 19.99, currency: "USD" });

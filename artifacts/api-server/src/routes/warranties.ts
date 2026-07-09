@@ -18,6 +18,11 @@ function mapWarranty(w: any) {
   return {
     id: w.id, productName: w.product_name, merchantName: w.merchant_name ?? null,
     purchaseDate: w.purchase_date, warrantyEndDate: w.warranty_end_date,
+    warrantyMonths: w.warranty_months ?? null,
+    // true when the duration was guessed from product category rather than
+    // read from the source email — the UI must label these "Estimated" and
+    // never present them as a confirmed manufacturer warranty.
+    isEstimated: w.is_estimated ?? false,
     daysRemaining, status: getStatus(w.warranty_end_date),
     reminderEnabled: w.reminder_enabled, notes: w.notes ?? null, createdAt: w.created_at,
   };
@@ -81,13 +86,26 @@ router.get('/api/warranties/:id', requireAuth, async (req, res): Promise<void> =
 });
 
 router.patch('/api/warranties/:id', requireAuth, async (req, res): Promise<void> => {
-  const { productName, merchantName, warrantyEndDate, reminderEnabled, notes } = req.body;
+  const { productName, merchantName, warrantyEndDate, warrantyMonths, reminderEnabled, notes } = req.body;
+
+  if (warrantyMonths !== undefined) {
+    if (!Number.isInteger(warrantyMonths) || warrantyMonths < 1 || warrantyMonths > 360) {
+      res.status(400).json({ error: 'warrantyMonths must be a whole number of months between 1 and 360 (30 years).' });
+      return;
+    }
+  }
+
   const updates: Record<string, any> = {};
   if (productName) updates.product_name = productName;
   if (merchantName !== undefined) updates.merchant_name = merchantName;
   if (warrantyEndDate) updates.warranty_end_date = warrantyEndDate;
+  if (warrantyMonths !== undefined) updates.warranty_months = warrantyMonths;
   if (reminderEnabled !== undefined) updates.reminder_enabled = reminderEnabled;
   if (notes !== undefined) updates.notes = notes;
+  // Any manual edit to the length or expiry date means it's no longer just
+  // a category-based guess — clear the estimated flag so the UI stops
+  // labeling a user-confirmed warranty as "Estimated".
+  if (warrantyEndDate || warrantyMonths !== undefined) updates.is_estimated = false;
   updates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabaseAdmin

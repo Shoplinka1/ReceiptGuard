@@ -988,6 +988,11 @@ components:
         status:
           type: string
           enum: [active, expiring_soon, expired]
+        warrantyMonths:
+          type: ["integer", "null"]
+        isEstimated:
+          type: boolean
+          description: True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this "Estimated".
         reminderEnabled:
           type: boolean
         notes:
@@ -1021,6 +1026,8 @@ components:
           type: string
         warrantyEndDate:
           type: string
+        warrantyMonths:
+          type: integer
         reminderEnabled:
           type: boolean
         notes:

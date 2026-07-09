@@ -203,5 +203,17 @@ where type in ('gmail_scan_started', 'gmail_scan_complete', 'gmail_scan_failed',
 -- ─── Phase 3: receipts table — add notes column if missing ───────────────────
 alter table public.receipts add column if not exists notes text;
 
+-- ─── Phase 4: warranties — reminder_enabled, is_estimated columns ────────────
+-- `reminder_enabled` was referenced by artifacts/api-server/src/routes/warranties.ts
+-- (POST/PATCH insert/update it) but was never added to the warranties table,
+-- so every manual "Add Warranty" request failed with a Postgres
+-- "column does not exist" error and the row was never created — one of the
+-- root causes behind the Warranties dashboard count always showing 0.
+alter table public.warranties add column if not exists reminder_enabled boolean not null default true;
+-- `is_estimated` marks warranties whose length was guessed from product
+-- category (no explicit warranty duration was found in the source email) so
+-- the UI can label them "Estimated" instead of presenting a guess as fact.
+alter table public.warranties add column if not exists is_estimated boolean not null default false;
+
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

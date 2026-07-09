@@ -291,13 +291,19 @@ export function getMerchantName(domain: string, rawFrom: string): string {
 
 export function extractAmount(text: string): { amount: number | null; currency: string } {
   // Patterns ordered from most specific to least specific
+  // Each pattern has an explicit optional group 1 capturing a leading "-" or
+  // "(" immediately before the currency symbol/number (the accounting
+  // convention for a negative/refund value), so the sign is detected right
+  // where it actually appears — before the symbol, not before the label
+  // text ("Amount charged: -$12.99") and not after the symbol either.
+  // The amount itself is always group 2.
   const pats = [
     // "Total: $12.99" or "Amount charged: £9.99" or similar label + value
-    /(?:total|amount\s*(?:charged|due|paid)|charged|paid|price|subtotal|grand\s*total)[^\d$£€₦₹¥₩]*[$£€₦₹¥₩]?\s*([\d]{1,6}(?:[,\.][\d]{3})*(?:[.,]\d{1,2})?)/i,
+    /(?:total|amount\s*(?:charged|due|paid)|charged|paid|price|subtotal|grand\s*total)[^\d$£€₦₹¥₩\-(]*([-(])?\s*[$£€₦₹¥₩]?\s*([\d]{1,6}(?:[,\.][\d]{3})*(?:[.,]\d{1,2})?)/i,
     // Currency symbol immediately before number: $12.99
-    /[$£€₦₹¥₩]\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)/,
+    /([-(])?\s*[$£€₦₹¥₩]\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)/,
     // Number followed by currency code: 12.99 USD
-    /(\d{1,6}(?:,\d{3})*(?:\.\d{2}))\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED)\b/i,
+    /([-(])?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2}))\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED)\b/i,
   ];
 
   const currencySymbols: Record<string, string> = {
@@ -309,15 +315,12 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     const m = text.match(pat);
     if (!m) continue;
 
-    // A minus sign (or parentheses, the accounting convention for negatives)
-    // immediately before the matched number means this is a refund/credit,
-    // not a charge. The capture group itself never includes the sign, so
-    // without this check "-$12.99" and "$12.99" parsed identically —
-    // refunds were silently counted as positive spending.
-    const matchStart = m.index ?? 0;
-    const precedingChar = text.slice(0, matchStart).trimEnd().slice(-1);
-    const isNegative = precedingChar === '-' || precedingChar === '(';
-    if (isNegative) continue;
+    // A minus sign or "(" captured in group 1 (see the pattern comments
+    // above — each pattern explicitly captures it right before the currency
+    // symbol/number) means this is a refund/credit, not a charge. Without
+    // this check "-$12.99" and "$12.99" parsed identically — refunds were
+    // silently counted as positive spending.
+    if (m[1] === '-' || m[1] === '(') continue;
 
     // Normalise the number: handle both comma-as-thousands (1,234.56) and
     // comma-as-decimal (1.234,56 — European format). Which separator is the
@@ -327,7 +330,7 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     // comma-decimal when there was no "." at all, so European-formatted
     // amounts that also used "." as a thousands separator — e.g. "1.234,56"
     // — were parsed as 1.23456 instead of 1234.56.)
-    let raw = m[1];
+    let raw = m[2];
     let amount: number;
 
     const lastComma = raw.lastIndexOf(',');
@@ -393,7 +396,8 @@ function extractBodyText(parts: any[]): string {
 export type ParsedMessage = {
   merchantName: string; amount: number | null; currency: string; purchaseDate: string;
   category: string; invoiceNumber: string | null; orderId: string | null;
-  paymentMethod: string | null; warrantyMonths: number | null; rawSubject: string; rawFrom: string;
+  paymentMethod: string | null; warrantyMonths: number | null; warrantyIsEstimated: boolean;
+  rawSubject: string; rawFrom: string;
 };
 
 // Skip reasons, surfaced in per-scan structured logs so "0 imported" always
@@ -410,8 +414,14 @@ export type ParseSkipReason =
 // looks like an order/payment confirmation (e.g. "Order Confirmation:
 // Refund Processed" or a receipt email whose body says the charge was
 // reversed). Subject-only filtering above misses these.
+// Deliberately narrow: "refund" alone appears in plenty of ordinary receipts
+// as boilerplate policy text ("request a refund within 30 days", "refunds
+// are available at checkout"). Only match phrasing that states a refund
+// ALREADY HAPPENED on THIS transaction, not policy/help text that mentions
+// the word in passing.
 const REFUND_BODY_PATTERNS = [
-  /\brefunded?\b/i, /\bcredited\s*(?:back)?\s*to\s*your/i,
+  /\b(?:has\s*been|was|is\s*being)\s*refunded\b/i, /\byour\s*refund\s*(?:of|for|has)\b/i,
+  /\bwe\s*(?:have\s*)?refunded\b/i, /\bcredited\s*(?:back\s*)?to\s*your\s*(?:account|card|original)/i,
   /\bchargeback\b/i, /\bpayment\s*(?:was\s*)?reversed\b/i,
   /\breturn\s*(?:has\s*been\s*)?(?:confirmed|processed|received)\b/i,
 ];
@@ -464,23 +474,70 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
 
   const warYr = combined.match(/(\d+)\s*-?\s*year\s*(?:limited\s*)?warranty/i);
   const warMo = combined.match(/(\d+)\s*-?\s*month\s*(?:limited\s*)?warranty/i);
-  const warrantyMonths = warYr ? parseInt(warYr[1]) * 12 : warMo ? parseInt(warMo[1]) : null;
+  const explicitWarrantyMonths = warYr ? parseInt(warYr[1]) * 12 : warMo ? parseInt(warMo[1]) : null;
+
+  const category = categorize(subject, from, body);
+  const merchantName = getMerchantName(domain, from);
+
+  // No explicit warranty statement in the email — estimate one for
+  // categories where a warranty is a real, standard thing (electronics,
+  // appliances, tools) rather than guessing on every purchase (a coffee
+  // subscription or food delivery receipt has no warranty). This was the
+  // other root cause of "Warranties always show 0": the old logic only ever
+  // created a warranty when the email explicitly said "N year warranty",
+  // which almost no order-confirmation email does.
+  let warrantyMonths = explicitWarrantyMonths;
+  let warrantyIsEstimated = false;
+  if (warrantyMonths === null && isWarrantyEligible(category, merchantName)) {
+    warrantyMonths = estimateWarrantyMonths(category, merchantName);
+    warrantyIsEstimated = true;
+  }
 
   const result: ParsedMessage = {
-    merchantName: getMerchantName(domain, from),
+    merchantName,
     amount,
     currency,
     purchaseDate,
-    category: categorize(subject, from, body),
+    category,
     invoiceNumber: invM?.[1] ?? null,
     orderId: ordM?.[1] ?? null,
     paymentMethod: payM?.[1]?.trim().slice(0, 50) ?? null,
     warrantyMonths,
+    warrantyIsEstimated,
     rawSubject: subject,
     rawFrom: from,
   };
   if (amount === null) return { result, skipReason: 'no_amount_found' };
   return { result };
+}
+
+// Merchants where a "warranty" concept doesn't apply at all (subscriptions,
+// digital goods, restaurants) must never get an estimated warranty even if
+// they were mis-categorized as "shopping".
+const NO_WARRANTY_MERCHANTS = new Set([
+  'Netflix', 'Spotify', 'Hulu', 'Disney+', 'HBO Max', 'Paramount+',
+  'PayPal', 'Stripe', 'Uber', 'Lyft', 'DoorDash', 'Grubhub', 'Instacart',
+  'Airbnb', 'Booking.com', 'Expedia', 'Hotels.com', 'Etsy', 'eBay',
+  'Dropbox', 'Box', 'Notion', 'Slack', 'Zoom', 'Figma', 'Sketch',
+  'GitHub', 'GitLab', 'Adobe', 'Canva', 'Squarespace', 'GoDaddy',
+  'Namecheap', 'Cloudflare', 'SendGrid', 'Mailchimp', 'Twilio', 'Datadog',
+  'Atlassian', 'Jira', 'Confluence', 'Salesforce', 'HubSpot', 'OpenAI',
+  'Anthropic', 'DigitalOcean', 'Linode', 'Vultr',
+]);
+
+function isWarrantyEligible(category: string, merchantName: string): boolean {
+  if (NO_WARRANTY_MERCHANTS.has(merchantName)) return false;
+  // Physical, durable-goods categories only — never subscriptions/services.
+  return category === 'shopping';
+}
+
+// Category-based estimate, clearly marked with `warrantyIsEstimated: true`
+// so the UI can label it "Estimated" instead of presenting a guess as a
+// confirmed manufacturer warranty. 12 months matches the standard US
+// consumer-electronics manufacturer warranty and is a reasonable default
+// for "shopping" purchases where the actual warranty term is unknown.
+function estimateWarrantyMonths(_category: string, _merchantName: string): number {
+  return 12;
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -924,7 +981,7 @@ export async function runGmailScan(
             await supabaseAdmin.from('warranties').upsert({
               user_id: userId, product_name: parsed.merchantName, merchant_name: parsed.merchantName,
               purchase_date: parsed.purchaseDate, warranty_end_date: warrantyEnd,
-              warranty_months: parsed.warrantyMonths,
+              warranty_months: parsed.warrantyMonths, is_estimated: parsed.warrantyIsEstimated,
               status: new Date(warrantyEnd) > new Date() ? 'active' : 'expired',
             }, { onConflict: 'user_id,product_name', ignoreDuplicates: true });
           }

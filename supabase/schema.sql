@@ -217,6 +217,8 @@ create table if not exists public.warranties (
   warranty_end_date   date not null,
   warranty_months     int,
   status              text not null default 'active',     -- active | expired | claimed
+  reminder_enabled    boolean not null default true,
+  is_estimated        boolean not null default false,      -- true when warranty_months was guessed from category, not the source email
   notes               text,
   metadata            jsonb,
   created_at          timestamptz not null default now(),

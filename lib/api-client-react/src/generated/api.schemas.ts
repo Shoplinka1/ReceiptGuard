@@ -234,6 +234,10 @@ export interface Warranty {
   warrantyEndDate: string;
   daysRemaining: number;
   status: WarrantyStatus;
+  /** @nullable */
+  warrantyMonths?: number | null;
+  /** True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this "Estimated". */
+  isEstimated?: boolean;
   reminderEnabled?: boolean;
   /** @nullable */
   notes?: string | null;
@@ -253,6 +257,7 @@ export interface WarrantyUpdate {
   productName?: string;
   merchantName?: string;
   warrantyEndDate?: string;
+  warrantyMonths?: number;
   reminderEnabled?: boolean;
   notes?: string;
 }
