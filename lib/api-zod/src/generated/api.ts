@@ -24,6 +24,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "firstName": zod.string(),
   "monthlySpending": zod.number(),
   "totalReceipts": zod.number(),
+  "validReceiptCount": zod.number().optional().describe('Receipts with a plausible amount ($0.50-$50,000) — the same filter used by Monthly Spending, Spending Trend, and Top Merchants. Use this for \"how many receipts do I actually have\" rather than totalReceipts, which includes malformed\/rejected rows still stored for audit purposes.'),
   "activeSubscriptions": zod.number(),
   "upcomingRenewalsCount": zod.number(),
   "activeWarranties": zod.number(),

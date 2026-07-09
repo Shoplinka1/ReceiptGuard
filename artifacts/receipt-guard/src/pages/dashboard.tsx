@@ -132,7 +132,7 @@ export default function Dashboard() {
           />
           <StatCard 
             title="Receipts Stored" 
-            value={summary?.totalReceipts} 
+            value={summary?.validReceiptCount} 
             loading={loadingSummary} 
             icon={Receipt} 
           />

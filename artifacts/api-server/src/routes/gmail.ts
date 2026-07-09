@@ -408,7 +408,7 @@ export type ParsedMessage = {
 export type ParseSkipReason =
   | 'subject_not_receipt_like' | 'subject_marketing_or_crypto'
   | 'crypto_sender_domain' | 'crypto_body_content' | 'no_amount_found'
-  | 'refund_or_credit_body';
+  | 'refund_or_credit_body' | 'duplicate_merchant_amount_date';
 
 // Body-level refund/credit signals, checked even when the subject itself
 // looks like an order/payment confirmation (e.g. "Order Confirmation:
@@ -830,6 +830,35 @@ export async function runGmailScan(
     .from('receipts').select('gmail_message_id').eq('user_id', userId).not('gmail_message_id', 'is', null);
   const alreadyImported = new Set((existing ?? []).map((r: any) => r.gmail_message_id));
 
+  // Cross-source duplicate detection. The `(user_id, gmail_message_id)`
+  // unique constraint only catches re-scanning the SAME email; it does
+  // nothing for the same purchase surfacing under a different message id —
+  // e.g. an order-confirmation email AND a separate shipping-confirmation
+  // email for the same order, or an old manually-added receipt that a later
+  // scan re-discovers. Without this, "Receipt Count" inflates with true
+  // duplicates even though gmail_message_id-based dedup reports 0 skipped.
+  //
+  // Tiered identity: prefer the merchant's own order/invoice number when the
+  // email states one — that's a real, unique identifier, so two emails
+  // sharing it are always the same purchase. Only fall back to
+  // merchant+amount+date (a much weaker signal — two separate purchases can
+  // legitimately share all three, e.g. buying the same $12 item twice in one
+  // day) when no order/invoice number was found on the new message, and even
+  // then only against OTHER receipts that likewise lack one.
+  const { data: existingForDup } = await supabaseAdmin
+    .from('receipts').select('merchant_name, amount, purchase_date, order_id, invoice_number').eq('user_id', userId);
+  const idKeys = new Set(
+    (existingForDup ?? [])
+      .map((r: any) => r.order_id || r.invoice_number)
+      .filter(Boolean)
+      .map((id: string) => id.toUpperCase())
+  );
+  const fallbackKeys = new Set(
+    (existingForDup ?? [])
+      .filter((r: any) => !r.order_id && !r.invoice_number)
+      .map((r: any) => `${r.merchant_name}|${r.amount}|${r.purchase_date}`)
+  );
+
   // Build search queries — add after: date filter for background rescans
   const afterFilter = afterDate ? ` after:${afterDate.replace(/-/g, '/')}` : '';
   const gmailQueries = [
@@ -927,6 +956,19 @@ export async function runGmailScan(
           if (skipReason) skipReasonCounts[skipReason] = (skipReasonCounts[skipReason] ?? 0) + 1;
           return;
         }
+
+        const newId = (parsed.orderId || parsed.invoiceNumber)?.toUpperCase() || null;
+        const fallbackKey = `${parsed.merchantName}|${parsed.amount}|${parsed.purchaseDate}`;
+        const isDuplicate = newId ? idKeys.has(newId) : fallbackKeys.has(fallbackKey);
+        if (isDuplicate) {
+          skippedCount++;
+          skipReasonCounts['duplicate_merchant_amount_date'] = (skipReasonCounts['duplicate_merchant_amount_date'] ?? 0) + 1;
+          return;
+        }
+        // Claim it immediately so two messages for the same purchase within
+        // this same scan batch don't both import (race between parallel
+        // Promise.all workers in the batch).
+        if (newId) idKeys.add(newId); else fallbackKeys.add(fallbackKey);
 
         const warrantyEnd = parsed.warrantyMonths
           ? (() => {
