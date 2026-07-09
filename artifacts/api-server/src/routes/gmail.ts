@@ -261,7 +261,7 @@ function extractEmailDomain(from: string): string {
   return m[1].toLowerCase().replace(/^(mail|email|mg|noreply|no-reply|notifications?|info|support|billing|invoices?|receipts?)\./i, '');
 }
 
-function getMerchantName(domain: string, rawFrom: string): string {
+export function getMerchantName(domain: string, rawFrom: string): string {
   if (MERCHANT_DOMAINS[domain]) return MERCHANT_DOMAINS[domain];
   for (const [k, v] of Object.entries(MERCHANT_DOMAINS)) {
     if (domain.endsWith(`.${k}`) || domain === k) return v;
@@ -283,7 +283,7 @@ function getMerchantName(domain: string, rawFrom: string): string {
   return main.charAt(0).toUpperCase() + main.slice(1);
 }
 
-function extractAmount(text: string): { amount: number | null; currency: string } {
+export function extractAmount(text: string): { amount: number | null; currency: string } {
   // Patterns ordered from most specific to least specific
   const pats = [
     // "Total: $12.99" or "Amount charged: £9.99" or similar label + value
@@ -304,15 +304,23 @@ function extractAmount(text: string): { amount: number | null; currency: string 
     if (!m) continue;
 
     // Normalise the number: handle both comma-as-thousands (1,234.56) and
-    // comma-as-decimal (1.234,56 — European format)
+    // comma-as-decimal (1.234,56 — European format). Which separator is the
+    // decimal one is determined by whichever of "," or "." appears LAST in
+    // the string — that is always the decimal separator, the other (if any)
+    // is a thousands separator to strip. (Previous logic only handled
+    // comma-decimal when there was no "." at all, so European-formatted
+    // amounts that also used "." as a thousands separator — e.g. "1.234,56"
+    // — were parsed as 1.23456 instead of 1234.56.)
     let raw = m[1];
     let amount: number;
 
-    if (/,\d{2}$/.test(raw) && !raw.includes('.')) {
-      // European decimal: "1.234,56" → 1234.56
+    const lastComma = raw.lastIndexOf(',');
+    const lastDot = raw.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // Comma is the decimal separator: strip dots (thousands), comma -> dot
       amount = parseFloat(raw.replace(/\./g, '').replace(',', '.'));
     } else {
-      // Standard: "1,234.56" → 1234.56
+      // Dot is the decimal separator (or no separators at all): strip commas
       amount = parseFloat(raw.replace(/,/g, ''));
     }
 
