@@ -1,0 +1,194 @@
+ReceiptGuard Final Production Launch (Railway)
+
+The remaining FAIL and NOT VERIFIED items are now the only launch blockers.
+
+Do not perform any more broad repository audits or unnecessary refactoring.
+
+Focus only on completing production readiness.
+
+IMPORTANT
+
+ReceiptGuard’s production environment is Railway, not Replit.
+
+Replit is only being used for development and testing.
+
+Every production fix must work correctly after deployment to Railway.
+
+Do not optimize specifically for Replit.
+
+Any required environment variables must be documented for Railway deployment.
+
+If any configuration differs between Replit and Railway, explain exactly what must be changed on Railway.
+
+⸻
+
+Remaining launch blockers
+
+1. Gmail OAuth
+
+Investigate why Gmail OAuth refresh returns invalid_grant.
+
+Determine whether this is:
+	•	revoked refresh token
+	•	Google OAuth configuration
+	•	redirect URI mismatch
+	•	missing scopes
+	•	expired refresh token
+	•	application bug
+
+Provide the exact root cause.
+
+If reconnecting Gmail is required, verify the reconnect flow works correctly.
+
+⸻
+
+2. Subscription detection
+
+Verify subscription detection using real subscription receipt emails.
+
+Confirm:
+	•	recurring services detected
+	•	billing frequency
+	•	renewal date
+	•	amount
+	•	subscription status
+
+⸻
+
+3. Warranty detection
+
+Verify warranty detection using real warranty-eligible receipts.
+
+Confirm:
+	•	product extraction
+	•	merchant extraction
+	•	warranty duration
+	•	estimated warranties
+	•	editing
+	•	duplicate prevention
+
+⸻
+
+4. Reminder scheduler
+
+Verify the complete reminder system.
+
+Test:
+
+Warranty reminders
+	•	90 days
+	•	60 days
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Subscription reminders
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Verify:
+	•	scheduler
+	•	email delivery
+	•	in-app notification
+	•	duplicate prevention
+
+⸻
+
+5. Paystack
+
+Complete one real Paystack test-mode payment.
+
+Verify:
+	•	payment history
+	•	webhook processing
+	•	upgrade
+	•	cancellation
+	•	renewal
+	•	automatic downgrade
+
+Cancelled checkouts must never create fake Pending payments.
+
+⸻
+
+6. Manual production verification
+
+Verify manually:
+	•	logout
+	•	session clearing
+	•	cache clearing
+	•	mobile layout
+	•	iPhone Safari
+	•	admin dashboard
+
+⸻
+
+Admin Dashboard
+
+I need a complete production admin system.
+
+Provide:
+	•	Admin URL
+	•	First admin SQL
+	•	Required environment variables
+	•	Required database tables
+	•	Required permissions
+	•	Deployment instructions
+
+I also want the admin dashboard to allow me to monitor my SaaS.
+
+Include:
+	•	Total users
+	•	New users today
+	•	Connected Gmail accounts
+	•	Active subscriptions
+	•	Free vs Premium users
+	•	Receipt imports
+	•	Gmail scan failures
+	•	Warranty statistics
+	•	Revenue
+	•	Paystack payments
+	•	Feedback submissions
+	•	Recent activity
+	•	System health
+	•	Error logs
+	•	Search users
+	•	View user receipts
+	•	View subscriptions
+	•	View warranties
+	•	Disable user
+	•	Delete user (with confirmation)
+	•	Export statistics
+
+Everything should be secured with proper admin authorization.
+
+⸻
+
+Railway
+
+Everything must work correctly after deployment to Railway.
+
+Document:
+	•	every required Railway environment variable
+	•	deployment steps
+	•	database migrations
+	•	cron/scheduler setup
+	•	webhook URLs
+	•	Gmail OAuth redirect URI
+	•	Paystack webhook URL
+
+⸻
+
+Final Verification
+
+Do not mark ReceiptGuard as production-ready until:
+	•	every remaining production test has passed
+
+or
+	•	the item requires live production usage and the exact verification procedure is documented.
+
+Provide a final PASS / FAIL table for every critical feature.

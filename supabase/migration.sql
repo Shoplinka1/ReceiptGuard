@@ -215,5 +215,34 @@ alter table public.warranties add column if not exists reminder_enabled boolean 
 -- the UI can label them "Estimated" instead of presenting a guess as fact.
 alter table public.warranties add column if not exists is_estimated boolean not null default false;
 
+-- ─── Phase 5: settings — days_before_90 / days_before_60 (warranty-only windows) ─
+-- reminder-scheduler.ts's WARRANTY_REMINDER_WINDOWS includes 90 and 60-day
+-- lead times, but the settings table never got these two columns, so the
+-- scheduler's settings SELECT couldn't fetch them and the per-user toggle
+-- silently had no effect (90/60-day warranty reminders always fired,
+-- regardless of the user's saved preference). This is additive/non-destructive.
+alter table public.settings add column if not exists days_before_90 boolean not null default true;
+alter table public.settings add column if not exists days_before_60 boolean not null default true;
+
+-- ─── Phase 6: audit_logs table (required by /api/admin/users/:id DELETE) ─────
+-- artifacts/api-server/src/routes/admin.ts writes an audit_logs row whenever
+-- an admin deletes a user, but the table never existed — the insert has been
+-- silently swallowed (.then(undefined, () => {})) so admin user-deletions
+-- left no audit trail. Purely additive; does not affect existing data.
+create table if not exists public.audit_logs (
+  id          uuid primary key default gen_random_uuid(),
+  actor_id    uuid references public.profiles(id) on delete set null,
+  action      text not null,
+  target_type text not null,
+  target_id   text,
+  metadata    jsonb,
+  created_at  timestamptz not null default now()
+);
+create index if not exists audit_logs_actor_idx on public.audit_logs(actor_id, created_at desc);
+alter table public.audit_logs enable row level security;
+drop policy if exists "Admins can view audit logs" on public.audit_logs;
+create policy "Admins can view audit logs" on public.audit_logs for select
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

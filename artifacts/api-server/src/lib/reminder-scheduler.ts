@@ -217,7 +217,7 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
   for (const warranty of warranties) {
     const { data: settings } = await supabaseAdmin
       .from('settings')
-      .select('warranty_reminder, email_notifications, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
+      .select('warranty_reminder, email_notifications, days_before_90, days_before_60, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
       .eq('user_id', warranty.user_id)
       .maybeSingle();
 
