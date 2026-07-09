@@ -25,3 +25,4 @@
 - [Warranty estimation & schema drift](warranties-reminder-enabled-column.md) — a route referenced a DB column that was never migrated; also added category-based warranty estimation.
 - [Receipt duplicate detection tiers](receipt-duplicate-detection.md) — prefer order/invoice ID over merchant+amount+date, which has real false-positive risk.
 - [next-themes class attribute](next-themes-class-attribute.md) — next-themes defaults to data-theme, not class; class-based Tailwind dark variants need attribute="class" explicitly or dark mode silently never applies.
+- [Gmail parsing & dashboard fixes](gmail-parsing-fixes.md) — rawBody must be on ParsedMessage; yearly subs need both yearly_price AND monthly_price; merchant normalization at parse+aggregation; warranty key = orderId/invoiceNumber or product+date.

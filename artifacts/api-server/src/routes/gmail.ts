@@ -267,10 +267,47 @@ function extractEmailDomain(from: string): string {
   return m[1].toLowerCase().replace(/^(mail|email|mg|noreply|no-reply|notifications?|info|support|billing|invoices?|receipts?)\./i, '');
 }
 
+// Normalize a merchant name to a canonical form, collapsing common variants.
+// "Amazon.com", "Amazon Marketplace", "Amazon Web Services" → "Amazon"
+// "Apple iTunes", "App Store" → "Apple"
+// "Google Play Store", "Google LLC" → "Google"
+export function normalizeMerchantName(name: string): string {
+  const NORMALIZATIONS: [RegExp, string][] = [
+    [/^amazon(\.(com|co\.uk|ca|de|fr|jp|in|com\.au))?(\s+(marketplace|services|web\s*services|aws|prime|digital|fresh|music|video))?$/i, 'Amazon'],
+    [/^apple(\s+(inc\.?|store|itunes|app\s*store|tv\+?|music|arcade))?$/i, 'Apple'],
+    [/^google(\s+(llc|play(\s*store)?|workspace|one|cloud|fi|photos|drive))?$/i, 'Google'],
+    [/^microsoft(\s+(corporation|office|365|azure|teams|xbox))?$/i, 'Microsoft'],
+    [/^netflix(\s+inc\.?)?$/i, 'Netflix'],
+    [/^spotify(\s+(ab|usa))?$/i, 'Spotify'],
+    [/^uber(\s+(eats|technologies))?$/i, 'Uber'],
+    [/^paypal(\s+inc\.?)?$/i, 'PayPal'],
+    [/^adobe(\s+inc\.?|\s+systems)?$/i, 'Adobe'],
+    [/^dropbox(\s+inc\.?)?$/i, 'Dropbox'],
+    [/^github(\s+inc\.?)?$/i, 'GitHub'],
+    [/^shopify(\s+inc\.?)?$/i, 'Shopify'],
+    [/^stripe(\s+inc\.?)?$/i, 'Stripe'],
+    [/^notion\s*(labs)?(\s+inc\.?)?$/i, 'Notion'],
+    [/^slack(\s+technologies)?$/i, 'Slack'],
+    [/^zoom(\s+(video\s*communications)?)?$/i, 'Zoom'],
+    [/^discord(\s+inc\.?)?$/i, 'Discord'],
+    [/^canva(\s+(pty\s*ltd\.?)?)?$/i, 'Canva'],
+    [/^figma(\s+inc\.?)?$/i, 'Figma'],
+    [/^atlassian(\s+pty\s*ltd\.?)?$/i, 'Atlassian'],
+    [/^openai(\s+llc\.?)?$/i, 'OpenAI'],
+    [/^anthropic(\s+pbc\.?)?$/i, 'Anthropic'],
+  ];
+  const trimmed = name.trim();
+  for (const [pattern, canonical] of NORMALIZATIONS) {
+    if (pattern.test(trimmed)) return canonical;
+  }
+  // Strip trailing TLD suffixes from display names like "Company.com" or "Company.co.uk"
+  return trimmed.replace(/\.(com|net|io|co\.uk|co\.nz|co\.za|co|org|app|store|biz|info)$/i, '');
+}
+
 export function getMerchantName(domain: string, rawFrom: string): string {
-  if (MERCHANT_DOMAINS[domain]) return MERCHANT_DOMAINS[domain];
+  if (MERCHANT_DOMAINS[domain]) return normalizeMerchantName(MERCHANT_DOMAINS[domain]);
   for (const [k, v] of Object.entries(MERCHANT_DOMAINS)) {
-    if (domain.endsWith(`.${k}`) || domain === k) return v;
+    if (domain.endsWith(`.${k}`) || domain === k) return normalizeMerchantName(v);
   }
   // Try to extract display name from "Display Name <email@domain.com>" format
   const displayNameMatch = rawFrom.match(/^"?([^"<]+?)"?\s*</);
@@ -281,12 +318,12 @@ export function getMerchantName(domain: string, rawFrom: string): string {
       .replace(/\b(noreply|no-reply|receipts?|billing|invoices?|notifications?|team\s+at|support)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
-    if (cleaned.length >= 2 && cleaned.length <= 50) return cleaned;
+    if (cleaned.length >= 2 && cleaned.length <= 50) return normalizeMerchantName(cleaned);
   }
   // Fall back to domain-based name
   const parts = domain.split('.');
   const main = parts.length >= 2 ? parts[parts.length - 2] : domain;
-  return main.charAt(0).toUpperCase() + main.slice(1);
+  return normalizeMerchantName(main.charAt(0).toUpperCase() + main.slice(1));
 }
 
 export function extractAmount(text: string): { amount: number | null; currency: string } {
@@ -375,6 +412,48 @@ function categorize(subject: string, from: string, body: string): string {
   return 'other';
 }
 
+// ─── Product name extractor ───────────────────────────────────────────────────
+
+// Extract the actual product/item name from receipt email body.
+// Returns null when no reliable product name can be identified.
+export function extractProductName(subject: string, body: string): string | null {
+  const combined = `${subject}\n${body}`;
+
+  // Software/SaaS subscription — product name typically in subject: "Your [Product] receipt"
+  const subjectPatterns = [
+    /(?:receipt|invoice|order\s*confirmation)\s+(?:for\s+)?([A-Za-z0-9][^\n\r,|(]{3,60}?)(?:\s*[-|,]|\s*subscription|\s*plan|\s*–|\s*$)/im,
+    /(?:your\s+)?([A-Za-z0-9][^\n\r,|(]{3,60}?)\s+(?:receipt|invoice|subscription\s+confirmation)/im,
+    /(?:thank\s+you\s+for\s+(?:purchasing|buying|subscribing\s+to))\s+([A-Za-z0-9][^\n\r,|(]{3,60}?)(?:\.|,|\s*$)/im,
+  ];
+  for (const pat of subjectPatterns) {
+    const m = subject.match(pat);
+    if (m) {
+      const candidate = m[1].trim();
+      // Reject if it looks like a company boilerplate or is too generic
+      if (candidate.length >= 3 && candidate.length <= 80 &&
+          !/^(your|the|our|this|a|an|order|receipt|invoice|purchase|payment|charge)$/i.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // E-commerce order — look for product line items in body
+  const bodyPatterns = [
+    /(?:^|\n)\s*(?:item|product|description)\s*:?\s*([A-Za-z0-9][^\n\r]{5,80}?)(?:\s*\n|\s*\$|\s*£|\s*€)/im,
+    /(?:you\s+(?:ordered|purchased|bought))\s*:?\s*\n?\s*([A-Za-z0-9][^\n\r]{5,80}?)(?:\s*\n|\s*\$|\s*£|\s*€)/im,
+    /(?:^|\n)\s*1\s*[x×]\s+([A-Za-z0-9][^\n\r]{5,80}?)(?:\s*\n|\s*\$|\s*£|\s*€)/im,
+  ];
+  for (const pat of bodyPatterns) {
+    const m = combined.match(pat);
+    if (m) {
+      const candidate = m[1].trim();
+      if (candidate.length >= 5 && candidate.length <= 80) return candidate;
+    }
+  }
+
+  return null;
+}
+
 function decodeB64(str: string): string {
   return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
 }
@@ -394,10 +473,10 @@ function extractBodyText(parts: any[]): string {
 }
 
 export type ParsedMessage = {
-  merchantName: string; amount: number | null; currency: string; purchaseDate: string;
+  merchantName: string; productName: string | null; amount: number | null; currency: string; purchaseDate: string;
   category: string; invoiceNumber: string | null; orderId: string | null;
   paymentMethod: string | null; warrantyMonths: number | null; warrantyIsEstimated: boolean;
-  rawSubject: string; rawFrom: string;
+  rawSubject: string; rawFrom: string; rawBody: string;
 };
 
 // Skip reasons, surfaced in per-scan structured logs so "0 imported" always
@@ -478,6 +557,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
 
   const category = categorize(subject, from, body);
   const merchantName = getMerchantName(domain, from);
+  const productName = extractProductName(subject, body);
 
   // No explicit warranty statement in the email — estimate one for
   // categories where a warranty is a real, standard thing (electronics,
@@ -495,6 +575,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
 
   const result: ParsedMessage = {
     merchantName,
+    productName,
     amount,
     currency,
     purchaseDate,
@@ -506,6 +587,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
     warrantyIsEstimated,
     rawSubject: subject,
     rawFrom: from,
+    rawBody: body,
   };
   if (amount === null) return { result, skipReason: 'no_amount_found' };
   return { result };
@@ -990,11 +1072,26 @@ export async function runGmailScan(
         if (e) { failedCount++; return; }
         importedCount++;
 
-        // Auto-detect subscription — but only create if within plan limits
-        const isSubscriptionEmail = /subscription|recurring|monthly|annual|yearly|auto-renew/i.test(
-          `${parsed.rawSubject}${parsed.rawFrom}`
+        // Auto-detect subscription — check subject, from AND body for keywords.
+        // Previous version only checked subject+from, missing Netflix "Your charge from Netflix",
+        // Spotify "Payment receipt", and many SaaS invoices that only say "subscription" in the body.
+        const subCheckText = `${parsed.rawSubject} ${parsed.rawFrom} ${parsed.rawBody}`.toLowerCase();
+        const isSubscriptionEmail = (
+          // Explicit subscription/billing keywords
+          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment)|annual\s+(?:plan|charge|payment)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew))\b/i.test(subCheckText) ||
+          // Known subscription services by category — many don't use "subscription" in their receipts
+          parsed.category === 'streaming' ||
+          /\b(netflix|spotify|hulu|disney|apple\s+tv|youtube\s+premium|hbo|paramount|peacock|amazon\s+prime|audible|kindle\s+unlimited|adobe\s+creative|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce)\b/i.test(subCheckText)
         );
         if (isSubscriptionEmail) {
+          const isYearly = /\b(annual|yearly|per\s+year|\/year|yr)\b/i.test(`${parsed.rawSubject} ${parsed.rawBody}`);
+          const billingCycle = isYearly ? 'yearly' : 'monthly';
+          // For yearly billing, store full amount as yearly_price and derive monthly equivalent.
+          // Previously only monthly_price was set, making yearly subs contribute $0 to dashboard
+          // Money Saved calculation (which reads yearly_price / 12 for yearly billing cycles).
+          const yearlyPrice = isYearly ? parsed.amount : null;
+          const monthlyPrice = isYearly ? Math.round((parsed.amount! / 12) * 100) / 100 : parsed.amount;
+
           const canAddSub = isPro || await (async () => {
             const { count } = await supabaseAdmin.from('subscriptions')
               .select('*', { count: 'exact', head: true })
@@ -1004,14 +1101,19 @@ export async function runGmailScan(
           if (canAddSub) {
             await supabaseAdmin.from('subscriptions').upsert({
               user_id: userId, name: parsed.merchantName, merchant_name: parsed.merchantName,
-              monthly_price: parsed.amount, currency: parsed.currency,
-              billing_cycle: /annual|yearly/i.test(parsed.rawSubject) ? 'yearly' : 'monthly',
+              monthly_price: monthlyPrice, yearly_price: yearlyPrice,
+              currency: parsed.currency,
+              billing_cycle: billingCycle,
               category: parsed.category, status: 'active',
             }, { onConflict: 'user_id,name', ignoreDuplicates: true });
           }
         }
 
-        // Auto-create warranty record — respect plan limits
+        // Auto-create warranty record — respect plan limits.
+        // Use extracted product name when available; fall back to merchant name.
+        // Append purchase date to the product key to allow multiple purchases of
+        // the same item from the same merchant (e.g. two laptops from Amazon on
+        // different dates) to each get their own warranty record.
         if (parsed.warrantyMonths && warrantyEnd) {
           const canAddWarranty = isPro || await (async () => {
             const { count } = await supabaseAdmin.from('warranties')
@@ -1020,8 +1122,17 @@ export async function runGmailScan(
             return (count ?? 0) < FREE_WARRANTY_LIMIT;
           })();
           if (canAddWarranty) {
+            const warrantyProductName = parsed.productName ?? parsed.merchantName;
+            // Build an idempotent key: prefer the merchant's own order/invoice ID
+            // (a real unique identifier, so re-scanning the same email is always
+            // safe). Fall back to "ProductName (YYYY-MM-DD)" when no ID exists —
+            // good enough to avoid same-product-same-date collisions while still
+            // allowing multiple distinct purchases of the same item over time.
+            const idSuffix = (parsed.orderId || parsed.invoiceNumber)?.toUpperCase()
+              ?? parsed.purchaseDate;
+            const productKey = `${warrantyProductName} (${idSuffix})`;
             await supabaseAdmin.from('warranties').upsert({
-              user_id: userId, product_name: parsed.merchantName, merchant_name: parsed.merchantName,
+              user_id: userId, product_name: productKey, merchant_name: parsed.merchantName,
               purchase_date: parsed.purchaseDate, warranty_end_date: warrantyEnd,
               warranty_months: parsed.warrantyMonths, is_estimated: parsed.warrantyIsEstimated,
               status: new Date(warrantyEnd) > new Date() ? 'active' : 'expired',

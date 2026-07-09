@@ -21,7 +21,23 @@ import { runGmailScan } from '../routes/gmail';
 
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-const REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
+// Reminder windows for subscription renewals
+const RENEWAL_REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
+  { days: 30, settingKey: 'days_before_30' },
+  { days: 14, settingKey: 'days_before_14' },
+  { days: 7,  settingKey: 'days_before_7' },
+  { days: 3,  settingKey: 'days_before_3' },
+  { days: 1,  settingKey: 'days_before_1' },
+];
+
+// Warranty reminders include longer lead times (90/60 days) because users need
+// more notice to act on warranty claims before the window closes. 90/60 don't
+// have dedicated settings columns — if the column is absent the setting is
+// treated as "enabled" (the safe default), so existing users aren't silently
+// skipped for the new windows.
+const WARRANTY_REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
+  { days: 90, settingKey: 'days_before_90' },
+  { days: 60, settingKey: 'days_before_60' },
   { days: 30, settingKey: 'days_before_30' },
   { days: 14, settingKey: 'days_before_14' },
   { days: 7,  settingKey: 'days_before_7' },
@@ -345,8 +361,8 @@ async function runAllReminders(): Promise<void> {
   const appUrl = process.env.FRONTEND_URL ?? 'https://receiptguard.app';
   try {
     await Promise.all([
-      ...REMINDER_WINDOWS.map(w => runRenewalRemindersForWindow(w.days, appUrl)),
-      ...REMINDER_WINDOWS.map(w => runWarrantyRemindersForWindow(w.days, appUrl)),
+      ...RENEWAL_REMINDER_WINDOWS.map(w => runRenewalRemindersForWindow(w.days, appUrl)),
+      ...WARRANTY_REMINDER_WINDOWS.map(w => runWarrantyRemindersForWindow(w.days, appUrl)),
     ]);
     logger.debug('[reminders] Reminder check complete');
   } catch (err) {

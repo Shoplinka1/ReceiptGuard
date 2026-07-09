@@ -1,6 +1,7 @@
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
+import { normalizeMerchantName } from './gmail';
 
 const router: IRouter = Router();
 
@@ -144,14 +145,18 @@ router.get('/api/dashboard/top-merchants', requireAuth, async (req, res): Promis
     const amt = validAmount(r.amount);
     if (amt === null) continue; // Skip malformed amounts
 
-    const ex = map.get(r.merchant_name);
+    // Normalize merchant name so "Amazon", "Amazon.com", "Amazon Marketplace" all
+    // aggregate under the same canonical key — without this, top-merchants shows
+    // duplicate entries for the same retailer with split totals.
+    const key = normalizeMerchantName(r.merchant_name ?? '');
+    const ex = map.get(key);
     if (ex) {
       ex.total += amt;
       ex.count++;
       if (r.purchase_date > ex.last) ex.last = r.purchase_date;
     } else {
-      map.set(r.merchant_name, {
-        name: r.merchant_name, logo: r.merchant_logo_url,
+      map.set(key, {
+        name: key, logo: r.merchant_logo_url,
         total: amt, count: 1, last: r.purchase_date,
       });
     }
