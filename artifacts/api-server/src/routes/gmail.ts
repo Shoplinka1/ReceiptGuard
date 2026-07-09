@@ -242,6 +242,12 @@ const SKIP_SUBJECT_PATTERNS = [
   /trading\s*(alert|signal)/i, /price\s*alert/i, /market\s*update/i,
   /crypto.*transfer/i, /wallet\s*address/i, /blockchain.*confirmation/i,
   /fund.*account/i, /kyc\s*(approved|required)/i,
+  // Refunds/credits/cancellations are not purchases — importing them as a
+  // positive charge would inflate Monthly Spending / Top Merchants by
+  // counting money that came BACK to the user as if it were spent.
+  /refund(?:ed)?/i, /(?:has\s*been\s*)?credited/i, /credit\s*(?:note|memo|issued)/i,
+  /chargeback/i, /order\s*cancell?ed/i, /return\s*(?:confirmed|processed|received)/i,
+  /reversal/i, /payment\s*reversed/i,
 ];
 
 // Body patterns that indicate this is a crypto/trading email, not a receipt
@@ -302,6 +308,16 @@ export function extractAmount(text: string): { amount: number | null; currency: 
   for (const pat of pats) {
     const m = text.match(pat);
     if (!m) continue;
+
+    // A minus sign (or parentheses, the accounting convention for negatives)
+    // immediately before the matched number means this is a refund/credit,
+    // not a charge. The capture group itself never includes the sign, so
+    // without this check "-$12.99" and "$12.99" parsed identically —
+    // refunds were silently counted as positive spending.
+    const matchStart = m.index ?? 0;
+    const precedingChar = text.slice(0, matchStart).trimEnd().slice(-1);
+    const isNegative = precedingChar === '-' || precedingChar === '(';
+    if (isNegative) continue;
 
     // Normalise the number: handle both comma-as-thousands (1,234.56) and
     // comma-as-decimal (1.234,56 — European format). Which separator is the
@@ -387,7 +403,18 @@ export type ParsedMessage = {
 // rejected as non-receipts, crypto noise, or simply had no parseable amount.
 export type ParseSkipReason =
   | 'subject_not_receipt_like' | 'subject_marketing_or_crypto'
-  | 'crypto_sender_domain' | 'crypto_body_content' | 'no_amount_found';
+  | 'crypto_sender_domain' | 'crypto_body_content' | 'no_amount_found'
+  | 'refund_or_credit_body';
+
+// Body-level refund/credit signals, checked even when the subject itself
+// looks like an order/payment confirmation (e.g. "Order Confirmation:
+// Refund Processed" or a receipt email whose body says the charge was
+// reversed). Subject-only filtering above misses these.
+const REFUND_BODY_PATTERNS = [
+  /\brefunded?\b/i, /\bcredited\s*(?:back)?\s*to\s*your/i,
+  /\bchargeback\b/i, /\bpayment\s*(?:was\s*)?reversed\b/i,
+  /\breturn\s*(?:has\s*been\s*)?(?:confirmed|processed|received)\b/i,
+];
 
 function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: ParseSkipReason } {
   const headers = msg.payload?.headers ?? [];
@@ -414,6 +441,14 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
   if (CRYPTO_BODY_PATTERNS.some(p => p.test(body))) return { result: null, skipReason: 'crypto_body_content' };
 
   const combined = `${subject}\n${body}`;
+
+  // Skip refund/credit/reversal emails even when the subject alone looked
+  // like a receipt (e.g. "Order Confirmation" reused as the subject line of
+  // a refund notice). Importing these as positive charges silently inflates
+  // Monthly Spending and Top Merchants totals.
+  if (REFUND_BODY_PATTERNS.some(p => p.test(combined))) {
+    return { result: null, skipReason: 'refund_or_credit_body' };
+  }
 
   const { amount, currency } = extractAmount(combined);
 

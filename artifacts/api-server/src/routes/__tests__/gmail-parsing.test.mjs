@@ -14,7 +14,8 @@ check("european decimal", extractAmount("Total: €1.234,56"), { amount: 1234.56
 check("currency code suffix", extractAmount("Grand total 45.00 NGN"), { amount: 45, currency: "NGN" });
 check("below min rejected", extractAmount("Total: $0.10"), { amount: null, currency: "USD" });
 check("above max rejected", extractAmount("Total: $75,000.00"), { amount: null, currency: "USD" });
-check("negative/refund rejected", extractAmount("Refund: -$12.99"), { amount: 12.99, currency: "USD" }); // documents current (mis)behavior
+check("negative/refund rejected", extractAmount("Refund: -$12.99"), { amount: null, currency: "USD" });
+check("parenthesized negative rejected", extractAmount("Adjustment: ($12.99)"), { amount: null, currency: "USD" });
 check("no amount found", extractAmount("Thanks for your order, ship date pending"), { amount: null, currency: "USD" });
 check("NaN-proof garbage", extractAmount("$$$ ---- ,,,,"), { amount: null, currency: "USD" });
 check("multi-currency body picks first symbol seen", extractAmount("Total: $19.99 (approx €18.20)"), { amount: 19.99, currency: "USD" });
