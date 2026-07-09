@@ -33,6 +33,44 @@ async function paystackRequest(path: string, options: RequestInit = {}): Promise
   return json;
 }
 
+// ─── Helper: write a payment status without ever downgrading a terminal
+// 'success' row ────────────────────────────────────────────────────────────
+// Webhook deliveries can arrive out of order or be retried (e.g. a delayed
+// 'failed'/'abandoned' verify-poll racing a webhook 'charge.success' that
+// already landed). Since /initialize no longer pre-creates a 'pending' row,
+// every write here is a real, final outcome — but writes must still be
+// monotonic: once a reference is recorded 'success', nothing may overwrite it.
+async function upsertPaymentStatus(row: {
+  user_id: string;
+  paystack_reference: string;
+  amount: number;
+  currency: string;
+  status: 'success' | 'failed' | 'cancelled';
+  plan_id: string | null;
+  billing_cycle: string;
+  description: string;
+  paid_at?: string;
+}): Promise<void> {
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from('payments')
+    .select('status')
+    .eq('paystack_reference', row.paystack_reference)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('[Paystack] payment status lookup failed:', fetchError.message);
+    // Fall through and attempt the upsert anyway — better to risk a duplicate
+    // write than to silently drop a real payment outcome.
+  }
+  if (existing?.status === 'success' && row.status !== 'success') {
+    console.warn(`[Paystack] ignoring ${row.status} write for ${row.paystack_reference} — already recorded success`);
+    return;
+  }
+
+  const { error } = await supabaseAdmin.from('payments').upsert(row, { onConflict: 'paystack_reference' });
+  if (error) console.error('[Paystack] payment upsert failed:', error.message);
+}
+
 // ─── Helper: extend or create a user subscription period ─────────────────────
 
 async function activateOrRenewSubscription(opts: {
@@ -190,21 +228,12 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
     return;
   }
 
-  const { error: insertError } = await supabaseAdmin.from('payments').insert({
-    user_id: req.userId,
-    paystack_reference: reference,
-    amount: usdPrice,
-    currency: 'USD',
-    status: 'pending',
-    plan_id: planId,
-    billing_cycle: billingCycle,
-    description: `ReceiptGuard ${planName} plan (${billingCycle})`,
-    metadata: { amountNgn: amountKobo / 100, billingCycle },
-  });
-  if (insertError) {
-    console.error('[Paystack] payments insert failed:', insertError.message);
-  }
-
+  // Root cause of "closing checkout creates a Pending payment": a payment row
+  // used to be pre-inserted here, before the user even reached the Paystack
+  // page. If they closed the tab, that row sat as 'pending' forever. We now
+  // record nothing until we have a real outcome — /verify or the webhook
+  // upsert the row with the actual final status (success/failed). If the user
+  // just closes the checkout, no event ever fires and nothing is written.
   const authorizationUrl = data?.data?.authorization_url;
   if (!authorizationUrl) {
     console.error('[Paystack] initialize returned no authorization_url:', JSON.stringify(data));
@@ -249,11 +278,20 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
 
     const billingCycle = (meta.billingCycle ?? 'monthly') as 'monthly' | 'yearly';
 
-    // Update payment record
-    await supabaseAdmin.from('payments').update({
+    // No row was pre-created at /initialize anymore, so this is normally an
+    // insert; `upsertPaymentStatus` also covers the case where the webhook
+    // already recorded this reference first, without ever downgrading it.
+    await upsertPaymentStatus({
+      user_id: meta.userId,
+      paystack_reference: reference as string,
+      amount: Number(txn.amount ?? 0) / 100 / 1600,
+      currency: 'USD',
       status: 'success',
+      plan_id: meta.planId,
+      billing_cycle: billingCycle,
+      description: `ReceiptGuard ${meta.planId} plan (${billingCycle})`,
       paid_at: new Date().toISOString(),
-    }).eq('paystack_reference', reference);
+    });
 
     // Activate/extend subscription and update profile
     await activateOrRenewSubscription({
@@ -270,6 +308,24 @@ router.get('/api/paystack/verify/:reference', requireAuth, async (req, res): Pro
       description: `Upgraded to ${meta.planId} plan (${billingCycle})`,
       metadata: { reference, planId: meta.planId, billingCycle },
     });
+  } else if (txn.status === 'failed' || txn.status === 'abandoned' || txn.status === 'reversed') {
+    // Only record an explicit outcome — never a synthetic "pending" row.
+    // Paystack's own terminal statuses map directly to ours; 'abandoned'
+    // (user closed checkout without paying) is intentionally recorded as
+    // 'cancelled' rather than 'failed' per the "no fake pending" requirement.
+    const meta = (txn.metadata ?? {}) as { userId?: string; planId?: string; billingCycle?: string };
+    if (meta.userId) {
+      await upsertPaymentStatus({
+        user_id: meta.userId,
+        paystack_reference: reference as string,
+        amount: Number(txn.amount ?? 0) / 100 / 1600,
+        currency: 'USD',
+        status: txn.status === 'abandoned' ? 'cancelled' : 'failed',
+        plan_id: meta.planId ?? null,
+        billing_cycle: meta.billingCycle ?? 'monthly',
+        description: `ReceiptGuard checkout ${txn.status}`,
+      });
+    }
   }
 
   res.json({ status: txn.status, planId: txn.metadata?.planId });
@@ -317,9 +373,20 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
         }
         const billingCycle = (meta.billingCycle ?? 'monthly') as 'monthly' | 'yearly';
 
-        // Mark payment success
-        await supabaseAdmin.from('payments').update({ status: 'success' })
-          .eq('paystack_reference', event.data.reference);
+        // No row is pre-created at /initialize anymore. Duplicate webhook
+        // deliveries, or a race with /verify, are handled by
+        // upsertPaymentStatus's onConflict + monotonic-status guard.
+        await upsertPaymentStatus({
+          user_id: meta.userId,
+          paystack_reference: event.data.reference,
+          amount: Number(event.data.amount ?? 0) / 100 / 1600,
+          currency: 'USD',
+          status: 'success',
+          plan_id: meta.planId,
+          billing_cycle: billingCycle,
+          description: `ReceiptGuard ${meta.planId} plan (${billingCycle})`,
+          paid_at: new Date().toISOString(),
+        });
 
         // Activate / extend subscription and upgrade profile
         await activateOrRenewSubscription({
@@ -478,13 +545,22 @@ router.post('/api/paystack/webhook', async (req, res): Promise<void> => {
 // ─── Cancel Subscription ──────────────────────────────────────────────────────
 
 router.post('/api/paystack/cancel', requireAuth, async (req, res): Promise<void> => {
-  const { data: sub } = await supabaseAdmin
+  // `.single()` would throw the PGRST116 coercion error when the user has no
+  // active subscription (0 rows) instead of hitting the `!sub` 404 below.
+  // `.maybeSingle()` fixes that, but its `error` must still be checked —
+  // otherwise a real DB failure would be misreported as "no subscription".
+  const { data: sub, error: subError } = await supabaseAdmin
     .from('user_subscriptions')
     .select('*')
     .eq('user_id', req.userId)
     .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
+  if (subError) {
+    console.error('[Paystack] cancel: subscription lookup failed:', subError.message);
+    res.status(500).json({ error: 'Failed to look up subscription' });
+    return;
+  }
   if (!sub) { res.status(404).json({ error: 'No active subscription found' }); return; }
 
   if (sub.paystack_subscription_id && PAYSTACK_SECRET_KEY) {
@@ -513,14 +589,24 @@ router.post('/api/paystack/cancel', requireAuth, async (req, res): Promise<void>
 });
 
 router.get('/api/paystack/subscription', requireAuth, async (req, res): Promise<void> => {
-  const { data } = await supabaseAdmin
+  // `.single()` throws "Cannot coerce the result to a single JSON object" for
+  // free users who have never subscribed (0 rows). `.maybeSingle()` returns
+  // null instead, which is the correct "no subscription yet" response — but
+  // its `error` must still be checked so a real DB failure isn't reported
+  // as "no subscription".
+  const { data, error } = await supabaseAdmin
     .from('user_subscriptions')
     .select('*, plans(*)')
     .eq('user_id', req.userId)
     .order('created_at', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
+  if (error) {
+    console.error('[Paystack] subscription lookup failed:', error.message);
+    res.status(500).json({ error: 'Failed to look up subscription' });
+    return;
+  }
   res.json(data ?? null);
 });
 

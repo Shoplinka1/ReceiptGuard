@@ -1,0 +1,270 @@
+
+⸻
+
+Continue the stabilization work immediately. Do not stop after setup.
+
+Do not add any new features, redesigns, or optimizations until every issue below has been fixed, tested, and verified.
+
+Priority 1 — Gmail Scanning
+
+Scanning is currently broken and imports 0 emails.
+
+Perform a complete root-cause investigation.
+
+Audit:
+	•	Gmail OAuth flow
+	•	Access token refresh
+	•	Refresh token handling
+	•	OAuth scopes
+	•	Gmail API permissions
+	•	Gmail search queries
+	•	Connected account state
+	•	Scheduler/background jobs
+	•	Scan endpoint
+	•	API responses
+	•	Error handling
+	•	Logging
+
+Add detailed logs for every Gmail API request and parsing step.
+
+Scanning must successfully import supported receipt emails again.
+
+If production secrets are unavailable, prepare and fix all code that can be fixed without them, then clearly identify what still requires credentials for final verification.
+
+⸻
+
+Priority 2 — Receipt Parsing
+
+Audit the complete parsing pipeline.
+
+Verify:
+	•	merchant extraction
+	•	amount extraction
+	•	currency extraction
+	•	date extraction
+	•	duplicate detection
+	•	malformed email handling
+
+Reject invalid receipts before saving them.
+
+Never allow impossible amounts into the database.
+
+Investigate why unrealistic receipt values were previously stored.
+
+⸻
+
+Priority 3 — Database Cleanup
+
+Audit existing receipt data.
+
+Find:
+	•	corrupted receipts
+	•	duplicate receipts
+	•	invalid merchants
+	•	impossible amounts
+	•	malformed records
+
+If cleanup is required:
+	•	generate safe SQL
+	•	explain it
+	•	ensure it is idempotent
+	•	verify dashboard accuracy afterwards
+
+⸻
+
+Priority 4 — Dashboard Analytics
+
+Audit every calculation.
+
+Verify:
+	•	Monthly Spending
+	•	Spending Trend
+	•	Money Saved
+	•	Top Merchants
+	•	Active Subscriptions
+	•	Warranties
+	•	Receipt Count
+
+Dashboard statistics must only use valid receipts.
+
+Corrupted receipts must never affect analytics again.
+
+⸻
+
+Priority 5 — Top Merchants
+
+Investigate why impossible values like:
+
+Bybit — $707,463.01
+
+appeared.
+
+Audit:
+	•	aggregation queries
+	•	SQL
+	•	grouping
+	•	filters
+	•	amount validation
+
+Fix the root cause permanently.
+
+⸻
+
+Priority 6 — Billing
+
+Fix the billing flow.
+
+Cancelling or closing Paystack checkout must NEVER create a Pending payment.
+
+Payment history should only contain:
+	•	Successful
+	•	Failed (if intentionally recorded)
+	•	Cancelled (explicitly marked Cancelled)
+
+No fake Pending records.
+
+⸻
+
+Priority 7 — Subscription Logic
+
+Verify:
+	•	upgrades
+	•	renewals
+	•	cancellations
+	•	cancel-at-period-end
+	•	automatic downgrades
+	•	webhook handling
+	•	duplicate webhook protection
+	•	subscription periods
+
+Prevent duplicate subscriptions.
+
+⸻
+
+Priority 8 — Feedback Emails
+
+Feedback saves correctly.
+
+Emails never arrive.
+
+Investigate:
+	•	SMTP
+	•	transporter configuration
+	•	environment variables
+	•	sendEmail()
+	•	transporter.verify()
+	•	logging
+
+Never silently ignore email failures.
+
+⸻
+
+Priority 9 — Settings
+
+Fix:
+
+“Cannot coerce the result to a single JSON object”
+
+Audit:
+	•	profile table
+	•	duplicate rows
+	•	missing rows
+	•	Supabase queries
+	•	.single()
+	•	.maybeSingle()
+	•	update logic
+
+Saving profile changes must work reliably.
+
+⸻
+
+Priority 10 — Authentication
+
+Fix logout completely.
+
+Verify:
+	•	session clearing
+	•	React Query cache
+	•	cookies
+	•	local storage
+	•	redirects
+	•	browser history
+
+The user must never remain authenticated after signing out.
+
+⸻
+
+Priority 11 — Theme
+
+Dark Mode currently does nothing.
+
+Audit:
+	•	ThemeProvider
+	•	Tailwind dark mode
+	•	HTML class switching
+	•	persistence
+	•	system theme
+
+Every page must update correctly.
+
+⸻
+
+Priority 12 — Mobile Scrolling
+
+Scrolling becomes stuck on iPhone Safari.
+
+Audit:
+	•	overflow
+	•	nested scrolling
+	•	fixed-height containers
+	•	touch scrolling
+	•	overscroll behavior
+
+Scrolling must feel smooth across the app.
+
+⸻
+
+Priority 13 — Admin Dashboard
+
+Provide a complete production-ready admin setup.
+
+Document:
+	•	first admin creation
+	•	authentication
+	•	required SQL
+	•	required environment variables
+	•	permissions
+	•	deployment steps
+	•	admin URL
+
+⸻
+
+Priority 14 — Logging
+
+Improve logging for:
+	•	Gmail
+	•	Receipt parsing
+	•	Paystack
+	•	SMTP
+	•	Authentication
+	•	Database writes
+	•	Background jobs
+
+Every failure must produce actionable logs.
+
+⸻
+
+Priority 15 — Production Verification
+
+Do not mark any issue as fixed based only on code changes.
+
+For every issue provide:
+	1.	Root cause.
+	2.	Files changed.
+	3.	Why it happened.
+	4.	Exactly how it was fixed.
+	5.	Tests performed.
+	6.	Whether production verification succeeded or is waiting for credentials.
+	7.	Remaining blockers.
+
+Continue working through every issue until the application is stable and production-ready. Do not stop after analysis or setup. If an issue cannot be fully verified because secrets are unavailable, still complete every code fix possible and clearly report what remains to be verified.

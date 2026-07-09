@@ -17,11 +17,41 @@ router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => 
 
 router.patch('/api/user/profile', requireAuth, async (req, res): Promise<void> => {
   const { name, avatarUrl } = req.body;
-  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+
+  // Root cause of "Cannot coerce the result to a single JSON object": this used
+  // `.update().select().single()`. If the profiles row didn't exist yet for this
+  // user (e.g. the auth-trigger row-create hadn't run, or the row was deleted),
+  // UPDATE matches 0 rows and PostgREST's `.single()` throws PGRST116 — whose raw
+  // message was being forwarded straight to the client. Upserting guarantees a
+  // row exists, and `.maybeSingle()` never throws for 0/1 rows.
+  let existingEmail: string | null = null;
+  const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email').eq('id', req.userId).maybeSingle();
+  existingEmail = existingProfile?.email ?? null;
+
+  if (!existingEmail) {
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(req.userId);
+    existingEmail = authData?.user?.email ?? '';
+  }
+
+  const updates: Record<string, any> = {
+    id: req.userId,
+    email: existingEmail ?? '',
+    updated_at: new Date().toISOString(),
+  };
   if (name) updates.full_name = name;
   if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
-  const { data, error } = await supabaseAdmin.from('profiles').update(updates).eq('id', req.userId).select().single();
-  if (error || !data) { res.status(500).json({ error: error?.message ?? 'Update failed' }); return; }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .upsert(updates, { onConflict: 'id' })
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    logger.error({ error: error?.message, userId: req.userId }, '[user] profile upsert failed');
+    res.status(500).json({ error: error?.message ?? 'Update failed' });
+    return;
+  }
   res.json({ id: data.id, name: data.full_name, email: data.email, avatarUrl: data.avatar_url ?? null, plan: data.plan_id, createdAt: data.created_at });
 });
 
