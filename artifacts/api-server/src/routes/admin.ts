@@ -6,6 +6,7 @@
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
+import { sendEmail } from '../lib/email';
 import type { Request, Response, NextFunction } from 'express';
 
 const router: IRouter = Router();
@@ -294,6 +295,50 @@ router.patch('/api/admin/feedback/:id', ...adminGuard, async (req, res): Promise
   const { data, error } = await supabaseAdmin.from('feedback').update(updates).eq('id', id).select().single();
   if (error) { res.status(500).json({ error: 'Failed to update feedback' }); return; }
   res.json(data);
+});
+
+// ─── SMTP test ────────────────────────────────────────────────────────────────
+// POST /api/admin/smtp-test  — sends a test email and returns full SMTP diagnostics.
+// Admin-only. Used to verify email delivery is working in production.
+router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<void> => {
+  const { to } = req.body as { to?: string };
+  const recipient = to?.trim() || 'receiptguard01@gmail.com';
+
+  const emailConfigured = !!(
+    process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS
+  );
+
+  if (!emailConfigured) {
+    res.status(503).json({
+      success: false,
+      configured: false,
+      error: 'SMTP not configured — EMAIL_HOST, EMAIL_USER, and EMAIL_PASS must all be set in Railway environment variables.',
+      hint: 'Set EMAIL_HOST=smtp.gmail.com, EMAIL_PORT=587, EMAIL_USER=your@gmail.com, EMAIL_PASS=<16-char app password>',
+    });
+    return;
+  }
+
+  const ok = await sendEmail({
+    to: recipient,
+    subject: '[ReceiptGuard] SMTP Test — delivery confirmed',
+    html: `
+      <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
+        <h2>✅ SMTP Test Successful</h2>
+        <p>This email was sent at <strong>${new Date().toISOString()}</strong> via the ReceiptGuard admin SMTP test endpoint.</p>
+        <p style="color:#666;font-size:12px">If you received this, email delivery is working correctly in production.</p>
+      </div>
+    `,
+  });
+
+  res.json({
+    success: ok,
+    configured: true,
+    recipient,
+    sentAt: new Date().toISOString(),
+    message: ok
+      ? `Test email sent to ${recipient}. Check the inbox (and spam folder) to confirm delivery.`
+      : `SMTP is configured but sendMail failed. Check Railway logs for [email] sendMail FAILED with the full error code and SMTP response.`,
+  });
 });
 
 export default router;

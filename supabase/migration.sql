@@ -163,13 +163,45 @@ alter table public.settings add column if not exists days_before_7 boolean not n
 alter table public.settings add column if not exists days_before_3 boolean not null default true;
 alter table public.settings add column if not exists days_before_1 boolean not null default false;
 
--- ─── Phase 2: receipts — mark malformed high-value receipts ──────────────────
--- Flag receipts with amounts outside the valid range ($0.50–$50,000).
--- These were likely imported from crypto exchange emails before domain blocklisting.
--- We flag rather than delete to preserve billing history and let users review.
-update public.receipts
-set status = 'flagged', notes = coalesce(notes || ' | ', '') || 'Amount outside valid range — please review'
-where (amount > 50000 or amount < 0.50) and status != 'flagged';
+-- ─── Phase 3: DELETE malformed receipts (crypto exchanges / invalid amounts) ──
+-- Receipts with amount > $50,000 or < $0.50 are corrupted data — crypto
+-- exchange account-balance emails that slipped through before domain blocklisting
+-- was in place. They corrupt Top Merchants, Monthly Spending, and Trends.
+--
+-- SAFE TO RUN: these are NOT real purchases. The amount bounds ($0.50–$50,000)
+-- match the validAmount() filter in the backend dashboard routes.
+--
+-- Run this SELECT first to review what will be deleted:
+--   SELECT id, merchant_name, amount, purchase_date, raw_email_from
+--   FROM public.receipts
+--   WHERE amount > 50000 OR amount < 0.50 OR amount IS NULL;
+--
+-- Then run the DELETE below to remove them permanently.
+
+delete from public.receipts
+where amount > 50000 or amount < 0.50 or amount is null;
+
+-- ─── Phase 3: DELETE orphaned warranty records for deleted receipts ───────────
+-- Clean up any warranty records whose merchant amounts were in the bad range.
+-- Warranties linked to flagged receipts are not real warranties.
+delete from public.warranties
+where product_name in (
+  -- These merchants are known crypto/trading platforms that were erroneously scanned
+  'Bybit', 'Binance', 'Coinbase', 'Kraken', 'OKX', 'KuCoin', 'Gate', 'Gemini',
+  'Bitfinex', 'Huobi', 'Bitmex', 'Bittrex', 'FTX', 'Deribit', 'Blockchain'
+) and purchase_date is not null;
+
+-- ─── Phase 3: Clean up stale activity_log entries showing old scan limit ──────
+-- Before FREE_SCAN_LIMIT was set to 150, the backend wrote "up to 500" into
+-- activity_logs. These old entries cause the dashboard to display the wrong limit.
+-- Delete them so only accurate entries remain.
+
+delete from public.activity_logs
+where type in ('gmail_scan_started', 'gmail_scan_complete', 'gmail_scan_failed', 'gmail_scan_limit_reached')
+  and description like '%up to 500%';
+
+-- ─── Phase 3: receipts table — add notes column if missing ───────────────────
+alter table public.receipts add column if not exists notes text;
 
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

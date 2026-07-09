@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import {
   Users, DollarSign, TrendingUp, Activity, Mail, ShieldAlert,
   UserX, Search, MessageSquare, Bug, Lightbulb, LifeBuoy, RefreshCw,
-  AlertTriangle, CheckCircle2, Sparkles, Calendar, Inbox,
+  AlertTriangle, CheckCircle2, Sparkles, Calendar, Inbox, Loader2,
 } from 'lucide-react'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
@@ -59,6 +59,54 @@ function useAdminGmailAccounts(search: string) {
     queryFn: () => apiFetch(`/api/admin/gmail-accounts?search=${encodeURIComponent(search)}&pageSize=50`),
     retry: false,
   })
+}
+
+function SmtpTestCard({ apiFetch }: { apiFetch: (path: string, opts?: RequestInit) => Promise<any> }) {
+  const [result, setResult] = useState<{ success: boolean; configured: boolean; message?: string; error?: string; hint?: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+
+  async function runTest() {
+    setTesting(true)
+    setResult(null)
+    try {
+      const data = await apiFetch('/api/admin/smtp-test', { method: 'POST' })
+      setResult(data)
+    } catch (e: any) {
+      setResult({ success: false, configured: false, error: e.message })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Mail className="w-4 h-4" /> SMTP / Email Delivery
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Send a test email to verify feedback notifications are working</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={runTest} disabled={testing}>
+            {testing ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Testing…</> : 'Send Test Email'}
+          </Button>
+        </div>
+      </CardHeader>
+      {result && (
+        <CardContent className="pt-0">
+          <div className={`flex items-start gap-2.5 p-3 rounded-lg text-sm border ${result.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-destructive/10 border-destructive/30 text-destructive'}`}>
+            {result.success ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+            <div>
+              <p className="font-medium">{result.success ? 'Email delivered' : result.configured ? 'SMTP error' : 'Not configured'}</p>
+              <p className="text-xs mt-0.5 opacity-80">{result.message ?? result.error}</p>
+              {result.hint && <p className="text-xs mt-1 font-mono opacity-70">{result.hint}</p>}
+            </div>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  )
 }
 
 export default function AdminPage() {
@@ -176,6 +224,9 @@ export default function AdminPage() {
                 </Card>
               ))}
             </div>
+
+            {/* SMTP Test */}
+            <SmtpTestCard apiFetch={apiFetch} />
           </div>
         )}
 

@@ -1,0 +1,47 @@
+Do not implement the Pro feature preview, WebSockets, polling, or any real-time plan synchronization at this stage. The current behavior is acceptable for launch because the backend already enforces the correct plan immediately after upgrades and downgrades.
+
+Let’s keep the focus on making ReceiptGuard production-ready. Before adding any new features, I want to ensure all launch-critical functionality is fully complete, deployed, and verified.
+
+While reviewing the production app, I found a few inconsistencies between your implementation report and what is currently live. Please investigate and resolve them before moving on to any new enhancements.
+
+1. Free Gmail scan limit
+	•	The dashboard still displays “Scanning 0 messages (Free — up to 500)” instead of the new 150-message Free limit.
+	•	Verify whether this is because:
+	•	the frontend text was not updated,
+	•	the backend is still using the old value,
+	•	or the latest code has not been deployed.
+	•	Ensure the UI always reflects the actual enforced limit.
+
+2. Top Merchants / malformed receipt
+	•	The dashboard still shows Bybit – $707,463.01, which should no longer happen.
+	•	Investigate why this malformed receipt is still affecting production.
+	•	If a database migration or cleanup SQL must be run, clearly identify it and explain exactly what needs to be executed.
+	•	Ensure malformed or invalid receipts can never corrupt dashboard statistics again.
+	•	Verify that Monthly Spending, Spending Trends, Top Merchants, and every dashboard calculation only use valid receipt data.
+
+3. Feedback email delivery
+	•	Feedback is successfully being saved (it appears in Recent Activity), which is good.
+	•	Now verify whether the notification email is actually being delivered.
+	•	If not, continue diagnosing SMTP until emails are successfully received.
+	•	Continue logging the exact SMTP responses and never silently ignore delivery failures.
+
+4. Deployment verification
+	•	Confirm that the latest code has actually been deployed to both Railway and Vercel.
+	•	If production is still running an older build, identify exactly which deployment is outdated and what remains to be deployed.
+	•	Verify that production behavior matches the implementation report before considering these tasks complete.
+
+5. Production verification
+
+After deployment, perform a full end-to-end verification in the live production environment and confirm that:
+	•	the Free Gmail scan limit is correctly enforced and displayed,
+	•	background Gmail scanning behaves correctly,
+	•	receipt storage limits work correctly,
+	•	receipt parsing is accurate,
+	•	malformed receipts no longer affect analytics,
+	•	dashboard calculations are accurate,
+	•	feedback emails are delivered successfully,
+	•	billing upgrades, recurring renewals, cancellations, and automatic downgrades all work correctly,
+	•	the admin dashboard displays all expected metrics,
+	•	and the overall upgrade experience is polished and production-ready.
+
+Please only mark an item as complete after verifying it in the deployed production environment, not just in the local development environment.
