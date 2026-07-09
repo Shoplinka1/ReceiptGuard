@@ -57,9 +57,17 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
 
   const activeWarranties = (warranties ?? []).filter(w => w.warranty_end_date >= today).length;
 
+  // Same outlier guard as receipts: a malformed/corrupted price (e.g. a
+  // scraped value in the millions, or a negative number) must not corrupt
+  // "Money Saved" / "Monthly Total" the way it previously could.
+  const validPrice = (v: unknown): number => {
+    const n = safeNum(v);
+    return n < 0 || n > 50_000 ? 0 : n;
+  };
+
   const monthlySubTotal = (activeSubs ?? []).reduce((sum, s) => {
-    if (s.billing_cycle === 'yearly') return sum + safeNum(s.yearly_price) / 12;
-    return sum + safeNum(s.monthly_price);
+    if (s.billing_cycle === 'yearly') return sum + validPrice(s.yearly_price) / 12;
+    return sum + validPrice(s.monthly_price);
   }, 0);
 
   // "Money saved" = estimated amount compared to list/retail prices.
@@ -181,7 +189,7 @@ router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Pr
     subscriptionId: s.id,
     companyName: s.name ?? s.company_name,
     companyLogoUrl: s.company_logo_url ?? null,
-    amount: safeNum(s.monthly_price),
+    amount: s.billing_cycle === 'yearly' ? safeNum(s.yearly_price) : safeNum(s.monthly_price),
     renewalDate: s.renewal_date,
     daysUntilRenewal: Math.max(0, Math.ceil((new Date(s.renewal_date).getTime() - now) / 86400000)),
     reminderEnabled: s.reminder_enabled,

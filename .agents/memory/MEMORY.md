@@ -20,3 +20,4 @@
 - [Dashboard gmailConnected fix](dashboard-gmail.md) — gmailConnected queries email_accounts table (not hardcoded false). Dashboard summary includes validReceiptCount filtering amounts $0.50–$50k.
 - [Phase 2 migration](phase2-migration.md) — supabase/migration.sql Phase 2 block adds: user_subscriptions(paystack_plan_code, cancel_at_period_end, paystack_subscription_id), payments(description), feedback(admin_notes, priority), notifications(metadata), settings(browser_notifications + all reminder window columns). Also flags receipts with amount>50k or <0.50.
 - [Gmail scan false-empty-result bug](gmail-scan-false-empty-result.md) — all-queries-failed (401/403/429/5xx) was silently reported as "0 candidates" success; now aborts with a real failure reason.
+- [Gmail scan partial-failure reporting](gmail-scan-partial-failures.md) — partial query failures now log `gmail_scan_partial`; admin success-rate must count it alongside `gmail_scan_complete`.

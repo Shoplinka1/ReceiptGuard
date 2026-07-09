@@ -920,10 +920,18 @@ export async function runGmailScan(
     zeroResultHint = topReason ? ` Most common skip reason: ${topReason[0]} (${topReason[1]} messages).` : '';
   }
 
+  // Some (but not all) search queries can fail while others succeed — e.g. a
+  // transient 429/5xx on one of the three subject queries. That is a partial
+  // scan, not a clean success, and must not be reported identically to a
+  // fully successful scan or receipts silently go missing with no signal.
+  const partialFailureHint = queryErrors.length > 0
+    ? ` Note: ${queryErrors.length} of ${gmailQueries.length} search queries failed (${queryErrors.map(e => `${e.status} ${e.code ?? ''}`.trim()).join(', ')}) — results may be incomplete; it will retry on the next scheduled scan.`
+    : '';
+
   const completionDescription = freeLimitReached
     ? `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed. ` +
       `Free plan receipt limit (${FREE_RECEIPT_LIMIT}) reached — ${limitStoppedCount} emails not imported. Upgrade to Pro for unlimited receipt storage.`
-    : `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed (of ${allIds.length} candidates).${zeroResultHint}`;
+    : `Scan complete: ${importedCount} imported, ${skippedCount} skipped, ${failedCount} failed (of ${allIds.length} candidates).${zeroResultHint}${partialFailureHint}`;
 
   logger.info({
     email: account.email, importedCount, skippedCount, failedCount, candidateCount: allIds.length,
@@ -931,12 +939,13 @@ export async function runGmailScan(
   }, '[Gmail Scan] complete');
 
   await supabaseAdmin.from('activity_logs').insert({
-    user_id: userId, type: 'gmail_scan_complete',
+    user_id: userId, type: queryErrors.length > 0 ? 'gmail_scan_partial' : 'gmail_scan_complete',
     description: completionDescription,
     metadata: {
       importedCount, skippedCount, failedCount, total: allIds.length,
       isPro, forceRescan, isInitialScan,
       freeLimitReached, limitStoppedCount, skipReasonCounts,
+      partialFailure: queryErrors.length > 0, queryErrors,
     },
   });
 

@@ -80,8 +80,10 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
     supabaseAdmin.from('user_subscriptions').select('*', { count: 'exact', head: true }).in('status', ['cancelled', 'expired']).gte('updated_at', thirtyDaysAgo),
     // Failed Gmail scans
     supabaseAdmin.from('activity_logs').select('*', { count: 'exact', head: true }).eq('type', 'gmail_scan_failed').gte('created_at', thirtyDaysAgo),
-    // Successful Gmail scans
-    supabaseAdmin.from('activity_logs').select('*', { count: 'exact', head: true }).eq('type', 'gmail_scan_complete').gte('created_at', thirtyDaysAgo),
+    // Successful Gmail scans — includes partial successes (some search
+    // queries failed but the scan still completed and imported what it could)
+    // so a single transient 429/5xx doesn't get counted as a full failure.
+    supabaseAdmin.from('activity_logs').select('*', { count: 'exact', head: true }).in('type', ['gmail_scan_complete', 'gmail_scan_partial']).gte('created_at', thirtyDaysAgo),
     // DAU — distinct users with activity in last 24h
     supabaseAdmin.from('activity_logs').select('user_id').gte('created_at', oneDayAgo),
     // WAU — distinct users with activity in last 7 days
