@@ -1,0 +1,211 @@
+ReceiptGuard Final Production Verification (Railway Only)
+
+Continue focusing only on the remaining production launch blockers.
+
+Do not perform any additional repository audits, refactoring, UI polish, or feature work unless it is required to fix a production bug.
+
+The objective is to make ReceiptGuard production-ready on Railway.
+
+IMPORTANT
+	•	Railway is the production environment.
+	•	Replit is only for development and testing.
+	•	Every fix must be verified against the Railway deployment.
+	•	Do not optimize or verify only in Replit.
+	•	If any code changes are made, ensure they are committed and pushed so they can be deployed to Railway.
+	•	Tell me exactly which commit contains the fixes.
+	•	Tell me whether Railway has deployed that commit successfully.
+	•	Provide the Railway production URL being tested.
+
+⸻
+
+Remaining Production Blockers
+
+1. Gmail OAuth
+
+Do not mark Gmail OAuth as PASS until all of the following succeed on the Railway deployment:
+	•	Connect a real Gmail account
+	•	Complete OAuth successfully
+	•	Refresh token stored correctly
+	•	Refresh token retrieved correctly
+	•	Gmail refresh succeeds
+	•	Gmail API requests succeed
+	•	Gmail scan succeeds
+	•	Receipt imports succeed
+	•	Merchant extraction correct
+	•	Amount extraction correct
+	•	Currency extraction correct
+	•	Reconnect flow verified
+
+If Gmail fails:
+
+Provide:
+	•	exact Google response
+	•	HTTP status
+	•	error code
+	•	response body
+	•	root cause
+
+Do not assume the issue is revoked tokens without evidence.
+
+⸻
+
+2. Feedback Email
+
+Do not mark PASS until a real email is received.
+
+Verify:
+	•	transporter.verify()
+	•	sendMail()
+	•	SMTP authentication
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+
+If delivery fails provide:
+	•	SMTP response
+	•	SMTP error code
+	•	messageId (if generated)
+	•	recipient
+	•	stack trace
+	•	exact failure point
+
+⸻
+
+3. Subscription Detection
+
+Verify using real subscription receipt emails.
+
+Confirm:
+	•	recurring service detected
+	•	amount
+	•	billing frequency
+	•	renewal date
+	•	subscription status
+
+⸻
+
+4. Warranty Detection
+
+Verify using real warranty-eligible receipts.
+
+Confirm:
+	•	merchant
+	•	product
+	•	warranty duration
+	•	estimated warranty label
+	•	editing
+	•	duplicate prevention
+
+⸻
+
+5. Reminder Scheduler
+
+Verify:
+
+Warranty reminders
+	•	90
+	•	60
+	•	30
+	•	14
+	•	7
+	•	3
+	•	1 day
+
+Subscription reminders
+	•	30
+	•	14
+	•	7
+	•	3
+	•	1 day
+
+Verify:
+	•	scheduler
+	•	email delivery
+	•	in-app notifications
+	•	duplicate prevention
+
+⸻
+
+6. Paystack
+
+Run one complete test-mode payment.
+
+Verify:
+	•	checkout
+	•	webhook
+	•	payment history
+	•	upgrade
+	•	cancellation
+	•	renewal
+	•	automatic downgrade
+
+Cancelled payments must never create fake Pending rows.
+
+⸻
+
+Database Safety
+
+Before executing any:
+	•	UPDATE
+	•	DELETE
+	•	ALTER TABLE
+	•	CREATE TABLE
+	•	DROP
+	•	migration
+
+Show me:
+	•	exact SQL
+	•	migration file
+	•	expected rows affected
+	•	why it is needed
+
+Wait for my approval before running it unless the change is purely additive and already approved.
+
+⸻
+
+Railway Deployment
+
+Provide:
+	•	Railway production URL
+	•	Railway API URL
+	•	Current deployed commit SHA
+	•	Deployment status
+	•	Deployment logs if deployment fails
+
+Confirm that the fixes are deployed to Railway, not only working in Replit.
+
+⸻
+
+Admin Dashboard
+
+Provide the complete production admin information.
+
+Include:
+	•	Admin URL
+	•	Admin login URL
+	•	First admin SQL
+	•	Required environment variables
+	•	Required database tables
+	•	Required permissions
+
+Tell me exactly how to access it.
+
+If the admin dashboard is:
+	•	/admin
+	•	/dashboard/admin
+	•	/admin/login
+	•	another route
+
+tell me the exact URL.
+
+Also verify that it is protected by admin authorization.
+
+⸻
+
+Final Verification
+
+Do not mark ReceiptGuard as production-ready until every remaining production test has passed on Railway or clearly document why live-user testing is still required.
+
+Return a PASS / FAIL table for every critical feature.
