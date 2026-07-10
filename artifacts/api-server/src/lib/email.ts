@@ -11,7 +11,19 @@
  * All SMTP errors are logged with full detail — never silently swallowed.
  */
 import nodemailer from 'nodemailer';
+import dns from 'node:dns';
 import { logger } from './logger';
+
+// Root cause (found live on Railway production, 2026-07-10): Railway's
+// outbound network resolved smtp.gmail.com to an IPv6 address
+// (2607:f8b0:...:587) that Railway's network cannot route, failing with
+// "connect ENETUNREACH ... - Local (:::0)". Node's default DNS lookup order
+// prefers IPv6 when available (Happy Eyeballs is NOT used by plain
+// dns.lookup, which Nodemailer/net.connect rely on by default). Forcing
+// IPv4-first resolution avoids the unreachable AAAA record entirely.
+// Replit's network path apparently didn't hit this (may resolve/route IPv6
+// differently), which is why this wasn't caught in dev.
+dns.setDefaultResultOrder('ipv4first');
 
 const EMAIL_HOST = process.env.EMAIL_HOST;
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT ?? '587', 10);
