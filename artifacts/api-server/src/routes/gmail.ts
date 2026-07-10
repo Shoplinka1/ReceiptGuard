@@ -326,7 +326,19 @@ export function getMerchantName(domain: string, rawFrom: string): string {
   return normalizeMerchantName(main.charAt(0).toUpperCase() + main.slice(1));
 }
 
-export function extractAmount(text: string): { amount: number | null; currency: string } {
+// Known payment-processor/merchant sender domains whose receipts are
+// denominated in a specific local currency when no explicit currency
+// symbol/code appears next to the amount itself. Without this, a Flutterwave
+// (Nigerian processor) receipt whose body happens to mention "$" anywhere
+// (e.g. an unrelated USD-equivalent disclaimer) was silently imported as USD
+// instead of NGN, because the old code scanned the ENTIRE email body for the
+// first currency symbol rather than looking near the actual matched amount.
+const PROCESSOR_DEFAULT_CURRENCY: Record<string, string> = {
+  'flutterwave.com': 'NGN',
+  'paystack.com': 'NGN',
+};
+
+export function extractAmount(text: string, senderDomain?: string): { amount: number | null; currency: string } {
   // Patterns ordered from most specific to least specific
   // Each pattern has an explicit optional group 1 capturing a leading "-" or
   // "(" immediately before the currency symbol/number (the accounting
@@ -385,14 +397,28 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     // or data-entry error — not a retail purchase.
     if (isNaN(amount) || amount < 0.50 || amount > 50_000) continue;
 
-    // Detect currency from context
-    const symMatch = text.match(/[$£€₦₹¥₩]/);
-    const codeMatch = text.match(currencyCodes);
+    // Detect currency from a narrow window AROUND the matched amount, not
+    // the whole email body — a symbol/code elsewhere in the text (footer
+    // disclaimer, unrelated USD-equivalent note, etc.) must never override
+    // the currency that actually appears next to the charged amount.
+    const windowStart = Math.max(0, (m.index ?? 0) - 20);
+    const windowEnd = Math.min(text.length, (m.index ?? 0) + m[0].length + 20);
+    const window = text.slice(windowStart, windowEnd);
+
+    const symMatch = window.match(/[$£€₦₹¥₩]/);
+    const codeMatch = window.match(currencyCodes);
+    const processorDefault = senderDomain
+      ? PROCESSOR_DEFAULT_CURRENCY[senderDomain.split('.').slice(-2).join('.')]
+      : undefined;
+
     const currency = symMatch
       ? (currencySymbols[symMatch[0]] ?? 'USD')
       : codeMatch
         ? codeMatch[0].toUpperCase()
-        : 'USD';
+        // No explicit symbol/code anywhere: fall back to the sending
+        // processor's known local currency (e.g. Flutterwave -> NGN)
+        // rather than always defaulting to USD.
+        : processorDefault ?? 'USD';
 
     return { amount, currency };
   }
@@ -539,7 +565,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
     return { result: null, skipReason: 'refund_or_credit_body' };
   }
 
-  const { amount, currency } = extractAmount(combined);
+  const { amount, currency } = extractAmount(combined, domain);
 
   const invM = combined.match(/(?:invoice|order|receipt|confirmation|ref(?:erence)?)\s*(?:#|no\.?|num(?:ber)?)?\s*:?\s*([A-Z0-9\-_]{4,30})/i);
   const ordM = combined.match(/order\s*(?:id|#|no\.?)?\s*:?\s*([A-Z0-9\-_]{6,30})/i);

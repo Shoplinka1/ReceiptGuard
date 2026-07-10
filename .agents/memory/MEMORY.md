@@ -29,3 +29,6 @@
 - [Subscription renewal_date backfill](subscription-renewal-date.md) — Gmail scan never set renewal_date; added calendar-safe calculation + a separate UPDATE to backfill null rows (ignoreDuplicates skips conflicts entirely).
 - [Dashboard metrics design](dashboard-metrics.md) — what each widget queries, the validAmount filter, and why "Money Saved" was renamed to "Monthly Subs".
 - [Dashboard currency mixing bug](dashboard-currency-mixing.md) — validAmount range guard alone doesn't stop NGN/other-currency receipts from being summed as USD; all money aggregates must filter by settings.currency.
+- [Currency detection scan window](currency-detection-window.md) — detect currency in a window around the matched amount, not the whole email body; fall back to sender-domain default (Flutterwave/Paystack→NGN) before USD.
+- [Promise.all destructure order](promise-all-destructure-order.md) — inserting a query into a Promise.all array without moving its destructured var to the same position silently swaps unrelated results; tsc won't catch it.
+- [Reminder scheduler column fallback](reminder-scheduler-column-fallback.md) — a missing new column in a settings SELECT can silently null out ALL toggles in that row, not just the new one; retry with a fallback column set.

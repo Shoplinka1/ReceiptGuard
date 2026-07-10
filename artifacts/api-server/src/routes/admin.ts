@@ -54,13 +54,13 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
     { count: churnedCount },
     { count: failedScanCount },
     { count: successfulScanCount },
-    { count: totalWarranties },
-    { count: activeWarranties },
-    { count: expiringWarranties30d },
     // DAU/WAU/MAU via activity_logs (users who logged in or performed actions)
     { data: dauData },
     { data: wauData },
     { data: mauData },
+    { count: totalWarranties },
+    { count: activeWarranties },
+    { count: expiringWarranties30d },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayStart),

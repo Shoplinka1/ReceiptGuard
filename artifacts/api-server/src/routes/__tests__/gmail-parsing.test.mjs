@@ -21,6 +21,21 @@ check("labeled negative with 'total' rejected", extractAmount("Total: -$45.00"),
 check("no amount found", extractAmount("Thanks for your order, ship date pending"), { amount: null, currency: "USD" });
 check("NaN-proof garbage", extractAmount("$$$ ---- ,,,,"), { amount: null, currency: "USD" });
 check("multi-currency body picks first symbol seen", extractAmount("Total: $19.99 (approx €18.20)"), { amount: 19.99, currency: "USD" });
+check(
+  "unrelated $ elsewhere doesn't override nearby-window currency",
+  extractAmount("Some unrelated $ pricing note above.\nTotal charged: 5,000.00 NGN\nThank you."),
+  { amount: 5000, currency: "NGN" },
+);
+check(
+  "Flutterwave receipt with no explicit currency defaults to NGN via sender domain",
+  extractAmount("Payment received. Total: 5,000.00", "flutterwave.com"),
+  { amount: 5000, currency: "NGN" },
+);
+check(
+  "non-Flutterwave receipt with no explicit currency still defaults to USD",
+  extractAmount("Payment received. Total: 5,000.00", "example.com"),
+  { amount: 5000, currency: "USD" },
+);
 
 // Merchant extraction
 check("known domain", getMerchantName("netflix.com", '"Netflix" <info@netflix.com>'), "Netflix");
