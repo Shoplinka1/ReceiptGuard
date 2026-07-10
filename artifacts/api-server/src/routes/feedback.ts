@@ -64,12 +64,21 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     logger.error({ err: profileErr }, '[Feedback] profile lookup for email failed — continuing without sender name');
   }
   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-  // Race the email against a 3-second timeout so slow/broken SMTP can't stall
-  // the user-facing POST. If SMTP is healthy, emailSent reflects the real result.
-  // If SMTP is slow (>3s) or unconfigured, we respond immediately and the send
-  // continues in the background (Promise is not cancelled, just not awaited).
+  // Race the email against a timeout so slow/broken SMTP can't stall the
+  // user-facing POST. If SMTP is healthy, emailSent reflects the real result.
+  // If SMTP is slower than this or unconfigured, we respond immediately and
+  // the send continues in the background (Promise is not cancelled, just not
+  // awaited).
+  //
+  // Measured against the Railway production deployment: real Gmail SMTP
+  // (TCP connect + STARTTLS + AUTH + send) from Railway's network
+  // consistently took ~4.5-4.7s round-trip — well over the old 3s cutoff, so
+  // every single feedback email was losing the race and reporting
+  // emailSent:false even though the send itself was not actually failing.
+  // Replit's network path to Gmail was faster, which is why this wasn't
+  // caught in dev. Bumped to 8s, comfortably above the observed ~4.7s.
   let emailSent = false;
-  const emailTimeout = new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000));
+  const emailTimeout = new Promise<boolean>(resolve => setTimeout(() => resolve(false), 8000));
   try {
     emailSent = await Promise.race([
       emailTimeout,
