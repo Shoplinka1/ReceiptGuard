@@ -12,8 +12,14 @@ import type { Request, Response, NextFunction } from 'express';
 const router: IRouter = Router();
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const { data, error } = await supabaseAdmin.from('profiles').select('is_admin').eq('id', req.userId).single();
-  if (error || !data?.is_admin) {
+  // Use maybeSingle() instead of single() so a missing profile row returns
+  // null (→ 403) rather than a PGRST116 error that swallowed into a crash.
+  const { data, error } = await supabaseAdmin.from('profiles').select('is_admin').eq('id', req.userId).maybeSingle();
+  if (error) {
+    res.status(500).json({ error: 'Admin access check failed' });
+    return;
+  }
+  if (!data?.is_admin) {
     res.status(403).json({ error: 'Admin access required' });
     return;
   }
@@ -231,14 +237,25 @@ router.get('/api/admin/payments', ...adminGuard, async (req, res): Promise<void>
   const pageSize = Math.min(parseInt(pageSizeRaw, 10), 200);
   const offset = (page - 1) * pageSize;
 
-  const { data, count, error } = await supabaseAdmin
+  // payments.user_id FKs to auth.users, not profiles — PostgREST cannot
+  // build the embedded join automatically. Fetch payments first, then look
+  // up profiles manually so the join always works regardless of FK setup.
+  const { data: rawPayments, count, error } = await supabaseAdmin
     .from('payments')
-    .select('*, profiles(email, full_name)', { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
 
   if (error) { res.status(500).json({ error: 'Failed to load payments' }); return; }
-  res.json({ payments: data ?? [], total: count ?? 0, page, pageSize });
+
+  const userIds = [...new Set((rawPayments ?? []).map((p: any) => p.user_id as string))];
+  const { data: profileRows } = userIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email, full_name').in('id', userIds)
+    : { data: [] };
+  const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.id, { email: p.email, full_name: p.full_name }]));
+
+  const data = (rawPayments ?? []).map((p: any) => ({ ...p, profiles: profileMap[p.user_id] ?? null }));
+  res.json({ payments: data, total: count ?? 0, page, pageSize });
 });
 
 // ─── Gmail Accounts ───────────────────────────────────────────────────────────
@@ -252,18 +269,28 @@ router.get('/api/admin/gmail-accounts', ...adminGuard, async (req, res): Promise
   }
   const offset = (page - 1) * pageSize;
 
-  let query = supabaseAdmin
+  // email_accounts.user_id FKs to auth.users — same PostgREST join limitation
+  // as payments above. Fetch accounts then look up profiles manually.
+  let baseQuery = supabaseAdmin
     .from('email_accounts')
-    .select('id, email, provider, is_active, last_scanned_at, created_at, user_id, profiles!email_accounts_user_id_fkey(email, full_name)', { count: 'exact' })
+    .select('id, email, provider, is_active, last_scanned_at, created_at, user_id', { count: 'exact' })
     .eq('provider', 'gmail')
     .order('created_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
 
-  if (search) query = (query as any).or(`email.ilike.%${search}%`);
+  if (search) baseQuery = (baseQuery as any).or(`email.ilike.%${search}%`);
 
-  const { data, count, error } = await query;
+  const { data: rawAccounts, count, error } = await baseQuery;
   if (error) { res.status(500).json({ error: 'Failed to load Gmail accounts' }); return; }
-  res.json({ accounts: data ?? [], total: count ?? 0, page, pageSize });
+
+  const acctUserIds = [...new Set((rawAccounts ?? []).map((a: any) => a.user_id as string))];
+  const { data: acctProfiles } = acctUserIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email, full_name').in('id', acctUserIds)
+    : { data: [] };
+  const acctProfileMap = Object.fromEntries((acctProfiles ?? []).map((p: any) => [p.id, { email: p.email, full_name: p.full_name }]));
+
+  const enrichedAccounts = (rawAccounts ?? []).map((a: any) => ({ ...a, profiles: acctProfileMap[a.user_id] ?? null }));
+  res.json({ accounts: enrichedAccounts, total: count ?? 0, page, pageSize });
 });
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────

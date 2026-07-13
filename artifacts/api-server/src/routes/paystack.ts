@@ -142,7 +142,9 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   let userEmail = '';
   let userName = '';
   try {
-    const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+    // Use maybeSingle() — single() throws PGRST116 when profile row is missing,
+    // which was being swallowed into a 500 "Could not create user profile" error.
+    const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).maybeSingle();
     if (!existingProfile) {
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(req.userId);
       if (authError || !authData?.user) {

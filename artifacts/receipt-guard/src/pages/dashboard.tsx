@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { useGetDashboardSummary, useGetSpendingTrend, useListActivity, useGetTopMerchants, useGetUpcomingRenewals, useGetSubscriptionBreakdown } from "@workspace/api-client-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts"
-import { ArrowUpRight, ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail, TrendingUp } from "lucide-react"
+import { ArrowDownRight, CreditCard, Receipt, Repeat, ShieldAlert, Activity, Building2, Calendar, Mail, TrendingUp, Sparkles, CheckCircle2, AlertTriangle, Crown } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
@@ -24,6 +24,15 @@ async function fetchGmailAccounts() {
     headers: { Authorization: `Bearer ${token}` }
   })
   if (!res.ok) return []
+  return res.json()
+}
+
+async function fetchSubscription() {
+  const token = await getAuthToken()
+  const res = await fetch(`${API_BASE}/api/paystack/subscription`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!res.ok) return null
   return res.json()
 }
 
@@ -59,6 +68,7 @@ export default function Dashboard() {
   const { data: renewals, isLoading: loadingRenewals } = useGetUpcomingRenewals()
   const { data: breakdown, isLoading: loadingBreakdown } = useGetSubscriptionBreakdown()
   const { data: gmailAccounts = [] } = useQuery({ queryKey: ['gmail', 'accounts'], queryFn: fetchGmailAccounts, retry: false })
+  const { data: subscription, isLoading: loadingSubscription } = useQuery({ queryKey: ['paystack', 'subscription'], queryFn: fetchSubscription, retry: false })
 
   const safeActivities  = toSafeArray<typeof activities extends (infer U)[] | undefined ? U : never>(activities,  'activities')
   const safeRenewals    = toSafeArray<typeof renewals   extends (infer U)[] | undefined ? U : never>(renewals,    'renewals')
@@ -103,6 +113,9 @@ export default function Dashboard() {
             </Badge>
           )}
         </header>
+
+        {/* Subscription Plan Card */}
+        <PlanCard plan={summary?.plan} subscription={subscription} loading={loadingSummary || loadingSubscription} />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
