@@ -298,17 +298,28 @@ router.get('/api/admin/gmail-accounts', ...adminGuard, async (req, res): Promise
 router.get('/api/admin/feedback', ...adminGuard, async (req, res): Promise<void> => {
   const { type, status } = req.query as Record<string, string>;
 
+  // feedback.user_id FKs to auth.users, not profiles — PostgREST cannot build
+  // profiles(email, full_name) as an embedded join. Use manual join instead,
+  // same pattern as admin payments and gmail-accounts routes above.
   let query = supabaseAdmin
     .from('feedback')
-    .select('*, profiles(email, full_name)')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (type) query = query.eq('type', type);
   if (status) query = query.eq('status', status);
 
-  const { data, error } = await query;
+  const { data: rawFeedback, error } = await query;
   if (error) { res.status(500).json({ error: 'Failed to load feedback' }); return; }
-  res.json(data ?? []);
+
+  const fbUserIds = [...new Set((rawFeedback ?? []).map((f: any) => f.user_id as string))];
+  const { data: fbProfiles } = fbUserIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email, full_name').in('id', fbUserIds)
+    : { data: [] };
+  const fbProfileMap = Object.fromEntries((fbProfiles ?? []).map((p: any) => [p.id, { email: p.email, full_name: p.full_name }]));
+
+  const data = (rawFeedback ?? []).map((f: any) => ({ ...f, profiles: fbProfileMap[f.user_id] ?? null }));
+  res.json(data);
 });
 
 router.patch('/api/admin/feedback/:id', ...adminGuard, async (req, res): Promise<void> => {
