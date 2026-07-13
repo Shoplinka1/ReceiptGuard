@@ -1,0 +1,419 @@
+ReceiptGuard Final Production Stabilization (Highest Priority)
+
+Do not add any unrelated new features until every issue below has been fixed, tested, and verified.
+
+The objective is to make ReceiptGuard production-ready for public launch.
+
+Do not stop after code changes. Perform root-cause analysis, implement fixes, test them, and verify them.
+
+⸻
+
+1. Dashboard Analytics
+
+The dashboard must accurately match the receipts stored in the database.
+
+Audit and fix:
+	•	Monthly Spending
+	•	Spending Trend
+	•	Money Saved
+	•	Top Merchants
+	•	Receipt Count
+	•	Active Subscriptions
+	•	Upcoming Renewals
+	•	Warranties
+
+Compare every dashboard value against the actual receipt records.
+
+Top Merchants must never contain corrupted merchants or impossible amounts.
+
+Verify every aggregation query.
+
+⸻
+
+2. Receipt Parsing
+
+Audit the complete parsing pipeline.
+
+Improve:
+	•	merchant extraction
+	•	amount extraction
+	•	currency detection
+	•	purchase date
+	•	duplicate detection
+	•	malformed email rejection
+	•	international number formats
+	•	refunds
+	•	taxes
+	•	discounts
+
+Reject invalid receipts before they reach the database.
+
+Impossible values must never affect analytics.
+
+⸻
+
+3. Warranty System
+
+Do NOT remove the Warranty feature.
+
+Complete it so it is production-ready.
+
+Implement:
+
+Automatic warranty detection
+
+Detect warranty-eligible purchases from imported receipts.
+
+Extract:
+	•	product name
+	•	merchant
+	•	purchase date
+	•	receipt
+	•	warranty information if available
+
+If warranty duration exists in the email or receipt:
+
+Extract it automatically.
+
+If no duration exists:
+
+Estimate intelligently based on product category, clearly mark it as an estimated warranty, and allow the user to edit it.
+
+Never pretend estimated values are confirmed.
+
+⸻
+
+Warranty management
+
+Allow users to:
+	•	edit warranty length
+	•	edit expiry date
+	•	edit product name
+	•	edit notes
+
+⸻
+
+Warranty dashboard
+
+Show:
+	•	Active Warranties
+	•	Expiring Soon
+	•	Expired
+	•	Recently Added
+
+⸻
+
+Warranty reminders
+
+Implement reminder emails.
+
+Users should automatically receive emails before warranties expire.
+
+Support reminders:
+	•	90 days
+	•	60 days
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Users should also receive in-app notifications.
+
+Each reminder should include:
+	•	product
+	•	merchant
+	•	purchase date
+	•	expiry date
+	•	receipt link
+
+⸻
+
+Warranty renewal
+
+If users upload a new receipt extending warranty, automatically update the warranty.
+
+Prevent duplicate warranties.
+
+⸻
+
+4. Subscription Renewal Emails
+
+Users should also receive reminder emails before subscriptions renew.
+
+Support reminders:
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Each email should contain:
+	•	subscription name
+	•	amount
+	•	renewal date
+	•	billing frequency
+
+⸻
+
+5. Gmail Notifications
+
+Verify every outgoing email.
+
+Users should receive Gmail notifications for:
+	•	warranty reminders
+	•	subscription renewals
+	•	successful imports
+	•	scan failures (optional)
+	•	feedback confirmations (if enabled)
+
+Verify SMTP end-to-end.
+
+Do not mark complete until real emails are successfully delivered.
+
+⸻
+
+6. Billing
+
+Fix every remaining billing issue.
+
+Cancelled Paystack checkout must NEVER create Pending payments.
+
+Payment history should only contain:
+	•	Successful
+	•	Failed (if intentionally stored)
+	•	Cancelled (only when actually cancelled)
+
+Never create fake Pending entries.
+
+⸻
+
+7. Subscription Logic
+
+Verify:
+	•	upgrade
+	•	renewal
+	•	cancellation
+	•	cancel-at-period-end
+	•	automatic downgrade
+	•	webhook handling
+	•	duplicate webhook protection
+
+⸻
+
+8. Gmail Scanning
+
+Continue auditing Gmail scanning.
+
+Verify:
+	•	OAuth
+	•	refresh tokens
+	•	reconnect flow
+	•	duplicate detection
+	•	parsing
+	•	scheduler
+	•	Gmail API
+
+Scanning should never silently fail.
+
+Every failure must include a clear reason.
+
+⸻
+
+9. Feedback Emails
+
+Feedback is saved.
+
+Emails still need production verification.
+
+Verify:
+	•	SMTP
+	•	transporter.verify()
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	sendEmail()
+
+Do not mark complete until a real feedback email is received.
+
+⸻
+
+10. Authentication
+
+Verify:
+	•	login
+	•	logout
+	•	session clearing
+	•	cache clearing
+	•	redirect
+	•	browser history
+	•	token refresh
+
+⸻
+
+11. Theme
+
+Fix Dark Mode completely.
+
+Verify:
+	•	ThemeProvider
+	•	Tailwind dark mode
+	•	persistence
+	•	HTML class switching
+	•	all pages
+
+⸻
+
+12. Mobile
+
+Audit:
+	•	iPhone Safari
+	•	scrolling
+	•	overflow
+	•	nested scroll containers
+	•	viewport height
+	•	touch scrolling
+
+Scrolling should always feel smooth.
+
+⸻
+
+13. Settings
+
+Resolve every remaining Settings error.
+
+Verify:
+	•	profile updates
+	•	preferences
+	•	theme
+	•	notifications
+	•	Supabase profile queries
+
+⸻
+
+14. Admin Dashboard
+
+Complete the admin system.
+
+Provide:
+	•	first admin setup
+	•	SQL
+	•	environment variables
+	•	permissions
+	•	admin URL
+	•	deployment instructions
+
+Document everything.
+
+⸻
+
+15. Security Audit
+
+Audit:
+	•	authentication
+	•	authorization
+	•	admin routes
+	•	SQL injection
+	•	XSS
+	•	CSRF
+	•	webhook verification
+	•	secrets
+	•	rate limiting
+
+Fix every code-level issue.
+
+⸻
+
+16. Performance Audit
+
+Audit:
+	•	React Query
+	•	caching
+	•	duplicate requests
+	•	rendering
+	•	dashboard performance
+	•	Gmail scan performance
+	•	database queries
+
+⸻
+
+17. Database Audit
+
+Audit:
+	•	indexes
+	•	constraints
+	•	duplicate rows
+	•	migrations
+	•	foreign keys
+	•	orphaned data
+	•	receipt cleanup
+
+Generate safe SQL if cleanup is required.
+
+⸻
+
+18. Repository Audit
+
+Search the entire repository for:
+	•	TODOs
+	•	FIXMEs
+	•	dead code
+	•	unreachable code
+	•	duplicate logic
+	•	race conditions
+	•	unsafe any
+	•	silent catch blocks
+	•	inconsistent validation
+
+Fix every issue that can be fixed.
+
+⸻
+
+19. Production Verification
+
+After every fix, verify the deployed application.
+
+Do not report “fixed” based only on code review.
+
+Verify:
+	•	Gmail scanning
+	•	receipt parsing
+	•	dashboard analytics
+	•	Top Merchants
+	•	Spending reports
+	•	warranties
+	•	warranty reminder emails
+	•	subscription reminder emails
+	•	feedback emails
+	•	billing
+	•	Paystack
+	•	upgrades
+	•	renewals
+	•	cancellations
+	•	automatic downgrades
+	•	payment history
+	•	logout
+	•	theme
+	•	mobile scrolling
+	•	admin dashboard
+
+⸻
+
+Final Report
+
+For every completed issue provide:
+	1.	Root cause
+	2.	Files changed
+	3.	Why it happened
+	4.	How it was fixed
+	5.	How it was tested
+	6.	Production verification results
+	7.	Remaining limitations
+
+Do not stop until every code-level issue has been audited.
+
+For anything requiring Railway, Vercel, Google Cloud, Paystack, Gmail OAuth, SMTP, or Supabase production access, do not guess. State exactly what must be verified, why it cannot be verified locally, and the exact production test procedure.
+
+Do not claim ReceiptGuard is production-ready until all critical issues have been verified.

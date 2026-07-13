@@ -7,6 +7,7 @@ import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
 import { sendEmail } from '../lib/email';
+import { logger } from '../lib/logger';
 
 const router: IRouter = Router();
 
@@ -24,56 +25,83 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
   }
 
   let feedbackId: string | null = null;
-  const { data, error } = await supabaseAdmin.from('feedback').insert({
-    user_id: req.userId,
-    type,
-    subject: subject.trim(),
-    body: body.trim(),
-    status: 'open',
-  }).select().single();
-
-  // If DB insert fails (e.g. table not yet created), still send the email notification
-  // and return success — data is captured in the email.
-  if (error) {
-    if (error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
-      res.status(500).json({ error: error.message }); return;
-    }
-    // Table doesn't exist yet — fall through and still send email
-  } else {
-    feedbackId = data?.id ?? null;
-    supabaseAdmin.from('activity_logs').insert({
+  // Wrapped in try/catch (in addition to checking the returned `error`) so
+  // that even a thrown exception (e.g. a network failure) can't skip the
+  // email notification below — the admin should always be notified even if
+  // persistence to Supabase is temporarily broken.
+  let data: any = null;
+  try {
+    const insertResult = await supabaseAdmin.from('feedback').insert({
       user_id: req.userId,
-      type: `feedback_submitted`,
-      description: `${type.replace('_', ' ')} submitted: ${subject}`,
-      metadata: { feedbackId, type },
-    }).then(undefined, () => {/* non-fatal */});
+      type,
+      subject: subject.trim(),
+      body: body.trim(),
+      status: 'open',
+    }).select().single();
+    data = insertResult.data;
+    const error = insertResult.error;
+    if (error) {
+      logger.error({ err: error, type, subject }, '[Feedback] DB insert failed — continuing to send email notification');
+    } else {
+      feedbackId = data?.id ?? null;
+      supabaseAdmin.from('activity_logs').insert({
+        user_id: req.userId,
+        type: `feedback_submitted`,
+        description: `${type.replace('_', ' ')} submitted: ${subject}`,
+        metadata: { feedbackId, type },
+      }).then(undefined, () => {/* non-fatal */});
+    }
+  } catch (insertErr: any) {
+    logger.error({ err: insertErr, type, subject }, '[Feedback] DB insert threw — continuing to send email notification');
   }
 
-  // Fire-and-forget email notification to admin
-  const { data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single();
+  // Fire-and-forget email notification to admin — a failure here should never
+  // block the response, and must not be able to throw uncaught.
+  let userProfile: { email?: string; full_name?: string } | null = null;
+  try {
+    ({ data: userProfile } = await supabaseAdmin.from('profiles').select('email, full_name').eq('id', req.userId).single());
+  } catch (profileErr: any) {
+    logger.error({ err: profileErr }, '[Feedback] profile lookup for email failed — continuing without sender name');
+  }
   const typeLabel = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-  sendEmail({
-    to: 'receiptguard01@gmail.com',
-    subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#1a1a1a">New ${typeLabel} Submitted</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-          <tr><td style="padding:6px 0;color:#666;width:100px">From</td><td style="padding:6px 0;font-weight:500">${userProfile?.full_name || 'Unknown'}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${userProfile?.email || '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Type</td><td style="padding:6px 0">${typeLabel}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Subject</td><td style="padding:6px 0;font-weight:500">${subject.trim()}</td></tr>
-          <tr><td style="padding:6px 0;color:#666">Time</td><td style="padding:6px 0">${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} (WAT)</td></tr>
-        </table>
-        <div style="background:#f5f5f5;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin-bottom:24px">
-          <p style="margin:0;color:#333;white-space:pre-wrap">${body.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-        </div>
-        <p style="font-size:12px;color:#999">This is an automated notification from ReceiptGuard.</p>
-      </div>
-    `,
-  }).catch(() => {});
+  // Race the email against a 3-second timeout so slow/broken SMTP can't stall
+  // the user-facing POST. If SMTP is healthy, emailSent reflects the real result.
+  // If SMTP is slow (>3s) or unconfigured, we respond immediately and the send
+  // continues in the background (Promise is not cancelled, just not awaited).
+  let emailSent = false;
+  const emailTimeout = new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000));
+  try {
+    emailSent = await Promise.race([
+      emailTimeout,
+      sendEmail({
+        to: 'receiptguard01@gmail.com',
+        subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1a1a1a">New ${typeLabel} Submitted</h2>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+              <tr><td style="padding:6px 0;color:#666;width:100px">From</td><td style="padding:6px 0;font-weight:500">${userProfile?.full_name || 'Unknown'}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${userProfile?.email || '—'}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Type</td><td style="padding:6px 0">${typeLabel}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Subject</td><td style="padding:6px 0;font-weight:500">${subject.trim()}</td></tr>
+              <tr><td style="padding:6px 0;color:#666">Time</td><td style="padding:6px 0">${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })} (WAT)</td></tr>
+            </table>
+            <div style="background:#f5f5f5;border-left:4px solid #6366f1;padding:12px 16px;border-radius:4px;margin-bottom:24px">
+              <p style="margin:0;color:#333;white-space:pre-wrap">${body.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+            </div>
+            <p style="font-size:12px;color:#999">This is an automated notification from ReceiptGuard.</p>
+          </div>
+        `,
+      }),
+    ]);
+  } catch {
+    // sendEmail already logs internally; swallow here so response always sends
+  }
 
-  res.status(201).json(data ?? { type, subject, body, status: 'open', created_at: new Date().toISOString() });
+  res.status(201).json({
+    ...(data ?? { type, subject, body, status: 'open', created_at: new Date().toISOString() }),
+    emailSent,
+  });
 });
 
 router.get('/api/feedback', requireAuth, async (req, res): Promise<void> => {

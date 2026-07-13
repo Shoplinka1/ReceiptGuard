@@ -1,0 +1,102 @@
+Continue the complete production audit. Do not stop after the first issue.
+
+1. Gmail encryption
+The Railway ENCRYPTION_KEY is a valid 64-character hexadecimal key. Do not assume the key format is the problem. Audit why isValidEncryptionKey() is still returning false in production. Add temporary debug logging that reports only:
+	•	whether the environment variable exists,
+	•	the key length,
+	•	whether it matches the 64-character hex regex,
+	•	which environment (Railway) is being read,
+	•	and exactly where validation fails.
+Do not log the actual key. Report the findings before changing any code.
+
+2. Feedback email delivery
+Feedback is now saving successfully, but no email is received. Audit only the email sending pipeline. Verify:
+	•	SMTP authentication,
+	•	Gmail App Password,
+	•	transporter verification,
+	•	EMAIL_HOST,
+	•	EMAIL_PORT,
+	•	EMAIL_USER,
+	•	EMAIL_FROM,
+	•	whether sendMail() succeeds or throws,
+	•	and log the exact SMTP response instead of silently failing.
+Report the root cause before making changes.
+
+3. Gmail receipt scanning
+After Gmail connects successfully, verify the complete pipeline:
+	•	OAuth callback
+	•	token storage
+	•	token encryption/decryption
+	•	initial Gmail scan
+	•	receipt parsing
+	•	merchant extraction
+	•	duplicate prevention
+	•	receipt insertion
+	•	subscription detection
+	•	warranty creation
+	•	category detection
+Report which stages pass and which fail.
+
+4. Reminder system
+Audit the reminder pipeline:
+	•	scheduled reminder worker
+	•	renewal reminders
+	•	warranty reminders
+	•	email reminders
+	•	in-app notifications
+Verify they are actually scheduled and triggered.
+
+5. Free vs Pro limits
+Verify that plan enforcement works:
+	•	Free plan Gmail account limit
+	•	receipt limit
+	•	subscription limit
+	•	upgrade prompt/banner
+	•	Pro unlimited features
+Report any missing enforcement.
+
+6. Billing lifecycle
+Verify Paystack subscription lifecycle:
+	•	upgrade to Pro
+	•	payment verification
+	•	subscription renewal
+	•	subscription cancellation
+	•	automatic downgrade back to Free after expiry
+	•	limits re-applied
+	•	billing history preserved
+
+7. Final production audit
+Produce a launch checklist showing PASS, FAIL, or NOT TESTED for:
+	•	Authentication
+	•	Profile
+	•	Settings
+	•	Language
+	•	Currency
+	•	Theme
+	•	Gmail OAuth
+	•	Gmail token encryption
+	•	Receipt scanning
+	•	Receipt parsing
+	•	Duplicate prevention
+	•	Subscription detection
+	•	Warranty detection
+	•	Dashboard
+	•	Search
+	•	Reminder scheduler
+	•	Reminder emails
+	•	In-app notifications
+	•	Feedback form
+	•	Feedback email delivery
+	•	Paystack checkout
+	•	Payment verification
+	•	Upgrade to Pro
+	•	Free plan limits
+	•	Pro plan limits
+	•	Subscription renewal
+	•	Subscription cancellation
+	•	Automatic downgrade to Free
+	•	Admin dashboard
+	•	Security
+	•	Mobile responsiveness
+
+Report every issue with its root cause before applying fixes. Do not modify Railway, Vercel, Supabase, or production environment variables unless I explicitly approve the change.

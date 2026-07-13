@@ -1,5 +1,6 @@
 import React from "react"
 import { Link, useLocation } from "wouter"
+import { toast } from "sonner"
 import { 
   LayoutDashboard, 
   Receipt, 
@@ -18,10 +19,24 @@ import { useGetUserProfile } from "@workspace/api-client-react"
 import { NotificationBell } from "./notification-bell"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation()
+  const [location, setLocation] = useLocation()
   const { user, signOut } = useAuth()
   const { data: profile } = useGetUserProfile({ query: { enabled: !!user, retry: false } })
   const isAdmin = profile?.isAdmin ?? false
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (err: any) {
+      toast.error(err?.message ?? "Sign out failed")
+    } finally {
+      // Always redirect regardless of error — signOut() already clears local
+      // session/cache/storage, so staying on a protected page would just be
+      // caught by ProtectedRoute anyway. Redirecting explicitly avoids a flash
+      // of stale content and matches the Settings page's sign-out flow.
+      setLocation("/login")
+    }
+  }
   
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -38,7 +53,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ]
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden text-foreground">
+    // `h-screen` (100vh) is a common cause of "stuck"/jumpy scrolling on iPhone
+    // Safari: 100vh is measured against the *largest* viewport (address bar
+    // hidden), so as the address bar shows/hides, the fixed-height container
+    // and the fixed bottom nav below fight the actual visible viewport. `h-dvh`
+    // tracks the real dynamic viewport instead.
+    <div className="flex h-dvh w-full bg-background overflow-hidden text-foreground">
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-sidebar h-full">
         <div className="p-6">
@@ -106,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             )}
             <button
-              onClick={() => signOut()}
+              onClick={handleSignOut}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4"
             >
               <LogOut className="w-4 h-4 opacity-70" />
@@ -119,23 +139,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none transform translate-x-1/2 -translate-y-1/2"></div>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        {/* pb-24 on mobile clears the fixed bottom nav so the last bit of
+            scrollable content is never hidden underneath it. */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-24 md:p-8 md:pb-8">
           {children}
         </div>
       </main>
       
-      {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-6 py-3 safe-area-bottom">
-        {[navItems[0], navItems[1], navItems[2], bottomItems[0]].map((item) => {
+      {/* Mobile Bottom Nav — Dashboard, Receipts, Subscriptions, Warranties, Settings.
+          Omits Search/Renewals/Reminders from the tab bar (accessible via sidebar on desktop).
+          Five items is the practical max for a bottom nav before labels become unreadable. */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-4 py-2 safe-area-bottom">
+        {[navItems[0], navItems[2], navItems[3], navItems[5], bottomItems[1]].map((item) => {
           const isActive = location === item.href
           return (
             <Link key={item.name} href={item.href}>
               <div className={cn(
-                "flex flex-col items-center gap-1 cursor-pointer",
+                "flex flex-col items-center gap-1 cursor-pointer px-2 py-1 rounded-md transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground"
               )}>
-                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "opacity-70")} />
-                <span className="text-[10px] font-medium">{item.name}</span>
+                <item.icon className={cn("w-5 h-5", isActive ? "text-primary" : "opacity-60")} />
+                <span className="text-[9px] font-medium leading-none">{item.name}</span>
               </div>
             </Link>
           )

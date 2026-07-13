@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useGetUserSettings, useUpdateUserSettings, useGetUserProfile } from '@workspace/api-client-react'
+import { useGetUserSettings, useUpdateUserSettings, useGetUserProfile, getGetUserSettingsQueryKey } from '@workspace/api-client-react'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/hooks/use-auth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -58,6 +58,7 @@ const GMAIL_ERRORS: Record<string, string> = {
   db_error: 'Could not save your Gmail connection. Please retry.',
   userinfo_failed: 'Could not fetch your Gmail address. Please retry.',
   encryption_not_configured: 'Server encryption not configured — contact support.',
+  encryption_key_invalid: 'Server encryption is misconfigured — contact support.',
   server_error: 'An unexpected error occurred during Gmail connection. Please try again.',
 }
 
@@ -350,7 +351,13 @@ function BillingTab() {
 
 function GeneralTab() {
   const { data: settings } = useGetUserSettings()
-  const updateSettings = useUpdateUserSettings()
+  const qc = useQueryClient()
+  const updateSettings = useUpdateUserSettings({
+    mutation: {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetUserSettingsQueryKey() }) },
+      onError: (e: any) => toast.error(e?.message ?? 'Failed to save settings'),
+    },
+  })
 
   return (
     <div className="space-y-6 mt-6">
@@ -437,7 +444,13 @@ function GeneralTab() {
 
 function AppearanceTab() {
   const { theme, setTheme } = useTheme()
-  const updateSettings = useUpdateUserSettings()
+  const qc = useQueryClient()
+  const updateSettings = useUpdateUserSettings({
+    mutation: {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetUserSettingsQueryKey() }) },
+      onError: (e: any) => toast.error(e?.message ?? 'Failed to save settings'),
+    },
+  })
 
   const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme)

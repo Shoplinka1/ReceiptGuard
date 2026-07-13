@@ -26,7 +26,7 @@ SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co/"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_qWXWU29TC9ys4HZG6MnZ1A_6jgpk5rf"
 VITE_SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co/"
 FRONTEND_URL = "https://31ed1826-9ef8-4477-a7e9-d7da1dbf19df-00-xthioj5tmtg0.worf.replit.dev"
-GOOGLE_REDIRECT_URI = "https://31ed1826-9ef8-4477-a7e9-d7da1dbf19df-00-xthioj5tmtg0.worf.replit.dev/api/gmail/callback"
+GOOGLE_REDIRECT_URI = "https://cfa74309-4e2c-4af9-b392-38facad3b101-00-2uy4jjdxl06qp.worf.replit.dev/api/gmail/callback"
 
 [nix]
 channel = "stable-25_05"

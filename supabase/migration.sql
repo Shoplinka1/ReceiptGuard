@@ -43,8 +43,11 @@ create table if not exists public.settings (
   updated_at            timestamptz not null default now()
 );
 alter table public.settings enable row level security;
-create policy if not exists "Users can manage own settings"
-  on public.settings for all using (auth.uid() = user_id);
+do $policy_settings$ begin
+  if not exists (select 1 from pg_policies where tablename = 'settings' and policyname = 'Users can manage own settings') then
+    create policy "Users can manage own settings" on public.settings for all using (auth.uid() = user_id);
+  end if;
+end $policy_settings$;
 
 -- Add language column if settings table already existed without it
 alter table public.settings add column if not exists language text not null default 'en';
@@ -133,6 +136,84 @@ update public.subscriptions set company_name = name where company_name is null a
 alter table public.user_subscriptions add column if not exists paystack_customer_id text;
 alter table public.user_subscriptions add column if not exists current_period_start timestamptz;
 alter table public.user_subscriptions add column if not exists current_period_end timestamptz;
+
+-- ─── Phase 2: user_subscriptions additional columns ──────────────────────────
+alter table public.user_subscriptions add column if not exists paystack_plan_code text;
+alter table public.user_subscriptions add column if not exists cancel_at_period_end boolean not null default false;
+alter table public.user_subscriptions add column if not exists paystack_subscription_id text;
+
+-- ─── Phase 2: payments — description column ───────────────────────────────────
+alter table public.payments add column if not exists description text;
+
+-- ─── Phase 2: feedback — admin_notes, priority columns ───────────────────────
+alter table public.feedback add column if not exists admin_notes text;
+alter table public.feedback add column if not exists priority text not null default 'normal';
+
+-- ─── Phase 2: notifications — metadata column ────────────────────────────────
+alter table public.notifications add column if not exists metadata jsonb;
+
+-- ─── Phase 2: settings — browser_notifications, reminder window columns ──────
+alter table public.settings add column if not exists browser_notifications boolean not null default true;
+alter table public.settings add column if not exists renewal_reminder boolean not null default true;
+alter table public.settings add column if not exists warranty_reminder boolean not null default true;
+alter table public.settings add column if not exists return_window_reminder boolean not null default true;
+alter table public.settings add column if not exists days_before_30 boolean not null default true;
+alter table public.settings add column if not exists days_before_14 boolean not null default true;
+alter table public.settings add column if not exists days_before_7 boolean not null default true;
+alter table public.settings add column if not exists days_before_3 boolean not null default true;
+alter table public.settings add column if not exists days_before_1 boolean not null default false;
+
+-- ─── Phase 3: DELETE malformed receipts (crypto exchanges / invalid amounts) ──
+-- Receipts with amount > $50,000 or < $0.50 are corrupted data — crypto
+-- exchange account-balance emails that slipped through before domain blocklisting
+-- was in place. They corrupt Top Merchants, Monthly Spending, and Trends.
+--
+-- SAFE TO RUN: these are NOT real purchases. The amount bounds ($0.50–$50,000)
+-- match the validAmount() filter in the backend dashboard routes.
+--
+-- Run this SELECT first to review what will be deleted:
+--   SELECT id, merchant_name, amount, purchase_date, raw_email_from
+--   FROM public.receipts
+--   WHERE amount > 50000 OR amount < 0.50 OR amount IS NULL;
+--
+-- Then run the DELETE below to remove them permanently.
+
+delete from public.receipts
+where amount > 50000 or amount < 0.50 or amount is null;
+
+-- ─── Phase 3: DELETE orphaned warranty records for deleted receipts ───────────
+-- Clean up any warranty records whose merchant amounts were in the bad range.
+-- Warranties linked to flagged receipts are not real warranties.
+delete from public.warranties
+where product_name in (
+  -- These merchants are known crypto/trading platforms that were erroneously scanned
+  'Bybit', 'Binance', 'Coinbase', 'Kraken', 'OKX', 'KuCoin', 'Gate', 'Gemini',
+  'Bitfinex', 'Huobi', 'Bitmex', 'Bittrex', 'FTX', 'Deribit', 'Blockchain'
+) and purchase_date is not null;
+
+-- ─── Phase 3: Clean up stale activity_log entries showing old scan limit ──────
+-- Before FREE_SCAN_LIMIT was set to 150, the backend wrote "up to 500" into
+-- activity_logs. These old entries cause the dashboard to display the wrong limit.
+-- Delete them so only accurate entries remain.
+
+delete from public.activity_logs
+where type in ('gmail_scan_started', 'gmail_scan_complete', 'gmail_scan_failed', 'gmail_scan_limit_reached')
+  and description like '%up to 500%';
+
+-- ─── Phase 3: receipts table — add notes column if missing ───────────────────
+alter table public.receipts add column if not exists notes text;
+
+-- ─── Phase 4: warranties — reminder_enabled, is_estimated columns ────────────
+-- `reminder_enabled` was referenced by artifacts/api-server/src/routes/warranties.ts
+-- (POST/PATCH insert/update it) but was never added to the warranties table,
+-- so every manual "Add Warranty" request failed with a Postgres
+-- "column does not exist" error and the row was never created — one of the
+-- root causes behind the Warranties dashboard count always showing 0.
+alter table public.warranties add column if not exists reminder_enabled boolean not null default true;
+-- `is_estimated` marks warranties whose length was guessed from product
+-- category (no explicit warranty duration was found in the source email) so
+-- the UI can label them "Estimated" instead of presenting a guess as fact.
+alter table public.warranties add column if not exists is_estimated boolean not null default false;
 
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

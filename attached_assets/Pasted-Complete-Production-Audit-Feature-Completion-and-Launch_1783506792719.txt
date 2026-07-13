@@ -1,0 +1,304 @@
+Complete Production Audit, Feature Completion, and Launch Readiness
+
+Do a complete production audit of ReceiptGuard. Do not guess. Verify everything using Railway runtime logs, Supabase, Paystack, Google OAuth, and live production testing.
+
+The objective is to make the app completely production-ready before launch.
+
+⸻
+
+1. Production Verification
+
+Verify the complete application end-to-end.
+	•	Verify every required Railway environment variable exists and is actually being used.
+	•	Verify every required Supabase migration has been applied.
+	•	If migrations are missing, generate the SQL and clearly tell me to run it in the Supabase SQL Editor.
+	•	Verify every background scheduler/cron job is actually running in production.
+	•	Verify every background worker starts after deployment.
+	•	Test with:
+	•	a brand-new Free account
+	•	a brand-new Pro account
+	•	my developer account
+	•	For every failed test:
+	•	include the exact Railway runtime log
+	•	identify the exact exception
+	•	fix the root cause
+	•	retest until it passes.
+
+⸻
+
+2. Gmail OAuth
+
+Completely verify Gmail integration.
+	•	Verify Google OAuth works end-to-end.
+	•	Verify Google returns the authorization code.
+	•	Verify /api/gmail/callback.
+	•	Verify tokens exchange successfully.
+	•	Verify tokens are encrypted using ENCRYPTION_KEY.
+	•	Verify tokens are stored correctly in Supabase.
+	•	Verify Gmail accounts appear inside Settings.
+	•	Verify disconnect revokes the Google token.
+	•	Verify reconnect works.
+	•	Verify rescan works.
+	•	Verify reconnect after disconnect works.
+
+Use Railway runtime logs instead of guessing.
+
+⸻
+
+3. Gmail Scanning
+
+Completely verify Gmail receipt scanning.
+
+When a user connects Gmail:
+	•	Scan existing emails.
+	•	Import receipts.
+	•	Import warranties.
+	•	Import subscriptions.
+	•	Import invoices.
+	•	Import order confirmations.
+	•	Avoid duplicates.
+	•	Save scan history.
+
+After Gmail is connected:
+	•	Automatically scan newly arriving emails.
+	•	Continue scanning in the background.
+	•	Respect Free and Pro limits.
+	•	Never re-import already imported emails.
+	•	Use incremental syncing where possible.
+
+Verify this works completely.
+
+⸻
+
+4. Email System
+
+Completely implement production email.
+
+If Resend already exists:
+	•	configure it properly.
+
+Otherwise:
+	•	configure SMTP.
+
+Verify production sending for:
+	•	Feedback emails
+	•	Support emails
+	•	Password reset emails
+	•	Warranty reminder emails
+	•	Subscription reminder emails
+	•	Receipt reminder emails
+	•	Welcome emails
+	•	Gmail connection confirmation emails
+
+Verify feedback and support emails arrive at:
+
+receiptguard01@gmail.com
+
+Verify reminder emails actually send.
+
+⸻
+
+5. Notifications
+
+Verify:
+	•	in-app notifications
+	•	email notifications
+	•	reminder notifications
+	•	unread count
+	•	notification bell
+	•	notification persistence
+
+Verify reminder schedules:
+	•	warranty reminders
+	•	subscription reminders
+	•	receipt reminders
+
+Verify users receive notifications correctly.
+
+⸻
+
+6. Settings
+
+Audit every Settings page.
+
+Verify:
+	•	language
+	•	currency
+	•	timezone
+	•	notification preferences
+	•	Gmail settings
+	•	profile
+	•	security
+
+Every setting must:
+	•	save
+	•	reload correctly
+	•	persist after logout
+	•	persist after deployment
+
+Fix every issue.
+
+⸻
+
+7. Billing & Paystack
+
+Completely audit Paystack.
+
+Verify:
+	•	checkout
+	•	payment initialization
+	•	verification
+	•	webhook
+	•	upgrades
+	•	downgrades
+	•	renewals
+	•	cancellations
+	•	failed payments
+
+Monthly subscriptions:
+	•	automatically downgrade to Free after expiration.
+
+Yearly subscriptions:
+	•	automatically downgrade to Free after expiration.
+
+Verify expired users immediately lose Pro features.
+
+Verify active users keep Pro until expiration.
+
+Verify webhook retries.
+
+⸻
+
+8. Admin Dashboard
+
+Verify the admin dashboard.
+
+Implement anything missing.
+
+Admin should be able to view:
+	•	all users
+	•	subscription status
+	•	payment history
+	•	connected Gmail accounts
+	•	receipts
+	•	warranties
+	•	subscriptions
+	•	feedback
+	•	support tickets
+	•	activity logs
+	•	notification logs
+	•	scan logs
+
+Allow searching and filtering.
+
+⸻
+
+9. Free vs Pro Plans
+
+Completely redesign the billing plans.
+
+The billing page must clearly show exactly what Free and Pro include.
+
+Implement the limits on the backend, not only the frontend.
+
+Free Plan
+	•	1 Gmail account
+	•	Scan up to 75–100 existing emails during initial import
+	•	Automatic Gmail rescan every 24 hours
+	•	Maximum 100 receipts
+	•	Maximum 10 warranties
+	•	Maximum 5 subscriptions
+	•	Basic email reminders
+	•	Basic dashboard
+	•	Limited OCR/AI scans
+	•	No export
+	•	No advanced analytics
+
+Pro Plan
+	•	Unlimited Gmail accounts
+	•	Scan up to 10,000 emails (or highest safe limit)
+	•	Automatic Gmail rescans every 15–30 minutes
+	•	Unlimited receipts
+	•	Unlimited warranties
+	•	Unlimited subscriptions
+	•	Unlimited OCR/AI
+	•	Unlimited reminders
+	•	Export
+	•	Advanced analytics
+	•	Priority background scanning
+	•	Premium features
+
+When users exceed the Free limits:
+	•	clearly explain why
+	•	show the remaining quota
+	•	allow upgrading without errors
+
+⸻
+
+10. Billing Page
+
+Update the billing page.
+
+It should clearly compare:
+
+Free vs Pro.
+
+Include:
+	•	every feature
+	•	every limit
+	•	upgrade button
+	•	current plan
+	•	renewal date
+	•	expiration date
+	•	remaining limits
+	•	usage progress bars
+
+The page should look polished and production-ready.
+
+⸻
+
+11. Feature Matrix
+
+Generate a complete feature matrix showing:
+	•	every Free feature
+	•	every Pro feature
+	•	every limit
+	•	where each limit is enforced
+	•	frontend
+	•	backend
+	•	database
+	•	how every limit is tested
+
+⸻
+
+12. Production Verification
+
+Before finishing:
+	•	test everything end-to-end
+	•	use Railway runtime logs
+	•	use Supabase
+	•	use Paystack
+	•	use Google OAuth
+	•	verify production behavior
+	•	fix every remaining production issue
+
+Do not assume anything works.
+
+Verify it.
+
+⸻
+
+13. Final Report
+
+When finished provide:
+	•	Every issue found
+	•	Root cause
+	•	Files changed
+	•	Database migrations added
+	•	Railway environment variables required
+	•	Google Cloud changes required
+	•	Paystack changes required
+	•	Tests performed
+	•	Remaining manual steps (if any)
+	•	Git commit hash
+	•	Confirmation that everything was committed and pushed to GitHub.

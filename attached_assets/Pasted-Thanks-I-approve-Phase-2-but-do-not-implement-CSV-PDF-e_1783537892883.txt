@@ -1,0 +1,194 @@
+Thanks. I approve Phase 2, but do not implement CSV/PDF export yet. Focus on correctness, reliability, monetization, and production readiness first.
+
+Implement the items below in priority order.
+
+Priority 1 — Critical Production Bugs
+	1.	Fix the Gmail scan bypass of the Free receipt storage limit.
+
+	•	Gmail imports must respect the Free receipt limit.
+	•	Existing receipts must never be deleted.
+	•	When the Free limit is reached:
+	•	stop importing new receipts,
+	•	continue scanning newer emails,
+	•	clearly tell the user why imports stopped,
+	•	explain that upgrading to Pro removes the limit,
+	•	show an attractive Upgrade to Pro action.
+
+	2.	Fix recurring Paystack renewals.
+
+	•	Successful recurring renewals must extend current_period_end.
+	•	Handle the correct recurring Paystack webhook events.
+	•	Prevent paying users from being downgraded incorrectly.
+	•	Preserve billing history.
+
+	3.	Fix the dashboard Gmail status so gmailConnected reflects the actual connected Gmail accounts instead of always returning false.
+
+⸻
+
+Priority 2 — Improve the Free & Pro Plans
+
+Redesign the plans to create stronger upgrade incentives.
+
+Recommend and implement sensible limits.
+
+My preferred direction is approximately:
+
+Free
+	•	1 Gmail account
+	•	Initial scan around 100–150 Gmail messages
+	•	Background scans continue automatically but only for new emails since the last successful scan
+	•	Maximum 50 stored receipts
+	•	Maximum 5 subscriptions
+	•	Maximum 5 warranties
+	•	Basic reminders
+	•	Basic dashboard
+	•	No exports
+	•	No advanced analytics
+
+Pro
+	•	Unlimited Gmail accounts
+	•	Full mailbox scan
+	•	Unlimited receipts
+	•	Unlimited subscriptions
+	•	Unlimited warranties
+	•	Advanced dashboard
+	•	Advanced analytics
+	•	Exports
+	•	Priority scanning
+	•	Future AI features
+
+Never silently block users.
+
+Always explain:
+	•	which limit they reached,
+	•	what Pro unlocks,
+	•	why upgrading helps.
+
+⸻
+
+Priority 3 — Gmail Scanner
+
+Continue improving the scanner.
+
+Audit and improve:
+	•	amount extraction
+	•	merchant extraction
+	•	currency detection
+	•	decimal parsing
+	•	international number formats
+	•	duplicate detection
+	•	subscription detection
+	•	warranty detection
+	•	category detection
+	•	receipt totals
+
+Specifically:
+	•	Ignore crypto balances.
+	•	Ignore trading quantities.
+	•	Ignore transaction IDs.
+	•	Ignore account balances.
+	•	Ignore order IDs.
+	•	Prevent unrealistic totals.
+	•	Prevent malformed receipts from affecting the dashboard.
+	•	Ensure dashboard totals always equal the sum of valid stored receipts.
+
+Ensure scans remain completely idempotent.
+
+Running multiple scans must never create duplicate receipts, subscriptions, or warranties.
+
+⸻
+
+Priority 4 — Dashboard Accuracy
+
+Improve:
+	•	Monthly Spending
+	•	Money Saved
+	•	Spending Trends
+	•	Top Merchants
+	•	Charts
+
+Prevent malformed receipts from corrupting statistics.
+
+Ensure currency handling is mathematically correct.
+
+⸻
+
+Priority 5 — Reminder System
+
+Improve:
+	•	timezone handling
+	•	scheduling accuracy
+	•	duplicate prevention
+	•	email reminders
+	•	in-app reminders
+
+Reminders should never be duplicated.
+
+⸻
+
+Priority 6 — Feedback Email
+
+Continue diagnosing until feedback emails are actually delivered.
+
+Do not stop after logging.
+
+Verify:
+	•	transporter.verify()
+	•	SMTP authentication
+	•	Gmail App Password
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	sendMail()
+
+If delivery fails, log the exact SMTP response.
+
+Only mark this feature complete once emails are successfully received.
+
+⸻
+
+Priority 7 — Admin Dashboard
+
+Keep the existing admin dashboard.
+
+Improve it by adding:
+	•	Total subscriptions
+	•	Daily Active Users
+	•	Weekly Active Users
+	•	Monthly Active Users
+	•	New users today
+	•	New Pro upgrades
+	•	Churned subscriptions
+	•	Total receipts imported
+	•	Scan success rate
+	•	Failed Gmail scans
+	•	Revenue charts
+	•	Better payment analytics
+
+Do not replace the existing dashboard.
+
+⸻
+
+Priority 8 — Production Error Handling
+
+Replace generic “Internal Error” responses with meaningful user-friendly messages while keeping sensitive server details hidden.
+
+⸻
+
+Final Verification
+
+After all implementation is complete:
+	•	audit the updated application again,
+	•	verify every feature works correctly,
+	•	list every file modified,
+	•	list every backend improvement,
+	•	list every frontend improvement,
+	•	list every billing improvement,
+	•	list every Free/Pro limit changed,
+	•	list every bug fixed,
+	•	list any database migrations required,
+	•	and clearly state whether ReceiptGuard is production-ready or whether anything still needs attention.
+
+Do not begin CSV/PDF export until all of the above is complete.

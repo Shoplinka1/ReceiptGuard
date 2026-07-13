@@ -1,0 +1,160 @@
+Do not move on to anything else until the highest-priority production issues are completely resolved.
+
+The previous task did not complete the requested work. The most critical launch blocker (Gmail scanning importing 0 emails) is still broken.
+
+Continue the stabilization work and do not stop until every item below is fixed, tested, and verified.
+
+Priority 1 — Restore Gmail Scanning (Highest Priority)
+
+The application currently shows:
+	•	Scanning 0 messages
+	•	Scan complete: 0 imported, 0 skipped, 0 failed (of 0 candidates)
+
+This is a launch blocker.
+
+Perform a complete root-cause investigation.
+
+Audit every part of the pipeline:
+	•	Gmail OAuth
+	•	Refresh tokens
+	•	Access token refresh
+	•	OAuth scopes
+	•	Gmail API permissions
+	•	Google Cloud OAuth configuration
+	•	Gmail search query
+	•	Gmail labels
+	•	Gmail API responses
+	•	Scan endpoint
+	•	Scheduler/background jobs
+	•	Cron jobs
+	•	Queue processing
+	•	Gmail connection state
+	•	Connected account validation
+	•	Gmail parser
+	•	Receipt filters
+	•	Duplicate detection
+	•	Production environment variables
+	•	Railway configuration
+	•	Vercel configuration
+
+Add detailed structured logging around every Gmail API request and parsing step.
+
+If scanning returns zero candidates, log exactly why.
+
+Do not assume configuration is correct—verify it.
+
+Scanning must successfully import real receipt emails again.
+
+⸻
+
+Priority 2 — Receipt Parsing
+
+Perform a full audit of the parsing pipeline.
+
+Verify:
+	•	merchant extraction
+	•	amount extraction
+	•	currency detection
+	•	date extraction
+	•	tax handling
+	•	duplicate detection
+	•	malformed email rejection
+	•	parser fallbacks
+
+Reject invalid receipts before saving.
+
+Never allow impossible amounts into the database.
+
+⸻
+
+Priority 3 — Dashboard Accuracy
+
+Audit every dashboard calculation.
+
+Verify:
+	•	Monthly Spending
+	•	Spending Trend
+	•	Money Saved
+	•	Top Merchants
+	•	Active Subscriptions
+	•	Receipt Count
+	•	Warranties
+
+Analytics must only use validated receipts.
+
+⸻
+
+Priority 4 — Top Merchants
+
+Investigate why impossible values such as:
+
+Bybit — $707,463.01
+
+were previously generated.
+
+Audit:
+	•	aggregation queries
+	•	SQL
+	•	filters
+	•	validAmount()
+	•	migrations
+	•	production data
+
+Prevent malformed receipts from affecting analytics again.
+
+⸻
+
+Priority 5 — Production Configuration Audit
+
+Do not assume Railway, Vercel, Supabase, Google Cloud, or Paystack are configured correctly.
+
+Audit every required environment variable.
+
+Verify all secrets.
+
+Identify anything missing or incorrect.
+
+If you cannot verify something because a secret is unavailable, explicitly list:
+	•	which secret is required
+	•	why it is required
+	•	exactly what cannot be tested without it
+
+Do not simply say “I couldn’t test.”
+
+⸻
+
+Priority 6 — Feedback Emails
+
+Feedback saves but emails never arrive.
+
+Verify:
+	•	SMTP
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	transporter.verify()
+	•	sendEmail()
+	•	logging
+
+Never silently swallow email failures.
+
+⸻
+
+Priority 7 — Production Verification
+
+Do not report completion based only on code changes.
+
+For every issue provide:
+	1.	Root cause
+	2.	Files changed
+	3.	Why it happened
+	4.	How it was fixed
+	5.	How it was tested
+	6.	Production verification
+	7.	Remaining limitations
+
+If Gmail scanning is still importing 0 emails, the task is not complete.
+
+Do not start new features until all launch blockers above have been resolved.

@@ -24,6 +24,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "firstName": zod.string(),
   "monthlySpending": zod.number(),
   "totalReceipts": zod.number(),
+  "validReceiptCount": zod.number().optional().describe('Receipts with a plausible amount ($0.50-$50,000) — the same filter used by Monthly Spending, Spending Trend, and Top Merchants. Use this for \"how many receipts do I actually have\" rather than totalReceipts, which includes malformed\/rejected rows still stored for audit purposes.'),
   "activeSubscriptions": zod.number(),
   "upcomingRenewalsCount": zod.number(),
   "activeWarranties": zod.number(),
@@ -367,6 +368,8 @@ export const ListWarrantiesResponseItem = zod.object({
   "warrantyEndDate": zod.string(),
   "daysRemaining": zod.number(),
   "status": zod.enum(['active', 'expiring_soon', 'expired']),
+  "warrantyMonths": zod.number().nullish(),
+  "isEstimated": zod.boolean().optional().describe('True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this \"Estimated\".'),
   "reminderEnabled": zod.boolean().optional(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -394,6 +397,8 @@ export const CreateWarrantyResponse = zod.object({
   "warrantyEndDate": zod.string(),
   "daysRemaining": zod.number(),
   "status": zod.enum(['active', 'expiring_soon', 'expired']),
+  "warrantyMonths": zod.number().nullish(),
+  "isEstimated": zod.boolean().optional().describe('True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this \"Estimated\".'),
   "reminderEnabled": zod.boolean().optional(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -415,6 +420,8 @@ export const GetWarrantyResponse = zod.object({
   "warrantyEndDate": zod.string(),
   "daysRemaining": zod.number(),
   "status": zod.enum(['active', 'expiring_soon', 'expired']),
+  "warrantyMonths": zod.number().nullish(),
+  "isEstimated": zod.boolean().optional().describe('True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this \"Estimated\".'),
   "reminderEnabled": zod.boolean().optional(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()
@@ -432,6 +439,7 @@ export const UpdateWarrantyBody = zod.object({
   "productName": zod.string().optional(),
   "merchantName": zod.string().optional(),
   "warrantyEndDate": zod.string().optional(),
+  "warrantyMonths": zod.number().optional(),
   "reminderEnabled": zod.boolean().optional(),
   "notes": zod.string().optional()
 })
@@ -444,6 +452,8 @@ export const UpdateWarrantyResponse = zod.object({
   "warrantyEndDate": zod.string(),
   "daysRemaining": zod.number(),
   "status": zod.enum(['active', 'expiring_soon', 'expired']),
+  "warrantyMonths": zod.number().nullish(),
+  "isEstimated": zod.boolean().optional().describe('True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this \"Estimated\".'),
   "reminderEnabled": zod.boolean().optional(),
   "notes": zod.string().nullish(),
   "createdAt": zod.string()

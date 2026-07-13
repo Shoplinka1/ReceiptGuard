@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/query-client';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from './components/theme-provider';
 import { AuthProvider } from './hooks/use-auth';
@@ -34,16 +35,6 @@ const AdminPage = lazy(() => import('./pages/admin'));
 const FeedbackPage = lazy(() => import('./pages/feedback'));
 const SearchPage = lazy(() => import('./pages/search'));
 const SupportPage = lazy(() => import('./pages/support'));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
-});
 
 function PageLoader() {
   return (
@@ -122,7 +113,7 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>

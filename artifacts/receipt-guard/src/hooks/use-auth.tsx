@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { setAuthTokenGetter } from '@workspace/api-client-react';
+import { queryClient } from '../lib/query-client';
 
 interface AuthContextValue {
   user: User | null;
@@ -76,8 +77,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    // Fix for "user must never remain authenticated after signing out":
+    // previously this only called supabase.auth.signOut() and left the React
+    // Query cache (dashboard/receipts/settings data) and any app-written
+    // localStorage keys in place. A slow network or a thrown error here also
+    // used to leave the UI in a stale "still logged in" state since nothing
+    // downstream forced a re-render. We now always clear local state — cache,
+    // storage, and React state — even if the Supabase call itself fails, then
+    // rethrow so callers can still show an error toast.
+    let signOutError: unknown = null;
+    try {
+      const { error } = await supabase.auth.signOut();
+      signOutError = error;
+    } catch (err) {
+      signOutError = err;
+    } finally {
+      queryClient.clear();
+      try {
+        // Only clear Supabase's own auth-token keys (sb-<project-ref>-auth-token,
+        // and legacy `supabase.auth.token`). Clearing ALL of localStorage would
+        // also wipe next-themes' theme preference and any other benign,
+        // non-auth prefs that should survive logout.
+        for (let i = window.localStorage.length - 1; i >= 0; i--) {
+          const key = window.localStorage.key(i);
+          if (key && (key.startsWith('sb-') || key === 'supabase.auth.token')) {
+            window.localStorage.removeItem(key);
+          }
+        }
+      } catch { /* storage may be unavailable (e.g. private mode) — non-fatal */ }
+      setSession(null);
+      setUser(null);
+    }
+    if (signOutError) throw signOutError;
   }, []);
 
   const sendPasswordReset = useCallback(async (email: string) => {

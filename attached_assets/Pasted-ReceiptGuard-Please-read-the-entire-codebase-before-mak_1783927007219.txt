@@ -1,0 +1,130 @@
+ReceiptGuard
+
+Please read the entire codebase before making any changes.
+
+Current production status
+
+Production frontend:
+
+https://receipt-guard-receipt-guard.vercel.app
+
+Backend:
+
+Railway
+
+⸻
+
+Current /admin error
+
+When visiting /admin I get:
+
+Admin access check failed
+HTTP 500: Could not create profile.
+
+Previously it was: HTTP 404: Profile not found.
+
+The previous investigation concluded:
+	•	Google OAuth creates an auth.users record.
+	•	No matching profiles row is created.
+	•	The backend now attempts to auto-create the profile.
+	•	Auto-create fails.
+
+The previous agent believed the root cause is that several tables still reference auth.users(id) instead of profiles(id) and that PostgREST cannot build the required relationships.
+
+It said the fix would require:
+	•	updating supabase/schema.sql
+	•	updating supabase/migration.sql
+	•	creating a Phase 7 migration
+	•	generating the SQL migration
+	•	then applying it in Supabase.
+
+Unfortunately it ran out of credits before producing the SQL.
+
+⸻
+
+Your tasks
+	1.	Read the entire codebase.
+	2.	Confirm whether the previous diagnosis is actually correct.
+	3.	If correct:
+	•	Generate the COMPLETE SQL migration.
+	•	Do NOT summarize it.
+	•	Output the FULL SQL.
+	4.	If incorrect:
+	•	Explain the actual root cause.
+	•	Generate the correct SQL migration instead.
+	5.	Update any backend/frontend code that must change.
+	6.	Commit all code changes.
+	7.	Push everything to GitHub.
+	8.	Verify Railway deployment.
+	9.	Verify Vercel deployment.
+	10.	Confirm /admin works.
+	11.	Confirm the feedback system still works.
+	12.	Confirm Gmail OAuth still works.
+
+Do not stop until you’ve identified the real root cause.
+
+⸻
+
+Additional production issues that also need fixing
+
+1. Admin Dashboard
+
+Admin dashboard access is still broken.
+
+Completely fix the admin authentication flow and verify it works in production.
+
+⸻
+
+2. Dashboard Subscription widget
+
+The Billing/Subscription page still exists under Settings.
+
+However, the Subscription/Premium widget/card on the Dashboard home page is missing.
+
+Please:
+	•	Compare the current Dashboard with the intended design.
+	•	Restore the Dashboard subscription card.
+	•	It should display:
+	•	Current Plan
+	•	Subscription status
+	•	Trial/Renewal information
+	•	Upgrade button when on the Free plan
+	•	Verify the information comes from the production subscription API.
+	•	Do not hardcode any values.
+
+⸻
+
+3. Railway ENCRYPTION_KEY
+
+The production app is logging these errors:
+	•	ENCRYPTION_KEY env var is missing or is not a valid 64-character hex string
+	•	Invalid key length
+	•	Failed to refresh Gmail token. User must reconnect Gmail.
+
+Please:
+	•	Find the exact encryption implementation.
+	•	Determine the required ENCRYPTION_KEY format.
+	•	If it must be a 64-character hexadecimal key, generate one.
+	•	Tell me the exact Railway environment variable name and value format I need to add.
+	•	Verify Gmail token encryption/decryption works afterward.
+	•	Verify Gmail refresh works again.
+
+⸻
+
+Production verification checklist
+
+Before marking the task complete, verify all of these in production with evidence:
+	•	✅ /admin opens correctly.
+	•	✅ Admin can view feedback.
+	•	✅ Admin can reply to feedback.
+	•	✅ Admin can delete feedback.
+	•	✅ Admin can mark feedback as resolved.
+	•	✅ Feedback is always saved to the database even if email delivery fails.
+	•	✅ Gmail OAuth works.
+	•	✅ Gmail reconnect works.
+	•	✅ Dashboard subscription widget is restored.
+	•	✅ Billing/Subscription pages still work.
+	•	✅ Railway deployment is healthy.
+	•	✅ Vercel deployment is healthy.
+
+If any issue remains, continue debugging until the production application is fully functional. Do not stop after finding one issue if others are still unresolved.

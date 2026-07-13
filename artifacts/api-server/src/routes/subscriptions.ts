@@ -4,10 +4,11 @@ import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
+const FREE_SUB_LIMIT = 5;
+
 function mapSub(s: any) {
   return {
     id: s.id,
-    // Schema uses `name`; fall back to `company_name` for rows inserted before the migration
     companyName: s.name ?? s.company_name,
     companyLogoUrl: s.merchant_logo_url ?? s.company_logo_url ?? null,
     monthlyPrice: Number(s.monthly_price), yearlyPrice: s.yearly_price ? Number(s.yearly_price) : null,
@@ -27,7 +28,7 @@ router.get('/api/subscriptions', requireAuth, async (req, res): Promise<void> =>
   query = query.order(sortBy as any, { ascending: sortDir === 'asc' });
 
   const { data, error } = await query;
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to load subscriptions. Please try again.' }); return; }
 
   let items = (data ?? []).map(mapSub);
   if (search) items = items.filter(s => (s.companyName ?? '').toLowerCase().includes(search.toLowerCase()));
@@ -36,28 +37,37 @@ router.get('/api/subscriptions', requireAuth, async (req, res): Promise<void> =>
 
 router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> => {
   const { companyName, companyLogoUrl, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
-  if (!companyName || monthlyPrice == null || !renewalDate || !category) { res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' }); return; }
+  if (!companyName || monthlyPrice == null || !renewalDate || !category) {
+    res.status(400).json({ error: 'companyName, monthlyPrice, renewalDate, and category are required' });
+    return;
+  }
 
   // Free plan: max 5 active subscriptions
   const { data: profile } = await supabaseAdmin.from('profiles').select('plan_id').eq('id', req.userId).single();
   if (profile?.plan_id !== 'pro') {
-    const { count } = await supabaseAdmin.from('subscriptions').select('*', { count: 'exact', head: true }).eq('user_id', req.userId).eq('status', 'active');
-    if ((count ?? 0) >= 5) {
-      res.status(403).json({ error: 'Free plan limit reached (5 active subscriptions). Upgrade to Pro for unlimited.', limitReached: true, limit: 5 });
+    const { count } = await supabaseAdmin.from('subscriptions')
+      .select('*', { count: 'exact', head: true }).eq('user_id', req.userId).eq('status', 'active');
+    if ((count ?? 0) >= FREE_SUB_LIMIT) {
+      res.status(403).json({
+        error: `You've reached the Free plan limit of ${FREE_SUB_LIMIT} active subscriptions. Upgrade to Pro for unlimited subscription tracking.`,
+        limitReached: true,
+        limit: FREE_SUB_LIMIT,
+        feature: 'subscriptions',
+      });
       return;
     }
   }
 
   const { data, error } = await supabaseAdmin.from('subscriptions').insert({
     user_id: req.userId,
-    name: companyName,           // schema column is `name`
+    name: companyName,
     merchant_logo_url: companyLogoUrl ?? null,
     monthly_price: monthlyPrice, yearly_price: yearlyPrice ?? null, billing_cycle: billingCycle ?? 'monthly',
     renewal_date: renewalDate, status: status ?? 'active', category,
     reminder_enabled: reminderEnabled ?? true, notes: notes ?? null,
   }).select().single();
 
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to save subscription. Please try again.' }); return; }
   res.status(201).json(mapSub(data));
 });
 
@@ -75,9 +85,12 @@ router.get('/api/subscriptions/breakdown', requireAuth, async (req, res): Promis
   }
   res.json({
     monthlyCount: monthly.length, yearlyCount: yearly.length,
-    monthlyTotal: Math.round(monthlyTotal * 100) / 100, yearlyTotal: Math.round(yearlyTotal * 100) / 100,
+    monthlyTotal: Math.round(monthlyTotal * 100) / 100,
+    yearlyTotal: Math.round(yearlyTotal * 100) / 100,
     grandMonthlyEquivalent: Math.round((monthlyTotal + yearlyTotal / 12) * 100) / 100,
-    categoryBreakdown: Array.from(catMap.entries()).map(([category, v]) => ({ category, total: Math.round(v.total * 100) / 100, count: v.count })),
+    categoryBreakdown: Array.from(catMap.entries()).map(([category, v]) => ({
+      category, total: Math.round(v.total * 100) / 100, count: v.count,
+    })),
   });
 });
 
@@ -90,7 +103,7 @@ router.get('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void
 router.patch('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
   const { companyName, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
   const updates: Record<string, any> = {};
-  if (companyName) updates.name = companyName;  // schema column is `name`
+  if (companyName) updates.name = companyName;
   if (monthlyPrice) updates.monthly_price = monthlyPrice;
   if (yearlyPrice !== undefined) updates.yearly_price = yearlyPrice;
   if (billingCycle) updates.billing_cycle = billingCycle;
@@ -108,7 +121,7 @@ router.patch('/api/subscriptions/:id', requireAuth, async (req, res): Promise<vo
 
 router.delete('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
   const { error } = await supabaseAdmin.from('subscriptions').delete().eq('id', req.params.id).eq('user_id', req.userId);
-  if (error) { res.status(500).json({ error: error.message }); return; }
+  if (error) { res.status(500).json({ error: 'Failed to delete subscription. Please try again.' }); return; }
   res.sendStatus(204);
 });
 

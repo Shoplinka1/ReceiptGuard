@@ -18,11 +18,41 @@ router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => 
 
 router.patch('/api/user/profile', requireAuth, async (req, res): Promise<void> => {
   const { name, avatarUrl } = req.body;
-  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+
+  // Root cause of "Cannot coerce the result to a single JSON object": this used
+  // `.update().select().single()`. If the profiles row didn't exist yet for this
+  // user (e.g. the auth-trigger row-create hadn't run, or the row was deleted),
+  // UPDATE matches 0 rows and PostgREST's `.single()` throws PGRST116 — whose raw
+  // message was being forwarded straight to the client. Upserting guarantees a
+  // row exists, and `.maybeSingle()` never throws for 0/1 rows.
+  let existingEmail: string | null = null;
+  const { data: existingProfile } = await supabaseAdmin.from('profiles').select('email').eq('id', req.userId).maybeSingle();
+  existingEmail = existingProfile?.email ?? null;
+
+  if (!existingEmail) {
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(req.userId);
+    existingEmail = authData?.user?.email ?? '';
+  }
+
+  const updates: Record<string, any> = {
+    id: req.userId,
+    email: existingEmail ?? '',
+    updated_at: new Date().toISOString(),
+  };
   if (name) updates.full_name = name;
   if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
-  const { data, error } = await supabaseAdmin.from('profiles').update(updates).eq('id', req.userId).select().single();
-  if (error || !data) { res.status(500).json({ error: error?.message ?? 'Update failed' }); return; }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .upsert(updates, { onConflict: 'id' })
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    logger.error({ error: error?.message, userId: req.userId }, '[user] profile upsert failed');
+    res.status(500).json({ error: error?.message ?? 'Update failed' });
+    return;
+  }
   res.json({ id: data.id, name: data.full_name, email: data.email, avatarUrl: data.avatar_url ?? null, plan: data.plan_id, createdAt: data.created_at });
 });
 
@@ -68,14 +98,19 @@ router.patch('/api/user/settings', requireAuth, async (req, res): Promise<void> 
   if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
     res.status(500).json({ error: error.message }); return;
   }
-  // Return only what was actually persisted so the UI doesn't cache values that were dropped
+  // Return the actual persisted row instead of fabricating a response from the
+  // request body — the request body only ever contains the fields the caller
+  // changed, so echoing it back (with defaults for the rest) would misrepresent
+  // every field the caller didn't touch.
+  const { data: persisted } = await supabaseAdmin.from('settings').select('*').eq('user_id', req.userId).maybeSingle();
   res.json({
-    theme: theme ?? 'system',
-    currency: currency ?? 'USD',
-    timezone: timezone ?? 'UTC',
-    language: usedCoreOnly ? undefined : (language ?? 'en'),
-    emailNotifications,
-    browserNotifications: usedCoreOnly ? undefined : browserNotifications,
+    id: req.userId, userId: req.userId,
+    theme: persisted?.theme ?? 'system',
+    currency: persisted?.currency ?? 'USD',
+    timezone: persisted?.timezone ?? 'UTC',
+    language: usedCoreOnly ? undefined : (persisted?.language ?? 'en'),
+    emailNotifications: persisted?.email_notifications ?? true,
+    browserNotifications: usedCoreOnly ? undefined : (persisted?.browser_notifications ?? true),
   });
 });
 

@@ -21,6 +21,8 @@ export interface DashboardSummary {
   firstName: string;
   monthlySpending: number;
   totalReceipts: number;
+  /** Receipts with a plausible amount ($0.50-$50,000) — the same filter used by Monthly Spending, Spending Trend, and Top Merchants. Use this for "how many receipts do I actually have" rather than totalReceipts, which includes malformed/rejected rows still stored for audit purposes. */
+  validReceiptCount?: number;
   activeSubscriptions: number;
   upcomingRenewalsCount: number;
   activeWarranties: number;
@@ -234,6 +236,10 @@ export interface Warranty {
   warrantyEndDate: string;
   daysRemaining: number;
   status: WarrantyStatus;
+  /** @nullable */
+  warrantyMonths?: number | null;
+  /** True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this "Estimated". */
+  isEstimated?: boolean;
   reminderEnabled?: boolean;
   /** @nullable */
   notes?: string | null;
@@ -253,6 +259,7 @@ export interface WarrantyUpdate {
   productName?: string;
   merchantName?: string;
   warrantyEndDate?: string;
+  warrantyMonths?: number;
   reminderEnabled?: boolean;
   notes?: string;
 }

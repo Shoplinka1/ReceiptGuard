@@ -114,6 +114,7 @@ export default function BillingPage() {
           refetchProfile()
           qc.invalidateQueries({ queryKey: ['payments', 'history'] })
           qc.invalidateQueries({ queryKey: ['user', 'usage'] })
+          qc.invalidateQueries({ queryKey: ['sub', 'details'] })
         } else {
           toast.info('Payment is being processed. Your plan will update shortly.')
         }
@@ -131,6 +132,14 @@ export default function BillingPage() {
     queryKey: ['user', 'usage'],
     queryFn: () => apiFetch('/api/user/usage'),
     retry: false,
+  })
+
+  // Fetch active subscription details (period end, cancel status) — Pro only
+  const { data: subDetails } = useQuery({
+    queryKey: ['sub', 'details'],
+    queryFn: () => apiFetch('/api/paystack/subscription'),
+    retry: false,
+    enabled: isPro,
   })
 
   const initCheckout = useMutation({
@@ -153,6 +162,7 @@ export default function BillingPage() {
     onSuccess: () => {
       toast.success('Subscription cancelled. You keep Pro until the end of the billing period.')
       refetchProfile()
+      qc.invalidateQueries({ queryKey: ['sub', 'details'] })
     },
     onError: (e: any) => toast.error(e.message),
   })
@@ -194,6 +204,19 @@ export default function BillingPage() {
               )}
             </div>
 
+            {/* Subscription renewal info — Pro only */}
+            {isPro && subDetails && (
+              <div className="text-sm text-muted-foreground space-y-1 mb-2">
+                {subDetails.current_period_end && (
+                  <p>
+                    {subDetails.cancel_at_period_end
+                      ? <>Cancelled — access ends <strong className="text-foreground">{new Date(subDetails.current_period_end).toLocaleDateString()}</strong></>
+                      : <>Next renewal: <strong className="text-foreground">{new Date(subDetails.current_period_end).toLocaleDateString()}</strong></>}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Usage bars — free plan only */}
             {!isPro && (
               <div className="bg-secondary/40 rounded-xl p-4 border border-border space-y-3">
@@ -202,10 +225,10 @@ export default function BillingPage() {
                   <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-6 w-full" />)}</div>
                 ) : (
                   <>
-                    <UsageBar label="Receipts"      used={usage?.receipts.used ?? 0}      limit={usage?.receipts.limit ?? 100}      icon={Receipt}    />
-                    <UsageBar label="Subscriptions" used={usage?.subscriptions.used ?? 0} limit={usage?.subscriptions.limit ?? 5}   icon={Repeat}     />
-                    <UsageBar label="Warranties"    used={usage?.warranties.used ?? 0}    limit={usage?.warranties.limit ?? 10}     icon={ShieldCheck} />
-                    <UsageBar label="Gmail accounts" used={usage?.gmailAccounts.used ?? 0} limit={usage?.gmailAccounts.limit ?? 1} icon={Mail}       />
+                    <UsageBar label="Receipts"       used={usage?.receipts.used ?? 0}      limit={usage?.receipts.limit ?? 100}     icon={Receipt}    />
+                    <UsageBar label="Subscriptions"  used={usage?.subscriptions.used ?? 0} limit={usage?.subscriptions.limit ?? 5}  icon={Repeat}     />
+                    <UsageBar label="Warranties"     used={usage?.warranties.used ?? 0}    limit={usage?.warranties.limit ?? 10}    icon={ShieldCheck} />
+                    <UsageBar label="Gmail accounts" used={usage?.gmailAccounts.used ?? 0} limit={usage?.gmailAccounts.limit ?? 1}  icon={Mail}       />
                   </>
                 )}
               </div>
@@ -266,17 +289,21 @@ export default function BillingPage() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" onClick={() => initCheckout.mutate()} disabled={initCheckout.isPending}>
-                  Manage Subscription
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => cancelSub.mutate()}
-                  disabled={cancelSub.isPending}
-                >
-                  {cancelSub.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : 'Cancel Subscription'}
-                </Button>
+                {!(subDetails as any)?.cancel_at_period_end && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => cancelSub.mutate()}
+                    disabled={cancelSub.isPending}
+                  >
+                    {cancelSub.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : 'Cancel Subscription'}
+                  </Button>
+                )}
+                {(subDetails as any)?.cancel_at_period_end && (
+                  <p className="text-sm text-muted-foreground self-center">
+                    Your subscription is cancelled and will not renew.
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -370,7 +397,7 @@ export default function BillingPage() {
                 {(paymentHistory as any[]).map((p: any) => (
                   <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
                     <div>
-                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
+                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${String(p.plan_id).charAt(0).toUpperCase() + String(p.plan_id).slice(1)}` : 'ReceiptGuard'}</p>
                       <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
                     </div>
                     <div className="flex items-center gap-4">

@@ -704,6 +704,9 @@ components:
           type: number
         totalReceipts:
           type: integer
+        validReceiptCount:
+          type: integer
+          description: Receipts with a plausible amount ($0.50-$50,000) — the same filter used by Monthly Spending, Spending Trend, and Top Merchants. Use this for "how many receipts do I actually have" rather than totalReceipts, which includes malformed/rejected rows still stored for audit purposes.
         activeSubscriptions:
           type: integer
         upcomingRenewalsCount:
@@ -988,6 +991,11 @@ components:
         status:
           type: string
           enum: [active, expiring_soon, expired]
+        warrantyMonths:
+          type: ["integer", "null"]
+        isEstimated:
+          type: boolean
+          description: True when warrantyMonths was guessed from the product category (no explicit duration was found in the source email) rather than confirmed — the UI must label this "Estimated".
         reminderEnabled:
           type: boolean
         notes:
@@ -1021,6 +1029,8 @@ components:
           type: string
         warrantyEndDate:
           type: string
+        warrantyMonths:
+          type: integer
         reminderEnabled:
           type: boolean
         notes:

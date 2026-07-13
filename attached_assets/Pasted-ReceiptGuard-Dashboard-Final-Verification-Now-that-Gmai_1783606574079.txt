@@ -1,0 +1,99 @@
+ReceiptGuard Dashboard Final Verification
+
+Now that Gmail scanning is importing receipts successfully, focus only on verifying and fixing the dashboard so it exactly matches the imported receipt data.
+
+Do not perform another broad repository audit.
+
+Verify against actual data
+
+Compare every dashboard card with the actual receipt records stored in Supabase.
+
+Audit and fix:
+	•	Monthly Spending
+	•	Spending Trend
+	•	Monthly Subs
+	•	Top Merchants
+	•	Receipt Count
+	•	Active Subscriptions
+	•	Upcoming Renewals
+	•	Warranties
+
+For every dashboard calculation:
+	•	Identify the SQL/API query used.
+	•	Compare it against the underlying receipt rows.
+	•	Ensure every card uses the same validated receipt dataset.
+	•	Exclude invalid or rejected receipts consistently.
+	•	Verify refunds are handled correctly.
+	•	Verify duplicate receipts cannot inflate totals.
+	•	Verify merchant normalization is applied consistently.
+
+Receipt parser validation
+
+If any imported receipt contains an incorrect:
+	•	merchant
+	•	amount
+	•	currency
+	•	purchase date
+	•	product
+
+trace the error back through the parsing pipeline and fix the root cause instead of masking it in dashboard calculations.
+
+Subscription verification
+
+Verify that imported subscription receipts correctly create subscriptions with:
+	•	renewal date
+	•	billing cycle
+	•	amount
+	•	status
+
+Confirm Active Subscriptions and Upcoming Renewals exactly match the stored subscription records.
+
+Warranty verification
+
+Verify:
+	•	warranty detection
+	•	estimated warranties
+	•	warranty counts
+	•	expiry calculations
+	•	reminder scheduling
+
+If warranties are missing because product detection failed, improve the parser.
+
+Final verification
+
+Run the application again.
+
+Import real Gmail receipts.
+
+Then provide a comparison showing:
+	•	actual receipt values in the database
+	•	API response values
+	•	dashboard values
+
+Every number must match.
+
+For every remaining issue provide:
+	1.	Root cause
+	2.	Files changed
+	3.	Fix implemented
+	4.	Testing performed
+	5.	Whether production verification passed or failed
+	6.	Any remaining limitations
+
+Do not mark the dashboard complete until every displayed value matches the underlying receipt data.
+
+⸻
+
+After that task is finished, move on to:
+	1.	Verify feedback emails actually reach the inbox (SMTP end-to-end test).
+	2.	Polish UI: loading states, empty states, and mobile layout (only if you still notice UI issues).
+
+From everything you’ve shared, the project has progressed a lot:
+	•	✅ Gmail scanning is importing receipts.
+	•	✅ Many parsing and billing bugs have been fixed.
+	•	✅ Subscription detection has been improved.
+	•	✅ Warranty infrastructure has been expanded.
+	•	❌ The dashboard still needs to be proven against real data.
+	•	❌ Feedback emails still need end-to-end production verification.
+
+I would not call ReceiptGuard production-ready until those last two items are verified.
