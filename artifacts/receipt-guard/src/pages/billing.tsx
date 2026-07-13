@@ -32,16 +32,13 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return res.json()
 }
 
-// Paystack charges in NGN — show Nigerian prices
-const USD_TO_NGN = 1600
+// Display prices in USD. Backend converts USD → NGN before charging via Paystack.
 const MONTHLY_USD = 5.99
 const YEARLY_USD  = 59.99
-const MONTHLY_NGN = Math.round(MONTHLY_USD * USD_TO_NGN)  // ₦9,584
-const YEARLY_NGN  = Math.round(YEARLY_USD * USD_TO_NGN)   // ₦95,984
 const YEARLY_SAVINGS_PCT = Math.round((1 - YEARLY_USD / (MONTHLY_USD * 12)) * 100)
 
-function fmtNGN(amount: number) {
-  return `₦${amount.toLocaleString('en-NG')}`
+function fmtUSD(amount: number) {
+  return `${amount.toFixed(2)}`
 }
 
 const PRO_FEATURES = [
@@ -160,8 +157,8 @@ export default function BillingPage() {
     onError: (e: any) => toast.error(e.message),
   })
 
-  const displayNGN  = billingCycle === 'yearly' ? YEARLY_NGN  : MONTHLY_NGN
-  const displayLabel = billingCycle === 'yearly' ? '/year'    : '/month'
+  const displayUSD   = billingCycle === 'yearly' ? YEARLY_USD  : MONTHLY_USD
+  const displayLabel = billingCycle === 'yearly' ? '/year'     : '/month'
 
   return (
     <AppShell>
@@ -189,7 +186,7 @@ export default function BillingPage() {
               {loadingProfile ? <Skeleton className="h-10 w-32" /> : (
                 <>
                   <span className="text-4xl font-bold">
-                    {isPro ? fmtNGN(displayNGN) : '₦0'}
+                    {isPro ? fmtUSD(displayUSD) : '$0'}
                   </span>
                   <span className="text-muted-foreground mb-1">{isPro ? displayLabel : '/ month'}</span>
                   {isPro && <Badge className="ml-2 mb-1">Active</Badge>}
@@ -239,8 +236,8 @@ export default function BillingPage() {
                   <h3 className="font-semibold text-lg mb-1">Upgrade to Pro</h3>
                   <p className="text-muted-foreground text-sm mb-4">
                     {billingCycle === 'yearly'
-                      ? `${fmtNGN(YEARLY_NGN)}/year · that's ${fmtNGN(Math.round(YEARLY_NGN / 12))}/month`
-                      : `${fmtNGN(MONTHLY_NGN)}/month · billed monthly`}
+                      ? `${fmtUSD(YEARLY_USD)}/year · that's ${fmtUSD(parseFloat((YEARLY_USD / 12).toFixed(2)))}/month`
+                      : `${fmtUSD(MONTHLY_USD)}/month · billed monthly`}
                   </p>
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
                     {PRO_FEATURES.map(ft => (
@@ -263,7 +260,7 @@ export default function BillingPage() {
                   >
                     {initCheckout.isPending
                       ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting to checkout…</>
-                      : `Upgrade to Pro — ${fmtNGN(displayNGN)}${displayLabel}`}
+                      : `Upgrade to Pro — ${fmtUSD(displayUSD)}${displayLabel}`}
                   </Button>
                 </div>
               </div>
@@ -310,7 +307,7 @@ export default function BillingPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Free</CardTitle>
-                <p className="text-2xl font-bold">₦0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+                <p className="text-2xl font-bold">$0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
@@ -330,11 +327,11 @@ export default function BillingPage() {
                 </div>
                 {billingCycle === 'yearly' ? (
                   <div>
-                    <p className="text-2xl font-bold">{fmtNGN(YEARLY_NGN)} <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{fmtNGN(Math.round(YEARLY_NGN / 12))}/month · billed annually</p>
+                    <p className="text-2xl font-bold">{fmtUSD(YEARLY_USD)} <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
+                    <p className="text-xs text-muted-foreground mt-0.5">${(YEARLY_USD / 12).toFixed(2)}/month · billed annually</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold">{fmtNGN(MONTHLY_NGN)} <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+                  <p className="text-2xl font-bold">{fmtUSD(MONTHLY_USD)} <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
                 )}
               </CardHeader>
               <CardContent>
@@ -370,23 +367,20 @@ export default function BillingPage() {
               <p className="text-center py-8 text-muted-foreground text-sm">No payment history yet.</p>
             ) : (
               <div className="space-y-1">
-                {(paymentHistory as any[]).map((p: any) => {
-                  const amountNGN = Math.round(Number(p.amount) * USD_TO_NGN)
-                  return (
-                    <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
-                      <div>
-                        <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
-                        <span className="font-mono font-medium text-sm">
-                          {fmtNGN(amountNGN)}
-                        </span>
-                      </div>
+                {(paymentHistory as any[]).map((p: any) => (
+                  <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
+                    <div>
+                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
                     </div>
-                  )
-                })}
+                    <div className="flex items-center gap-4">
+                      <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
+                      <span className="font-mono font-medium text-sm">
+                        {fmtUSD(Number(p.amount))}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
