@@ -10,14 +10,18 @@ import {
   Bell,
   LogOut,
   Search,
+  ShieldAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { useGetUserProfile } from "@workspace/api-client-react"
 import { NotificationBell } from "./notification-bell"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
-  const { signOut } = useAuth()
+  const { user, signOut } = useAuth()
+  const { data: profile } = useGetUserProfile({ query: { enabled: !!user, retry: false } })
+  const isAdmin = profile?.isAdmin ?? false
   
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -88,6 +92,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               )
             })}
+            {isAdmin && (
+              <Link href="/admin">
+                <div className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all cursor-pointer",
+                  location === '/admin'
+                    ? "bg-destructive/10 text-destructive"
+                    : "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                )}>
+                  <ShieldAlert className={cn("w-4 h-4", location === '/admin' ? "" : "opacity-70")} />
+                  Admin
+                </div>
+              </Link>
+            )}
             <button
               onClick={() => signOut()}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4"

@@ -98,7 +98,7 @@ router.get('/api/admin/users', ...adminGuard, async (req, res): Promise<void> =>
   let query = supabaseAdmin
     .from('profiles')
     .select('id, email, full_name, avatar_url, plan_id, is_admin, is_suspended, created_at, updated_at', { count: 'exact' })
-    .range(offset, offset + parseInt(pageSize) - 1)
+    .range(offset, offset + pageSize - 1)
     .order('created_at', { ascending: false });
 
   if (search) query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
@@ -106,7 +106,7 @@ router.get('/api/admin/users', ...adminGuard, async (req, res): Promise<void> =>
 
   const { data, count, error } = await query;
   if (error) { res.status(500).json({ error: error.message }); return; }
-  res.json({ users: data ?? [], total: count ?? 0, page: parseInt(page), pageSize: parseInt(pageSize) });
+  res.json({ users: data ?? [], total: count ?? 0, page, pageSize });
 });
 
 router.patch('/api/admin/users/:id', ...adminGuard, async (req, res): Promise<void> => {
@@ -175,7 +175,7 @@ router.get('/api/admin/gmail-accounts', ...adminGuard, async (req, res): Promise
 
   const { data, count, error } = await query;
   if (error) { res.status(500).json({ error: error.message }); return; }
-  res.json({ accounts: data ?? [], total: count ?? 0, page: parseInt(page), pageSize: parseInt(pageSize) });
+  res.json({ accounts: data ?? [], total: count ?? 0, page, pageSize });
 });
 
 // ─── Feedback ────────────────────────────────────────────────────────────────

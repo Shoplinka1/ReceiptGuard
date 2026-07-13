@@ -1,0 +1,90 @@
+We are continuing this project from another Replit because the previous agent ran out of credits.
+
+Project: ReceiptGuard
+
+IMPORTANT:
+Read the ENTIRE codebase before making ANY changes.
+
+This includes:
+- Frontend
+- Backend
+- Supabase schema
+- Railway configuration
+- Vercel deployment
+- Gmail OAuth
+- Paystack integration
+- Admin routes
+- Dashboard routes
+- Billing
+- Git history
+
+Current Git commits already on main:
+- 94d9e67
+- 3b1f263
+- 8f3903a
+
+Do NOT repeat previous investigations unless you find contradictory evidence in the code.
+
+Production:
+
+Frontend:
+https://receipt-guard-receipt-guard.vercel.app
+
+Backend:
+Railway
+
+Current unresolved production issues:
+
+1. /admin still does not load.
+2. Verify whether ANY SQL migration is actually required.
+3. ENCRYPTION_KEY is missing or invalid on Railway.
+4. Gmail reconnect fails.
+5. Dashboard Recent Activity still shows:
+   - ENCRYPTION_KEY env var missing or invalid
+   - Failed to refresh Gmail token
+6. Flutterwave values are still displayed in USD instead of NGN.
+7. Verify my OAuth account has a profiles row.
+8. Verify my OAuth account has is_admin = true.
+9. Verify Feedback appears inside the Admin dashboard.
+10. Verify Billing still works.
+11. Verify Dashboard subscription widget still works.
+
+Before generating ANY SQL:
+
+Read:
+- admin routes
+- Paystack routes
+- Gmail OAuth code
+- dashboard routes
+- Supabase schema
+- production configuration
+
+Then answer:
+
+1. Is any SQL migration actually required?
+2. If yes, exactly which production issue does it fix?
+3. If no, explicitly state that no SQL migration is required.
+4. Do NOT generate duplicate foreign keys to profiles if auth.users foreign keys are already correct.
+
+Then fix the remaining production issues.
+
+After making changes:
+
+- Commit all changes.
+- Push to GitHub.
+- Wait for Railway and Vercel deployments to finish.
+- Test the LIVE production deployment.
+
+Do not mark the task complete until you have verified on production that:
+
+✅ /admin loads successfully
+✅ Gmail reconnect works
+✅ ENCRYPTION_KEY errors disappear from Recent Activity
+✅ Flutterwave values display in NGN instead of USD
+✅ Billing works
+✅ Dashboard subscription widget works
+✅ Feedback appears in the Admin panel
+✅ OAuth profile exists
+✅ is_admin is true for my admin account
+
+If any of these cannot be verified, explain exactly why before stopping.

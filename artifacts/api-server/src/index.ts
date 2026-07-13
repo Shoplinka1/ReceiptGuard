@@ -24,6 +24,19 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
+  // Warn loudly if critical env vars are missing — these cause runtime errors
+  if (!process.env.ENCRYPTION_KEY) {
+    logger.warn('⚠️  ENCRYPTION_KEY env var is missing. Gmail token encryption/decryption will fail. Set a 32-byte hex key on Railway.');
+  } else if (Buffer.from(process.env.ENCRYPTION_KEY, 'hex').length !== 32) {
+    logger.warn('⚠️  ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars). Gmail will fail until this is corrected.');
+  }
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    logger.warn('⚠️  GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing. Gmail OAuth will not work.');
+  }
+  if (!process.env.PAYSTACK_SECRET_KEY) {
+    logger.warn('⚠️  PAYSTACK_SECRET_KEY missing. Payments will not work.');
+  }
+
   // Start background jobs
   startReminderScheduler();
 });

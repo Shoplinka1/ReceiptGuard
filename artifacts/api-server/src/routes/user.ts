@@ -6,11 +6,12 @@ import { logger } from '../lib/logger';
 const router: IRouter = Router();
 
 router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => {
-  const { data, error } = await supabaseAdmin.from('profiles').select('*, user_subscriptions(*, plans(*)), email_accounts(id, email, is_active)').eq('id', req.userId).single();
+  const { data, error } = await supabaseAdmin.from('profiles').select('*, is_admin, user_subscriptions(*, plans(*)), email_accounts(id, email, is_active)').eq('id', req.userId).single();
   if (error || !data) { res.status(404).json({ error: 'Profile not found' }); return; }
   res.json({
     id: data.id, name: data.full_name, email: data.email, avatarUrl: data.avatar_url ?? null,
-    plan: data.plan_id as 'free' | 'pro', gmailConnected: (data.email_accounts as any[])?.some(a => a.is_active) ?? false,
+    plan: data.plan_id as 'free' | 'pro', isAdmin: data.is_admin ?? false,
+    gmailConnected: (data.email_accounts as any[])?.some(a => a.is_active) ?? false,
     gmailEmail: (data.email_accounts as any[])?.[0]?.email ?? null, storageUsed: 0, createdAt: data.created_at,
   });
 });

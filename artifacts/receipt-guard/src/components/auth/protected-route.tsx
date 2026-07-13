@@ -1,6 +1,7 @@
 import { type ComponentType } from 'react';
 import { Redirect } from 'wouter';
 import { useAuth } from '../../hooks/use-auth';
+import { useGetUserProfile } from '@workspace/api-client-react';
 
 interface ProtectedRouteProps {
   component: ComponentType;
@@ -10,8 +11,14 @@ interface ProtectedRouteProps {
 /** Wraps a page component: redirects to /login if unauthenticated. */
 export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
+  // Fetch profile for admin check — only runs once user is known
+  const { data: profile, isLoading: profileLoading } = useGetUserProfile({
+    query: { enabled: !!user && adminOnly, retry: false },
+  });
 
-  if (loading) {
+  const isLoading = loading || (adminOnly && !!user && profileLoading);
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -24,8 +31,9 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
 
   if (!user) return <Redirect to="/login" />;
 
-  // Admin check — reads from user metadata set by the server
-  if (adminOnly && !user.user_metadata?.is_admin) {
+  // Admin check — reads isAdmin from the profiles DB table via the API
+  // (not from user_metadata, which is never updated for existing users)
+  if (adminOnly && !profile?.isAdmin) {
     return <Redirect to="/dashboard" />;
   }
 

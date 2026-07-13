@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
 import { useGetUserProfile } from '@workspace/api-client-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Sparkles, Loader2, AlertTriangle, CreditCard } from 'lucide-react'
+import { CheckCircle2, Sparkles, Loader2, AlertTriangle, CreditCard, Receipt, Repeat, ShieldCheck, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
@@ -31,11 +32,23 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return res.json()
 }
 
+// Paystack charges in NGN — show Nigerian prices
+const USD_TO_NGN = 1600
+const MONTHLY_USD = 5.99
+const YEARLY_USD  = 59.99
+const MONTHLY_NGN = Math.round(MONTHLY_USD * USD_TO_NGN)  // ₦9,584
+const YEARLY_NGN  = Math.round(YEARLY_USD * USD_TO_NGN)   // ₦95,984
+const YEARLY_SAVINGS_PCT = Math.round((1 - YEARLY_USD / (MONTHLY_USD * 12)) * 100)
+
+function fmtNGN(amount: number) {
+  return `₦${amount.toLocaleString('en-NG')}`
+}
+
 const PRO_FEATURES = [
   'Unlimited Gmail accounts',
   'Unlimited receipts & subscriptions',
+  'Unlimited warranties',
   'Unlimited reminders',
-  'Warranty & return tracking',
   'CSV & PDF export',
   'Spending reports & analytics',
   'Advanced filters & categories',
@@ -43,16 +56,46 @@ const PRO_FEATURES = [
 ]
 const FREE_FEATURES = [
   '1 Gmail account',
-  'Up to 50 receipts',
+  'Up to 100 receipts',
+  'Up to 10 warranties',
   'Up to 5 active subscriptions',
-  'Basic dashboard',
-  'Basic reminders',
+  'Basic dashboard & reminders',
   'Search',
 ]
 
-const MONTHLY_USD = 5.99
-const YEARLY_USD = 59.99
-const YEARLY_SAVINGS_PCT = Math.round((1 - YEARLY_USD / (MONTHLY_USD * 12)) * 100)
+interface UsageData {
+  isPro: boolean
+  receipts: { used: number; limit: number | null }
+  subscriptions: { used: number; limit: number | null }
+  warranties: { used: number; limit: number | null }
+  gmailAccounts: { used: number; limit: number | null }
+}
+
+function UsageBar({ label, used, limit, icon: Icon }: {
+  label: string; used: number; limit: number | null; icon: React.ComponentType<{ className?: string }>
+}) {
+  if (limit === null) return null // Pro — unlimited, no bar needed
+  const pct = Math.min(100, Math.round((used / limit) * 100))
+  const isNearLimit = pct >= 80
+  const isAtLimit   = pct >= 100
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </div>
+        <span className={`font-medium tabular-nums ${isAtLimit ? 'text-destructive' : isNearLimit ? 'text-amber-500' : 'text-foreground'}`}>
+          {used} / {limit}
+        </span>
+      </div>
+      <Progress
+        value={pct}
+        className={`h-1.5 ${isAtLimit ? '[&>div]:bg-destructive' : isNearLimit ? '[&>div]:bg-amber-500' : ''}`}
+      />
+    </div>
+  )
+}
 
 export default function BillingPage() {
   const { data: profile, isLoading: loadingProfile, refetch: refetchProfile } = useGetUserProfile()
@@ -73,6 +116,7 @@ export default function BillingPage() {
           toast.success('Payment confirmed! Your plan has been upgraded.')
           refetchProfile()
           qc.invalidateQueries({ queryKey: ['payments', 'history'] })
+          qc.invalidateQueries({ queryKey: ['user', 'usage'] })
         } else {
           toast.info('Payment is being processed. Your plan will update shortly.')
         }
@@ -83,6 +127,12 @@ export default function BillingPage() {
   const { data: paymentHistory, isLoading: loadingHistory } = useQuery({
     queryKey: ['payments', 'history'],
     queryFn: () => apiFetch('/api/paystack/payments'),
+    retry: false,
+  })
+
+  const { data: usage, isLoading: loadingUsage } = useQuery<UsageData>({
+    queryKey: ['user', 'usage'],
+    queryFn: () => apiFetch('/api/user/usage'),
     retry: false,
   })
 
@@ -110,8 +160,8 @@ export default function BillingPage() {
     onError: (e: any) => toast.error(e.message),
   })
 
-  const displayPrice = billingCycle === 'yearly' ? YEARLY_USD : MONTHLY_USD
-  const displayLabel = billingCycle === 'yearly' ? '/year' : '/month'
+  const displayNGN  = billingCycle === 'yearly' ? YEARLY_NGN  : MONTHLY_NGN
+  const displayLabel = billingCycle === 'yearly' ? '/year'    : '/month'
 
   return (
     <AppShell>
@@ -136,14 +186,33 @@ export default function BillingPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-end gap-2">
-              {loadingProfile ? <Skeleton className="h-10 w-24" /> : (
+              {loadingProfile ? <Skeleton className="h-10 w-32" /> : (
                 <>
-                  <span className="text-4xl font-bold">{isPro ? `$${displayPrice}` : '$0'}</span>
+                  <span className="text-4xl font-bold">
+                    {isPro ? fmtNGN(displayNGN) : '₦0'}
+                  </span>
                   <span className="text-muted-foreground mb-1">{isPro ? displayLabel : '/ month'}</span>
                   {isPro && <Badge className="ml-2 mb-1">Active</Badge>}
                 </>
               )}
             </div>
+
+            {/* Usage bars — free plan only */}
+            {!isPro && (
+              <div className="bg-secondary/40 rounded-xl p-4 border border-border space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your usage</p>
+                {loadingUsage ? (
+                  <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-6 w-full" />)}</div>
+                ) : (
+                  <>
+                    <UsageBar label="Receipts"      used={usage?.receipts.used ?? 0}      limit={usage?.receipts.limit ?? 100}      icon={Receipt}    />
+                    <UsageBar label="Subscriptions" used={usage?.subscriptions.used ?? 0} limit={usage?.subscriptions.limit ?? 5}   icon={Repeat}     />
+                    <UsageBar label="Warranties"    used={usage?.warranties.used ?? 0}    limit={usage?.warranties.limit ?? 10}     icon={ShieldCheck} />
+                    <UsageBar label="Gmail accounts" used={usage?.gmailAccounts.used ?? 0} limit={usage?.gmailAccounts.limit ?? 1} icon={Mail}       />
+                  </>
+                )}
+              </div>
+            )}
 
             {!isPro ? (
               <div className="space-y-6">
@@ -170,8 +239,8 @@ export default function BillingPage() {
                   <h3 className="font-semibold text-lg mb-1">Upgrade to Pro</h3>
                   <p className="text-muted-foreground text-sm mb-4">
                     {billingCycle === 'yearly'
-                      ? `$${YEARLY_USD}/year · that's $${(YEARLY_USD / 12).toFixed(2)}/month`
-                      : `$${MONTHLY_USD}/month · billed monthly`}
+                      ? `${fmtNGN(YEARLY_NGN)}/year · that's ${fmtNGN(Math.round(YEARLY_NGN / 12))}/month`
+                      : `${fmtNGN(MONTHLY_NGN)}/month · billed monthly`}
                   </p>
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
                     {PRO_FEATURES.map(ft => (
@@ -194,7 +263,7 @@ export default function BillingPage() {
                   >
                     {initCheckout.isPending
                       ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting to checkout…</>
-                      : `Upgrade to Pro — $${displayPrice}${displayLabel}`}
+                      : `Upgrade to Pro — ${fmtNGN(displayNGN)}${displayLabel}`}
                   </Button>
                 </div>
               </div>
@@ -220,7 +289,6 @@ export default function BillingPage() {
         <div>
           <h2 className="text-lg font-semibold mb-4">Compare Plans</h2>
 
-          {/* Billing toggle for comparison */}
           <div className="flex justify-center mb-6">
             <div className="inline-flex bg-secondary rounded-lg p-1 gap-1">
               <button
@@ -242,7 +310,7 @@ export default function BillingPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Free</CardTitle>
-                <p className="text-2xl font-bold">$0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+                <p className="text-2xl font-bold">₦0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
@@ -262,11 +330,11 @@ export default function BillingPage() {
                 </div>
                 {billingCycle === 'yearly' ? (
                   <div>
-                    <p className="text-2xl font-bold">$59.99 <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
-                    <p className="text-xs text-muted-foreground mt-0.5">${(YEARLY_USD / 12).toFixed(2)}/month · billed annually</p>
+                    <p className="text-2xl font-bold">{fmtNGN(YEARLY_NGN)} <span className="text-sm font-normal text-muted-foreground">/ year</span></p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{fmtNGN(Math.round(YEARLY_NGN / 12))}/month · billed annually</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold">$5.99 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+                  <p className="text-2xl font-bold">{fmtNGN(MONTHLY_NGN)} <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
                 )}
               </CardHeader>
               <CardContent>
@@ -302,20 +370,23 @@ export default function BillingPage() {
               <p className="text-center py-8 text-muted-foreground text-sm">No payment history yet.</p>
             ) : (
               <div className="space-y-1">
-                {(paymentHistory as any[]).map((p: any) => (
-                  <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
+                {(paymentHistory as any[]).map((p: any) => {
+                  const amountNGN = Math.round(Number(p.amount) * USD_TO_NGN)
+                  return (
+                    <div key={p.id} className="flex justify-between items-center py-3 border-b border-border last:border-0">
+                      <div>
+                        <p className="font-medium text-sm">{p.plan_id ? `ReceiptGuard ${p.plan_id}` : 'ReceiptGuard'}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
+                        <span className="font-mono font-medium text-sm">
+                          {fmtNGN(amountNGN)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant={p.status === 'success' ? 'default' : 'destructive'} className="text-xs capitalize">{p.status}</Badge>
-                      <span className="font-mono font-medium text-sm">
-                        ${Number(p.amount).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
