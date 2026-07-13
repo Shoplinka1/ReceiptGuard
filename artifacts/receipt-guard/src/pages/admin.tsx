@@ -60,19 +60,34 @@ function useAdminGmailAccounts(search: string) {
     retry: false,
   })
 }
+function useAdminActivityLogs() {
+  return useQuery({ queryKey: ['admin', 'activity-logs'], queryFn: () => apiFetch('/api/admin/activity-logs?pageSize=50'), retry: false })
+}
+function useAdminScanLogs() {
+  return useQuery({ queryKey: ['admin', 'scan-logs'], queryFn: () => apiFetch('/api/admin/scan-logs?pageSize=50'), retry: false })
+}
+function useAdminReceipts() {
+  return useQuery({ queryKey: ['admin', 'receipts'], queryFn: () => apiFetch('/api/admin/receipts?pageSize=30'), retry: false })
+}
+function useAdminWarranties() {
+  return useQuery({ queryKey: ['admin', 'warranties'], queryFn: () => apiFetch('/api/admin/warranties?pageSize=30'), retry: false })
+}
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail'>('overview')
+  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail' | 'activity' | 'scan-logs' | 'receipts' | 'warranties'>('overview')
   const [search, setSearch] = useState('')
   const qc = useQueryClient()
 
   const { data: stats, isLoading: loadingStats, error: statsError } = useAdminStats()
-  // Backend wraps users in { users: [...], total, page, pageSize }
   const { data: usersData, isLoading: loadingUsers } = useAdminUsers(search)
   const users = usersData?.users ?? []
   const { data: payments, isLoading: loadingPayments } = useAdminPayments()
   const { data: feedback, isLoading: loadingFeedback } = useAdminFeedback()
   const { data: gmailData, isLoading: loadingGmail } = useAdminGmailAccounts(search)
+  const { data: activityData, isLoading: loadingActivity } = useAdminActivityLogs()
+  const { data: scanData, isLoading: loadingScan } = useAdminScanLogs()
+  const { data: receiptsData, isLoading: loadingReceipts } = useAdminReceipts()
+  const { data: warrantiesData, isLoading: loadingWarranties } = useAdminWarranties()
 
   const patchUser = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
@@ -92,7 +107,11 @@ export default function AdminPage() {
     { id: 'users' as const, label: 'Users' },
     { id: 'payments' as const, label: 'Payments' },
     { id: 'subscriptions' as const, label: 'Subscriptions' },
+    { id: 'receipts' as const, label: 'Receipts' },
+    { id: 'warranties' as const, label: 'Warranties' },
     { id: 'gmail' as const, label: 'Gmail Accounts' },
+    { id: 'activity' as const, label: 'Activity Logs' },
+    { id: 'scan-logs' as const, label: 'Scan Logs' },
     { id: 'feedback' as const, label: 'Feedback' },
   ]
 
@@ -358,6 +377,154 @@ export default function AdminPage() {
               </Card>
             )}
           </div>
+        )}
+
+        {/* RECEIPTS */}
+        {tab === 'receipts' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Receipt className="w-5 h-5" /> All Receipts</CardTitle>
+              <CardDescription>{receiptsData?.total ?? 0} total receipts across all users</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingReceipts ? (
+                <div className="p-6 space-y-3">{[1,2,3].map(i=><Skeleton key={i} className="h-12 w-full"/>)}</div>
+              ) : !(receiptsData?.receipts as any[])?.length ? (
+                <div className="p-12 text-center text-muted-foreground">No receipts found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      <th className="px-4 py-3">Merchant</th><th className="px-4 py-3">User</th>
+                      <th className="px-4 py-3">Amount</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Date</th>
+                    </tr></thead>
+                    <tbody>
+                      {((receiptsData?.receipts ?? []) as any[]).map((r:any) => (
+                        <tr key={r.id} className="border-b border-border last:border-0 hover:bg-secondary/30">
+                          <td className="px-4 py-3 font-medium">{r.merchant_name}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{(r.profiles as any)?.email ?? String(r.user_id).slice(0,8)+'…'}</td>
+                          <td className="px-4 py-3">{r.currency} {Number(r.amount).toFixed(2)}</td>
+                          <td className="px-4 py-3"><Badge variant="outline" className="text-xs capitalize">{r.category||'—'}</Badge></td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{r.purchase_date ?? new Date(r.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* WARRANTIES */}
+        {tab === 'warranties' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><ShieldAlert className="w-5 h-5" /> All Warranties</CardTitle>
+              <CardDescription>{warrantiesData?.total ?? 0} warranties — sorted by nearest expiry</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingWarranties ? (
+                <div className="p-6 space-y-3">{[1,2,3].map(i=><Skeleton key={i} className="h-12 w-full"/>)}</div>
+              ) : !(warrantiesData?.warranties as any[])?.length ? (
+                <div className="p-12 text-center text-muted-foreground">No warranties found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      <th className="px-4 py-3">Product</th><th className="px-4 py-3">User</th>
+                      <th className="px-4 py-3">Merchant</th><th className="px-4 py-3">Expires</th><th className="px-4 py-3">Days Left</th>
+                    </tr></thead>
+                    <tbody>
+                      {((warrantiesData?.warranties ?? []) as any[]).map((w:any) => {
+                        const expiry = w.warranty_end_date ? new Date(w.warranty_end_date) : null
+                        const daysLeft = expiry ? Math.ceil((expiry.getTime() - Date.now()) / 86400000) : null
+                        return (
+                          <tr key={w.id} className="border-b border-border last:border-0 hover:bg-secondary/30">
+                            <td className="px-4 py-3 font-medium">{w.product_name}</td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">{(w.profiles as any)?.email ?? String(w.user_id).slice(0,8)+'…'}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{w.merchant_name||'—'}</td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{expiry?.toLocaleDateString()??'—'}</td>
+                            <td className="px-4 py-3">
+                              {daysLeft !== null ? (
+                                <span className={`text-xs font-medium ${daysLeft<=0?'text-destructive':daysLeft<=30?'text-amber-600':'text-muted-foreground'}`}>
+                                  {daysLeft<=0?'Expired':`${daysLeft}d`}
+                                </span>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ACTIVITY LOGS */}
+        {tab === 'activity' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Activity className="w-5 h-5" /> Activity Logs</CardTitle>
+              <CardDescription>{activityData?.total ?? 0} total log entries</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingActivity ? (
+                <div className="p-6 space-y-3">{[1,2,3,4,5].map(i=><Skeleton key={i} className="h-10 w-full"/>)}</div>
+              ) : !(activityData?.logs as any[])?.length ? (
+                <div className="p-12 text-center text-muted-foreground">No activity logs.</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {((activityData?.logs ?? []) as any[]).map((log:any) => (
+                    <div key={log.id} className="px-4 py-3 flex gap-4 hover:bg-secondary/20">
+                      <div className="w-36 shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-mono truncate">{log.type}</Badge>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{log.description||'—'}</p>
+                        <p className="text-xs text-muted-foreground">{(log.profiles as any)?.email ?? String(log.user_id).slice(0,12)+'…'}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* SCAN LOGS */}
+        {tab === 'scan-logs' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Mail className="w-5 h-5" /> Gmail Scan Logs</CardTitle>
+              <CardDescription>Activity logs filtered to Gmail / scan events — {scanData?.total ?? 0} entries</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingScan ? (
+                <div className="p-6 space-y-3">{[1,2,3,4,5].map(i=><Skeleton key={i} className="h-10 w-full"/>)}</div>
+              ) : !(scanData?.logs as any[])?.length ? (
+                <div className="p-12 text-center text-muted-foreground">No scan logs yet.</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {((scanData?.logs ?? []) as any[]).map((log:any) => (
+                    <div key={log.id} className="px-4 py-3 flex gap-4 hover:bg-secondary/20">
+                      <div className="w-36 shrink-0">
+                        <Badge variant={log.type?.includes('error')||log.type?.includes('fail')?'destructive':'outline'} className="text-[10px] font-mono truncate">{log.type}</Badge>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{log.description||'—'}</p>
+                        <p className="text-xs text-muted-foreground">{(log.profiles as any)?.email ?? String(log.user_id).slice(0,12)+'…'}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* GMAIL ACCOUNTS */}

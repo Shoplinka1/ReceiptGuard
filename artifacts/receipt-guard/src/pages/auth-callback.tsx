@@ -11,8 +11,15 @@ export default function AuthCallbackPage() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
+    const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || '';
+
     supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Fire-and-forget: send welcome email on first sign-in (idempotent on backend)
+        fetch(`${API_BASE}/api/user/welcome`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {/* non-fatal */});
         navigate('/dashboard');
       } else if (event === 'PASSWORD_RECOVERY') {
         navigate('/reset-password');
