@@ -368,6 +368,84 @@ export default function Dashboard() {
   )
 }
 
+function PlanCard({ plan, subscription, loading }: {
+  plan: 'free' | 'pro' | undefined
+  subscription: any
+  loading: boolean
+}) {
+  const isPro = plan === 'pro'
+  const status: string | undefined = subscription?.status
+  const periodEnd: string | undefined = subscription?.current_period_end
+  const cancelAtEnd: boolean = subscription?.cancel_at_period_end ?? false
+
+  const renewalDate = periodEnd ? new Date(periodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+
+  return (
+    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${isPro ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+              {isPro ? <Crown className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+            </div>
+            <div>
+              {loading ? (
+                <Skeleton className="h-5 w-24 mb-1" />
+              ) : (
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-semibold text-foreground">
+                    {isPro ? 'Pro Plan' : 'Free Plan'}
+                  </p>
+                  {isPro && status && (
+                    <Badge
+                      variant="outline"
+                      className={`text-xs px-1.5 py-0 ${
+                        status === 'active' && !cancelAtEnd
+                          ? 'text-emerald-600 border-emerald-500/30'
+                          : cancelAtEnd
+                          ? 'text-amber-600 border-amber-500/30'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {cancelAtEnd ? 'Cancelling' : status === 'active' ? 'Active' : status}
+                    </Badge>
+                  )}
+                </div>
+              )}
+              {loading ? (
+                <Skeleton className="h-3.5 w-40" />
+              ) : isPro && renewalDate ? (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  {cancelAtEnd
+                    ? <><AlertTriangle className="w-3 h-3 text-amber-500" /> Access until {renewalDate}</>
+                    : <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Renews {renewalDate}</>
+                  }
+                </p>
+              ) : !isPro ? (
+                <p className="text-xs text-muted-foreground">50 receipts · 5 subscriptions · 1 Gmail</p>
+              ) : null}
+            </div>
+          </div>
+          {!loading && !isPro && (
+            <Link href="/settings?tab=billing">
+              <Button size="sm" className="shrink-0 text-xs h-8">
+                Upgrade to Pro
+              </Button>
+            </Link>
+          )}
+          {!loading && isPro && cancelAtEnd && (
+            <Link href="/settings?tab=billing">
+              <Button size="sm" variant="outline" className="shrink-0 text-xs h-8">
+                Manage Plan
+              </Button>
+            </Link>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function StatCard({ title, value, loading, icon: Icon, subtext, colSpan = "" }: {
   title: string
   value: string | number | null | undefined
