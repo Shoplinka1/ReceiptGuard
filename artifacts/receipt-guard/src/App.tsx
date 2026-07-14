@@ -101,7 +101,7 @@ function Router() {
           {() => <ProtectedRoute component={SearchPage} />}
         </Route>
         <Route path="/support">
-          {() => <ProtectedRoute component={SupportPage} />}
+          {() => <SupportPage />}
         </Route>
 
         <Route component={NotFound} />

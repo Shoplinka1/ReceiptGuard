@@ -604,6 +604,7 @@ export default function LandingPage() {
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
             <Link href="/terms"   className="hover:text-foreground transition-colors">Terms</Link>
+            <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>
           </div>
         </div>
       </footer>
