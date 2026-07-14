@@ -11,7 +11,7 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/
 const FAQ = [
   {
     q: 'How do I connect my Gmail account?',
-    a: "Go to Settings → Gmail Accounts (or click "Connect Gmail" on your dashboard) and click "Connect Gmail". You'll be taken to Google's consent screen. ReceiptGuard only requests read-only access — we never read personal conversations.",
+    a: 'Go to Settings → Gmail Accounts (or click "Connect Gmail" on your dashboard) and click "Connect Gmail". You\'ll be taken to Google\'s consent screen. ReceiptGuard only requests read-only access — we never read personal conversations.',
   },
   {
     q: 'What emails does ReceiptGuard scan?',
@@ -19,7 +19,7 @@ const FAQ = [
   },
   {
     q: 'How do I upgrade to Pro?',
-    a: "Go to Billing (in the sidebar) and click "Upgrade to Pro". You'll be taken to a secure Paystack checkout. After payment, your account upgrades instantly.",
+    a: 'Go to Billing (in the sidebar) and click "Upgrade to Pro". You\'ll be taken to a secure Paystack checkout. After payment, your account upgrades instantly.',
   },
   {
     q: 'How do I cancel my Pro subscription?',
