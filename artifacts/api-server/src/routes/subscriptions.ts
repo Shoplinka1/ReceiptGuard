@@ -9,8 +9,8 @@ const FREE_SUB_LIMIT = 5;
 function mapSub(s: any) {
   return {
     id: s.id,
-    companyName: s.name ?? s.company_name,
-    companyLogoUrl: s.merchant_logo_url ?? s.company_logo_url ?? null,
+    companyName: s.company_name,
+    companyLogoUrl: s.company_logo_url ?? null,
     monthlyPrice: Number(s.monthly_price), yearlyPrice: s.yearly_price ? Number(s.yearly_price) : null,
     billingCycle: s.billing_cycle, renewalDate: s.renewal_date, status: s.status,
     category: s.category, reminderEnabled: s.reminder_enabled, notes: s.notes ?? null,
@@ -60,8 +60,8 @@ router.post('/api/subscriptions', requireAuth, async (req, res): Promise<void> =
 
   const { data, error } = await supabaseAdmin.from('subscriptions').insert({
     user_id: req.userId,
-    name: companyName,
-    merchant_logo_url: companyLogoUrl ?? null,
+    company_name: companyName,
+    company_logo_url: companyLogoUrl ?? null,
     monthly_price: monthlyPrice, yearly_price: yearlyPrice ?? null, billing_cycle: billingCycle ?? 'monthly',
     renewal_date: renewalDate, status: status ?? 'active', category,
     reminder_enabled: reminderEnabled ?? true, notes: notes ?? null,
@@ -103,7 +103,7 @@ router.get('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void
 router.patch('/api/subscriptions/:id', requireAuth, async (req, res): Promise<void> => {
   const { companyName, monthlyPrice, yearlyPrice, billingCycle, renewalDate, status, category, reminderEnabled, notes } = req.body;
   const updates: Record<string, any> = {};
-  if (companyName) updates.name = companyName;
+  if (companyName) updates.company_name = companyName;
   if (monthlyPrice) updates.monthly_price = monthlyPrice;
   if (yearlyPrice !== undefined) updates.yearly_price = yearlyPrice;
   if (billingCycle) updates.billing_cycle = billingCycle;
