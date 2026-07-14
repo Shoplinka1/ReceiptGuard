@@ -129,7 +129,7 @@ export default function ReceiptsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      ${(receipt.amount ?? 0).toFixed(2)}
+                      {formatCurrency(receipt.amount ?? 0, (receipt as any).currency || 'USD')}
                     </TableCell>
                   </TableRow>
                 ))

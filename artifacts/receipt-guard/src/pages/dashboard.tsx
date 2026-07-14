@@ -70,6 +70,8 @@ export default function Dashboard() {
   const { data: breakdown, isLoading: loadingBreakdown } = useGetSubscriptionBreakdown()
   const { data: gmailAccounts = [] } = useQuery({ queryKey: ['gmail', 'accounts'], queryFn: fetchGmailAccounts, retry: false })
   const { data: subscription, isLoading: loadingSubscription } = useQuery({ queryKey: ['paystack', 'subscription'], queryFn: fetchSubscription, retry: false })
+  const { data: userSettings } = useGetUserSettings()
+  const currency = userSettings?.currency || 'USD'
 
   const safeActivities  = toSafeArray<typeof activities extends (infer U)[] | undefined ? U : never>(activities,  'activities')
   const safeRenewals    = toSafeArray<typeof renewals   extends (infer U)[] | undefined ? U : never>(renewals,    'renewals')

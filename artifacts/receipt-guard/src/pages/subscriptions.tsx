@@ -14,6 +14,8 @@ import { formatCurrency } from "@/lib/currency"
 export default function SubscriptionsPage() {
   const [search, setSearch] = useState("")
   const { data: subs, isLoading, error } = useListSubscriptions()
+  const { data: userSettings } = useGetUserSettings()
+  const currency = userSettings?.currency || 'USD'
 
   const filtered = useMemo(() => {
     if (!subs) return []
@@ -100,7 +102,7 @@ export default function SubscriptionsPage() {
                     </div>
                     <h3 className="font-bold text-lg leading-tight">{sub.companyName}</h3>
                     <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-2xl font-bold">${(sub.monthlyPrice ?? 0).toFixed(2)}</span>
+                      <span className="text-2xl font-bold">{formatCurrency(sub.monthlyPrice ?? 0, currency)}</span>
                       <span className="text-sm text-muted-foreground">/mo</span>
                     </div>
 
