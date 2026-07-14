@@ -379,6 +379,8 @@ router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<voi
       ? `Test email sent to ${recipient}. Check the inbox (and spam folder) to confirm delivery.`
       : `SMTP is configured but sendMail failed. Check Railway logs for [email] sendMail FAILED with the full error code and SMTP response.`,
   });
+});
+
 // ─── Receipts ────────────────────────────────────────────────────────────────
 
 router.get('/api/admin/receipts', ...adminGuard, async (req, res): Promise<void> => {

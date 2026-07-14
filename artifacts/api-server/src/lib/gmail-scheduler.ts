@@ -27,7 +27,7 @@ async function rescanAllAccounts(): Promise<void> {
       try {
         // forceRescan=false: only pull messages newer than the last scan,
         // same incremental behavior as the manual "Scan now" button.
-        await runGmailScan(account, account.user_id, false);
+        await runGmailScan(account, account.user_id, false, false);
       } catch (err) {
         logger.error({ err, accountId: account.id }, '[gmail-scheduler] Rescan failed for account');
       }
