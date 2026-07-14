@@ -1,35 +1,25 @@
 import { useState } from 'react'
 import { Link } from 'wouter'
-import { AppShell } from '@/components/layout/app-shell'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { useMutation } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { MessageSquare, Mail, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Mail, MessageSquare, ShieldCheck } from 'lucide-react'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
-
-async function getAuthToken() {
-  const { supabase } = await import('@/lib/supabase')
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? ''
-}
 
 const FAQ = [
   {
     q: 'How do I connect my Gmail account?',
-    a: 'Go to Settings → Gmail Accounts (or click "Connect Gmail" on your dashboard banner) and click "Connect Gmail". You\'ll be taken to Google\'s consent screen. ReceiptGuard only requests read-only access.',
+    a: "Go to Settings → Gmail Accounts (or click "Connect Gmail" on your dashboard) and click "Connect Gmail". You'll be taken to Google's consent screen. ReceiptGuard only requests read-only access — we never read personal conversations.",
   },
   {
     q: 'What emails does ReceiptGuard scan?',
-    a: 'Only emails matching known receipt, invoice, and order confirmation patterns — things like "Your order is confirmed", "Receipt from Amazon", or "Invoice #12345". Personal conversations are never scanned.',
+    a: 'Only emails matching known receipt, invoice, and purchase confirmation patterns — e.g. "Your order is confirmed", "Receipt from Amazon", or "Invoice #12345". Personal conversations, newsletters, and promotions are never scanned.',
   },
   {
     q: 'How do I upgrade to Pro?',
-    a: 'Go to Billing (in the sidebar) and click "Upgrade to Pro". You\'ll be taken to a secure Paystack checkout. After payment, your account upgrades instantly.',
+    a: "Go to Billing (in the sidebar) and click "Upgrade to Pro". You'll be taken to a secure Paystack checkout. After payment, your account upgrades instantly.",
   },
   {
     q: 'How do I cancel my Pro subscription?',
@@ -37,35 +27,37 @@ const FAQ = [
   },
   {
     q: 'Why is my Gmail not connecting?',
-    a: 'Make sure you\'re allowing read-only access on the Google consent screen. If you see a redirect error, ensure the redirect URI in your Google Cloud Console matches exactly. Contact support if the issue persists.',
+    a: 'Make sure you allow read-only access on the Google consent screen. If you see a redirect error, contact us at receiptguard01@gmail.com with the error message and we\'ll help you resolve it.',
   },
   {
     q: 'Is my payment information safe?',
-    a: 'Yes. ReceiptGuard uses Paystack for all payments. We never see or store your card details.',
+    a: 'Yes. All payments are processed by Paystack. ReceiptGuard never sees or stores your card details.',
   },
   {
     q: 'Can I export my data?',
-    a: 'CSV and PDF export are Pro features, available from Settings → Data.',
+    a: 'CSV and PDF export are available on the Pro plan from Settings → Data.',
   },
   {
     q: 'How do I delete my account?',
-    a: 'Go to Settings → Data → Danger Zone and click "Delete Account". This permanently removes all your data. This action cannot be undone.',
+    a: 'Go to Settings → Security → Danger Zone and click "Delete Account". This permanently removes all your data and cannot be undone.',
   },
 ]
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
-        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left text-sm font-medium hover:bg-gray-50 transition-colors"
+        onClick={() => setOpen(o => !o)}
       >
         <span>{q}</span>
-        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+        {open
+          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
       </button>
       {open && (
-        <div className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-border pt-3">
+        <div className="px-5 pb-4 pt-3 text-sm text-gray-600 leading-relaxed border-t border-gray-100">
           {a}
         </div>
       )}
@@ -76,90 +68,126 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 export default function SupportPage() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
-  const [sent, setSent] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
 
-  const submit = useMutation({
-    mutationFn: async () => {
-      const token = await getAuthToken()
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!subject.trim() || !message.trim()) return
+    setStatus('sending')
+    try {
       const res = await fetch(`${API_BASE}/api/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'support', subject: subject.trim(), body: message.trim() }),
       })
       if (!res.ok) {
         const b = await res.json().catch(() => ({}))
-        throw new Error((b as any)?.error ?? 'Failed to send')
+        throw new Error((b as any)?.error ?? 'Failed to send message')
       }
-      return res.json()
-    },
-    onSuccess: () => { setSent(true); setSubject(''); setMessage('') },
-    onError: (e: any) => toast.error(e.message),
-  })
+      setStatus('sent')
+      setSubject('')
+      setMessage('')
+    } catch (err: any) {
+      setErrorMsg(err.message ?? 'Something went wrong')
+      setStatus('error')
+    }
+  }
 
   return (
-    <AppShell>
-      <div className="max-w-3xl mx-auto space-y-10">
-        <header className="pb-4 border-b border-border">
-          <h1 className="text-3xl font-bold tracking-tight mb-1">Support</h1>
-          <p className="text-muted-foreground">Get help with ReceiptGuard. We read every message.</p>
-        </header>
+    <div className="min-h-screen bg-white font-sans">
+      {/* Minimal public header — no auth required */}
+      <header className="border-b border-gray-100 px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+              R
+            </div>
+            <span className="font-bold text-lg text-gray-900 tracking-tight">ReceiptGuard</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="text-sm text-gray-600">Sign In</Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm">Get Started</Button>
+            </Link>
+          </div>
+        </div>
+      </header>
 
-        {/* Quick links */}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Link href="/billing">
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors h-full">
-              <CardContent className="p-5 flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Billing & Subscriptions</p>
-                  <p className="text-xs text-muted-foreground mt-1">View plans, invoices, cancel or upgrade</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link href="/feedback">
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors h-full">
-              <CardContent className="p-5 flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Mail className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Send Feedback</p>
-                  <p className="text-xs text-muted-foreground mt-1">Feature requests, bug reports, general ideas</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+      <main className="max-w-3xl mx-auto px-6 py-16 space-y-14">
+        {/* Page title */}
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">Support Center</h1>
+          <p className="text-lg text-gray-500">Get help with ReceiptGuard. We read and respond to every message.</p>
         </div>
 
-        {/* FAQ */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Frequently asked questions</h2>
-          <div className="space-y-2">
-            {FAQ.map(item => <FaqItem key={item.q} {...item} />)}
+        {/* Quick contact cards */}
+        <div className="grid sm:grid-cols-3 gap-4">
+          <a
+            href="mailto:receiptguard01@gmail.com"
+            className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors text-center"
+          >
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              <Mail className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-gray-900">Email Us</p>
+              <p className="text-xs text-gray-500 mt-0.5">receiptguard01@gmail.com</p>
+            </div>
+          </a>
+
+          <div className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-xl text-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-gray-900">Contact Form</p>
+              <p className="text-xs text-gray-500 mt-0.5">Response within 1–2 business days</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-xl text-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-gray-900">Privacy & Data</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                <Link href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</Link>
+                {' · '}
+                <Link href="/terms" className="text-emerald-600 hover:underline">Terms</Link>
+              </p>
+            </div>
           </div>
         </div>
 
+        {/* FAQ */}
+        <section>
+          <h2 className="text-xl font-semibold text-gray-900 mb-5">Frequently asked questions</h2>
+          <div className="space-y-2">
+            {FAQ.map(item => <FaqItem key={item.q} {...item} />)}
+          </div>
+        </section>
+
         {/* Contact form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact support</CardTitle>
-            <CardDescription>Still need help? Send us a message and we'll get back to you.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {sent ? (
-              <div className="flex flex-col items-center gap-3 py-8 text-center">
-                <CheckCircle2 className="w-12 h-12 text-primary" />
-                <p className="font-semibold">Message sent!</p>
-                <p className="text-sm text-muted-foreground">We'll reply to your registered email within 1–2 business days.</p>
-                <Button variant="outline" onClick={() => setSent(false)}>Send another</Button>
+        <section>
+          <h2 className="text-xl font-semibold text-gray-900 mb-5">Send a message</h2>
+          <div className="border border-gray-200 rounded-xl p-8">
+            {status === 'sent' ? (
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                <div>
+                  <p className="font-semibold text-gray-900">Message sent!</p>
+                  <p className="text-sm text-gray-500 mt-1">We'll reply to your email within 1–2 business days.</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setStatus('idle')}>Send another</Button>
               </div>
             ) : (
-              <form onSubmit={e => { e.preventDefault(); if (subject.trim() && message.trim()) submit.mutate() }} className="space-y-4 max-w-lg">
+              <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Subject</label>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Subject</label>
                   <Input
                     placeholder="Brief description of your issue"
                     value={subject}
@@ -169,7 +197,7 @@ export default function SupportPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Message</label>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">Message</label>
                   <Textarea
                     placeholder="Describe your issue in detail…"
                     value={message}
@@ -179,17 +207,42 @@ export default function SupportPage() {
                     required
                   />
                 </div>
+                {status === 'error' && (
+                  <p className="text-sm text-red-600">{errorMsg} — or email us directly at receiptguard01@gmail.com</p>
+                )}
                 <div className="flex items-center gap-3">
-                  <Button type="submit" disabled={submit.isPending || !subject.trim() || !message.trim()}>
-                    {submit.isPending ? 'Sending…' : 'Send message'}
+                  <Button
+                    type="submit"
+                    disabled={status === 'sending' || !subject.trim() || !message.trim()}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                  >
+                    {status === 'sending' ? 'Sending…' : 'Send message'}
                   </Button>
-                  <Badge variant="outline" className="text-xs text-muted-foreground">Replies within 1–2 business days</Badge>
+                  <Badge variant="outline" className="text-xs text-gray-500">Replies within 1–2 business days</Badge>
                 </div>
+                <p className="text-xs text-gray-400">
+                  You can also email us directly at{' '}
+                  <a href="mailto:receiptguard01@gmail.com" className="text-emerald-600 hover:underline">
+                    receiptguard01@gmail.com
+                  </a>
+                </p>
               </form>
             )}
-          </CardContent>
-        </Card>
-      </div>
-    </AppShell>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-100 mt-16">
+        <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-400">
+          <p>© {new Date().getFullYear()} ReceiptGuard Inc. All rights reserved.</p>
+          <div className="flex gap-6">
+            <Link href="/privacy" className="hover:text-gray-700 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-gray-700 transition-colors">Terms of Service</Link>
+            <Link href="/support" className="hover:text-gray-700 transition-colors">Support</Link>
+          </div>
+        </div>
+      </footer>
+    </div>
   )
 }
