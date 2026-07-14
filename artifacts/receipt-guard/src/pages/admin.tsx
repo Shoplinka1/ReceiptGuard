@@ -1,5 +1,5 @@
 import { AppShell } from '@/components/layout/app-shell'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import {
   Users, DollarSign, TrendingUp, Activity, Mail, ShieldAlert,
   UserX, Search, MessageSquare, Bug, Lightbulb, LifeBuoy, RefreshCw,
-  AlertTriangle, CheckCircle2, Sparkles, Calendar, Inbox, Loader2,
+  AlertTriangle, CheckCircle2, Sparkles, Calendar, Inbox, Loader2, Receipt,
 } from 'lucide-react'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''

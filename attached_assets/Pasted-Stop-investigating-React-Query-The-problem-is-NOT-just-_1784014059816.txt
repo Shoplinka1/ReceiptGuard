@@ -1,0 +1,111 @@
+Stop investigating React Query.
+
+The problem is NOT just the isAdmin value.
+
+Current behavior:
+
+- Logging in as my admin account shows the normal user dashboard.
+- I can see receipts like a normal user.
+- I do NOT see the admin interface.
+- I do NOT see:
+  - total users
+  - payments
+  - subscriptions
+  - feedback
+  - admin analytics
+  - activity logs
+- The page looks exactly like the normal user dashboard.
+
+I need you to trace the ROUTING, not just authentication.
+
+Verify the entire admin route:
+
+1. What component is mounted when visiting /admin?
+2. Is React Router actually rendering Admin.tsx?
+3. Is /admin redirecting to /dashboard anywhere?
+4. Is AppShell replacing the Admin page with Dashboard?
+5. Is there another route matching before /admin?
+6. Is the Admin component being imported correctly?
+7. Add console logs to confirm which React component actually renders.
+
+Print:
+
+- Current URL
+- Matched React Router route
+- Mounted React component name
+- Redirect source (if any)
+
+If Dashboard.tsx is being rendered instead of Admin.tsx, find exactly why.
+
+Do NOT add another workaround.
+
+Find the exact file and line causing the wrong page to render.
+
+Also verify that the admin dashboard itself is complete.
+
+The admin page should contain things like:
+
+- Total users
+- Revenue
+- Payments
+- Feedback
+- Activity logs
+- Gmail accounts
+- Subscriptions
+- Analytics
+- Admin navigation
+
+If those components are missing from Admin.tsx, identify why and restore them.
+
+Do not stop until /admin renders the actual Admin interface instead of the normal user dashboard.
+The problem is confirmed.
+
+When I manually visit:
+
+/admin
+
+the app immediately redirects me to:
+
+/dashboard
+
+So the Admin page is never rendered.
+
+Do NOT investigate the Admin UI anymore.
+
+Trace the redirect itself.
+
+I want you to identify the exact file and exact line that performs the redirect.
+
+Verify every step in this order:
+	1.	Browser requests /admin
+	2.	React Router matches /admin
+	3.	ProtectedRoute executes
+	4.	GET /api/user/profile executes
+	5.	Show the raw JSON returned by /api/user/profile
+	6.	Show the value of:
+	•	profile.isAdmin
+	•	profile.is_admin
+	•	user.id
+	7.	Show the exact condition that evaluates to true and causes:
+navigate("/dashboard")
+
+If /api/user/profile returns isAdmin: true but the redirect still happens, explain exactly why.
+
+If /api/user/profile returns isAdmin: false, trace why:
+	•	Is the database returning false?
+	•	Is the backend mapping it incorrectly?
+	•	Is Railway connected to a different Supabase project?
+	•	Is the wrong database being queried?
+
+Do NOT add another workaround.
+
+Find the root cause.
+
+Also verify that Railway and the frontend are both using the SAME Supabase project by printing:
+	•	SUPABASE_URL (masked except the project reference)
+	•	Project reference
+	•	Environment being used
+
+I want proof that the production backend is connected to the same database where I set profiles.is_admin = true.
+
+Do not stop until you identify the exact reason /admin redirects to /dashboard.

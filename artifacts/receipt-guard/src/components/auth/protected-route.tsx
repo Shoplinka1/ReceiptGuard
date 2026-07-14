@@ -55,14 +55,18 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
   });
   // ─────────────────────────────────────────────────────────────────────────
 
-  const isLoading = loading || (adminOnly && !!user && profileLoading);
+  // isLoading is true only when there is NO cached data and a fetch is in
+  // flight.  Use isFetching as the guard instead so that stale cached data
+  // (isAdmin: false from a previous AppShell fetch) is never used to make
+  // the redirect decision before a fresh response arrives.
+  const isLoading = loading || (!!adminOnly && !!user && isFetching);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">Verifying access…</p>
         </div>
       </div>
     );
@@ -70,10 +74,33 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
 
   if (!user) return <Redirect to="/login" />;
 
-  // Admin check — reads isAdmin from the profiles DB table via the API
-  // (not from user_metadata, which is never populated for existing users)
-  if (adminOnly && !profile?.isAdmin) {
-    return <Redirect to="/dashboard" />;
+  if (adminOnly) {
+    // API call failed (401, 404, 500, network error).  Do NOT silently
+    // redirect — show a visible error so we can distinguish a backend
+    // failure from a genuine "not admin" case.
+    if (isError) {
+      const msg = (error as Error)?.message ?? 'Unknown error';
+      console.error('[ReceiptGuard] ProtectedRoute: profile fetch failed —', msg);
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center bg-background">
+          <p className="font-semibold text-foreground">Could not verify admin access</p>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            The server returned an error. Check the browser console and Railway logs for
+            the <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">[profile]</code> log line to see the exact reason.
+          </p>
+          <pre className="text-xs bg-muted text-muted-foreground p-4 rounded-md max-w-lg w-full text-left overflow-auto">
+            {msg}
+          </pre>
+        </div>
+      );
+    }
+
+    // Fetch completed successfully — check isAdmin.
+    // Only redirect once isFetched is true so we never act on undefined data.
+    if (isFetched && !profile?.isAdmin) {
+      console.warn('[ReceiptGuard] ProtectedRoute: redirect to /dashboard — profile.isAdmin is', profile?.isAdmin, '| full profile:', profile);
+      return <Redirect to="/dashboard" />;
+    }
   }
 
   return <Component />;
