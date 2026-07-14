@@ -1,0 +1,465 @@
+ReceiptGuard Landing Page Professional UX Audit
+
+Do NOT redesign the website.
+
+Do NOT change the color palette.
+
+Do NOT change branding.
+
+Do NOT change pricing.
+
+Do NOT change backend logic.
+
+Do NOT remove any existing features.
+
+The goal is only to polish the landing page to make it look like a premium SaaS (Stripe, Notion, Linear, Vercel quality).
+
+Before changing anything:
+	•	Read the entire landing page.
+	•	Read every section.
+	•	Keep the current layout.
+	•	Only improve wording, trust, hierarchy, spacing and conversion.
+
+⸻
+
+Section 1 — Hero
+
+Current headline:
+
+Your expenses, perfectly organized.
+
+Current subheading:
+
+ReceiptGuard automatically securely scans your Gmail to track receipts, monitor active subscriptions, and alert you before warranties expire or renewals hit.
+
+Do NOT replace these.
+
+Instead:
+
+Improve the wording so it focuses more on the user’s outcome instead of features.
+
+The visitor should immediately understand that ReceiptGuard helps them:
+	•	never lose receipts
+	•	never forget subscriptions
+	•	never miss warranty deadlines
+	•	organize purchases automatically
+
+without making the headline longer.
+
+⸻
+
+Section 2 — Hero trust
+
+The current hero says:
+
+Trusted by 10,000+ professionals
+
+If this number cannot be verified,
+
+REMOVE IT.
+
+Never use fake social proof.
+
+Replace it with real trust signals instead.
+
+Examples:
+	•	Read-only Gmail access
+	•	Secure Google OAuth
+	•	Bank-grade encryption
+	•	GDPR-ready
+	•	Privacy first
+
+Use only truthful statements.
+
+⸻
+
+Section 3 — Gmail trust
+
+This is currently the biggest conversion weakness.
+
+The landing page asks users to connect Gmail.
+
+Immediately underneath the CTA buttons add a compact trust strip.
+
+Example:
+
+✓ Read-only Gmail access
+
+✓ We never read personal conversations
+
+✓ Disconnect anytime
+
+✓ Your data stays encrypted
+
+Do NOT exaggerate.
+
+Use only statements that are technically true.
+
+⸻
+
+Section 4 — Everything in one place
+
+Current cards:
+	•	Smart Receipt Extraction
+	•	Subscription Tracking
+	•	Warranty Monitoring
+
+Keep these cards.
+
+Do NOT redesign them.
+
+Improve only:
+	•	icon consistency
+	•	spacing
+	•	typography
+	•	microcopy
+
+Each card should explain one clear benefit in one sentence.
+
+Avoid marketing buzzwords.
+
+⸻
+
+Section 5 — Missing “Why users pay”
+
+Currently the landing page explains features.
+
+It does not clearly explain why someone should pay.
+
+Add a new section AFTER “Everything in one place”.
+
+Title:
+
+Why people use ReceiptGuard
+
+Show 4 benefit cards.
+
+Examples:
+
+Never lose a receipt again
+
+Know exactly what subscriptions renew next
+
+Protect expensive purchases with warranty reminders
+
+Find any receipt instantly in seconds
+
+These are user outcomes.
+
+Not features.
+
+⸻
+
+Section 6 — Missing instant value
+
+The landing page never shows what users get immediately after connecting Gmail.
+
+Add a visual dashboard preview.
+
+Example metrics:
+
+327 receipts organized
+
+14 subscriptions detected
+
+3 warranties expiring soon
+
+$89 renewing this month
+
+Recent purchases
+
+Upcoming renewals
+
+Warranty countdowns
+
+Use realistic sample data.
+
+Do NOT claim these numbers belong to real users.
+
+⸻
+
+Section 7 — Security section
+
+Currently security is mentioned briefly.
+
+Create a dedicated section titled:
+
+Your privacy comes first.
+
+Explain:
+
+Google OAuth
+
+Read-only Gmail access
+
+Encrypted storage
+
+We never send emails
+
+We never delete emails
+
+Disconnect anytime
+
+This section should increase trust before the FAQ.
+
+⸻
+
+Section 8 — FAQ
+
+Review every FAQ.
+
+Answer the questions every visitor has:
+
+Do you read my personal emails?
+
+Why do you need Gmail access?
+
+Can I disconnect Gmail later?
+
+How secure is my data?
+
+Will ReceiptGuard delete emails?
+
+Do you support Outlook?
+
+Can I upload paper receipts?
+
+Keep answers short.
+
+⸻
+
+Section 9 — CTA
+
+The final CTA should reinforce the outcome.
+
+Instead of repeating features,
+
+focus on the transformation.
+
+Example:
+
+Stop digging through your inbox.
+
+Start keeping every receipt, subscription and warranty organized automatically.
+
+⸻
+
+Section 10 — Professional polish
+
+Review the entire landing page.
+
+Improve:
+
+spacing
+
+typography
+
+visual hierarchy
+
+button consistency
+
+section spacing
+
+responsive layout
+
+animation timing
+
+hover effects
+
+loading states
+
+Ensure every section looks polished.
+
+Do NOT redesign the website.
+
+Only refine it.
+
+⸻
+
+Section 11 — Why ReceiptGuard instead of Gmail?
+
+Add a new section immediately after “Why people use ReceiptGuard”.
+
+Title:
+
+Why use ReceiptGuard instead of searching Gmail manually?
+
+Create a clean, premium comparison table.
+
+Left column:
+
+Searching Gmail manually
+
+Examples:
+	•	Search receipts one by one
+	•	No subscription renewal tracking
+	•	No warranty monitoring
+	•	No financial overview
+	•	No automatic reminders
+	•	Easy to miss important purchases
+
+Right column:
+
+ReceiptGuard
+
+Examples:
+	•	Automatically organizes every receipt
+	•	Tracks recurring subscriptions
+	•	Monitors warranties
+	•	Shows all purchases in one dashboard
+	•	Sends renewal reminders
+	•	Instantly finds any purchase
+
+Use clean icons (✓ / ✕ or equivalent).
+
+Keep the design modern, premium, and responsive.
+
+Do not make it look cluttered.
+
+The purpose is to clearly communicate why someone should use ReceiptGuard instead of relying on Gmail search.
+
+⸻
+
+Section 12 — Supported merchants
+
+Add a new section before the FAQ.
+
+Title:
+
+Works with receipts from your favorite services
+
+Show recognizable merchants that commonly send receipts.
+
+Examples:
+	•	Amazon
+	•	Apple
+	•	Google
+	•	Microsoft
+	•	Netflix
+	•	Spotify
+	•	Uber
+	•	Airbnb
+	•	PayPal
+
+Use official brand names and appropriate logos/icons where permitted.
+
+Do not imply any partnership or endorsement.
+
+Add a short description underneath explaining that ReceiptGuard automatically detects receipts from thousands of supported merchants.
+
+⸻
+
+Section 13 — Improve “How it works”
+
+Keep the existing first two steps.
+
+Do not remove them.
+
+Current flow:
+	1.	Connect your inbox
+	2.	AI extraction runs
+
+Add a new third step.
+
+Step 3
+
+Stay informed
+
+Example description:
+
+Receive renewal reminders, warranty alerts, and subscription insights automatically without manually checking your inbox.
+
+This should complete the user journey from:
+
+Connect → Scan → Stay protected.
+
+⸻
+
+Section 14 — Security wording review
+
+Review every security-related sentence on the landing page.
+
+Remove or replace any wording that cannot be truthfully verified.
+
+For example:
+
+Replace:
+
+Bank-grade encryption
+
+with wording such as:
+	•	Secure Google OAuth authentication
+	•	Read-only Gmail access
+	•	Encrypted data storage
+	•	Industry-standard encryption (only if technically accurate)
+	•	Your Gmail remains under your control
+	•	Disconnect access anytime
+
+Only make claims that are factually true.
+
+Do not exaggerate security capabilities.
+
+The goal is to increase trust while remaining completely accurate.
+
+⸻
+
+Final review
+
+After completing Sections 1–14:
+	•	Review the entire landing page from top to bottom.
+	•	Ensure every section flows naturally into the next.
+	•	Maintain a premium SaaS appearance.
+	•	Keep the design clean, modern, and conversion-focused.
+	•	Do not modify any backend code, Paystack logic, database schema, Gmail OAuth flow, admin functionality, or billing logic.
+	•	Build the project.
+	•	Fix any build errors.
+	•	Commit the changes.
+	•	Push to GitHub.
+
+Things NOT to change
+
+Do NOT change:
+
+backend
+
+Paystack
+
+pricing logic
+
+subscription logic
+
+Google OAuth flow
+
+billing
+
+database
+
+dashboard
+
+admin
+
+API
+
+Only improve the landing page UX and conversion.
+
+⸻
+
+Goal
+
+When finished,
+
+the landing page should feel comparable to premium SaaS companies such as:
+	•	Stripe
+	•	Notion
+	•	Linear
+	•	Vercel
+	•	Clerk
+	•	Resend
+
+without changing ReceiptGuard’s identity or existing feature set.
+
+Finally:
+	•	Build the project.
+	•	Fix any errors.
+	•	Commit the changes.
+	•	Push to GitHub.
