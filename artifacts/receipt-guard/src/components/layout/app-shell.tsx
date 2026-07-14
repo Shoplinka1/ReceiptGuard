@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useEffect } from "react"
 import { Link, useLocation } from "wouter"
 import { toast } from "sonner"
 import { 
@@ -21,8 +21,20 @@ import { NotificationBell } from "./notification-bell"
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation()
   const { user, signOut } = useAuth()
-  const { data: profile } = useGetUserProfile({ query: { enabled: !!user, retry: false } })
+  const { data: profile, isError: profileError, error: profileFetchError } = useGetUserProfile({
+    query: { enabled: !!user, retry: 1, staleTime: 0 },
+  })
   const isAdmin = profile?.isAdmin ?? false
+
+  // Diagnostic logging — visible in browser DevTools Console
+  useEffect(() => {
+    console.group('[ReceiptGuard] AppShell profile')
+    console.log('user id  :', user?.id ?? '(none)')
+    console.log('profile  :', profile)
+    console.log('isAdmin  :', isAdmin)
+    console.log('error    :', profileError, profileFetchError ?? '')
+    console.groupEnd()
+  }, [profile, isAdmin, profileError, profileFetchError, user?.id])
 
   const handleSignOut = async () => {
     try {

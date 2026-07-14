@@ -1,4 +1,4 @@
-import { type ComponentType } from 'react';
+import { type ComponentType, useEffect } from 'react';
 import { Redirect } from 'wouter';
 import { useAuth } from '../../hooks/use-auth';
 import { useGetUserProfile } from '@workspace/api-client-react';
@@ -12,19 +12,50 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
 
-  // Fetch profile for admin check — only runs once user is known.
-  // `isFetched` (not just `isLoading`) is used below to guard the redirect:
-  // React Query's `isLoading` can be `false` for one render cycle after
-  // `enabled` transitions from false→true while `fetchStatus` is still 'idle',
-  // which would cause a premature redirect before the profile arrives.
-  const { data: profile, isFetched: profileFetched } = useGetUserProfile({
+  // Fetch profile for admin check — only runs once user is known
+  const {
+    data: profile,
+    status,
+    isLoading: profileLoading,
+    isFetching,
+    isFetched,
+    isError,
+    error,
+  } = useGetUserProfile({
     query: { enabled: !!user && !!adminOnly, retry: false },
   });
 
-  // Keep showing the spinner until:
-  //   • auth finishes resolving, AND
-  //   • for admin routes: the profile fetch has completed (success OR error)
-  const isLoading = loading || (!!adminOnly && !!user && !profileFetched);
+  // ── Diagnostic logging ────────────────────────────────────────────────────
+  // Logs every render so you can see exactly what values ProtectedRoute sees
+  // before any redirect decision is made. Check DevTools Console → filter by
+  // "[ReceiptGuard] ProtectedRoute".
+  useEffect(() => {
+    if (!adminOnly) return; // only log for admin routes
+    console.group('[ReceiptGuard] ProtectedRoute render');
+    console.log('adminOnly         :', adminOnly);
+    console.log('auth.loading      :', loading);
+    console.log('user              :', user?.id ?? null);
+    console.log('RQ status         :', status);
+    console.log('RQ isLoading      :', profileLoading);
+    console.log('RQ isFetching     :', isFetching);
+    console.log('RQ isFetched      :', isFetched);
+    console.log('RQ isError        :', isError);
+    console.log('RQ error          :', error ?? null);
+    console.log('profile           :', profile ?? null);
+    console.log('profile.isAdmin   :', profile?.isAdmin ?? '(no profile)');
+    // Derived values that drive the redirect decision
+    const computedLoading = loading || (adminOnly && !!user && profileLoading);
+    const wouldRedirectAuth  = !loading && !user;
+    const wouldRedirectAdmin = !computedLoading && !!user && adminOnly && !profile?.isAdmin;
+    console.log('--- decision ---');
+    console.log('computedLoading   :', computedLoading);
+    console.log('→ redirect /login :', wouldRedirectAuth);
+    console.log('→ redirect /dash  :', wouldRedirectAdmin);
+    console.groupEnd();
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const isLoading = loading || (adminOnly && !!user && profileLoading);
 
   if (isLoading) {
     return (
@@ -40,8 +71,7 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
   if (!user) return <Redirect to="/login" />;
 
   // Admin check — reads isAdmin from the profiles DB table via the API
-  // (not from user_metadata, which is never updated for existing users).
-  // Only evaluated after profileFetched=true (see isLoading guard above).
+  // (not from user_metadata, which is never populated for existing users)
   if (adminOnly && !profile?.isAdmin) {
     return <Redirect to="/dashboard" />;
   }

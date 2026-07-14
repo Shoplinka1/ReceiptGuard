@@ -6,11 +6,22 @@ import { logger } from '../lib/logger';
 const router: IRouter = Router();
 
 router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => {
-  const { data, error } = await supabaseAdmin.from('profiles').select('*, is_admin, user_subscriptions(*, plans(*)), email_accounts(id, email, is_active)').eq('id', req.userId).single();
-  if (error || !data) { res.status(404).json({ error: 'Profile not found' }); return; }
+  logger.info({ userId: req.userId }, '[profile] GET /api/user/profile called');
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('*, is_admin, user_subscriptions(*, plans(*)), email_accounts(id, email, is_active)')
+    .eq('id', req.userId)
+    .single();
+  if (error || !data) {
+    logger.error({ userId: req.userId, error: error?.message }, '[profile] profile not found or DB error');
+    res.status(404).json({ error: 'Profile not found' });
+    return;
+  }
+  const isAdmin = data.is_admin ?? false;
+  logger.info({ userId: req.userId, email: data.email, isAdmin, plan: data.plan_id }, '[profile] returning profile');
   res.json({
     id: data.id, name: data.full_name, email: data.email, avatarUrl: data.avatar_url ?? null,
-    plan: data.plan_id as 'free' | 'pro', isAdmin: data.is_admin ?? false,
+    plan: data.plan_id as 'free' | 'pro', isAdmin,
     gmailConnected: (data.email_accounts as any[])?.some(a => a.is_active) ?? false,
     gmailEmail: (data.email_accounts as any[])?.[0]?.email ?? null, storageUsed: 0, createdAt: data.created_at,
   });
