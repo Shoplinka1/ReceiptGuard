@@ -12,6 +12,7 @@ import paystackRouter from './paystack';
 import adminRouter from './admin';
 import feedbackRouter from './feedback';
 import notificationsRouter from './notifications';
+import debugRouter from './debug';
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use(userRouter);
 router.use(feedbackRouter);
 router.use(notificationsRouter);
 router.use(adminRouter);
+router.use(debugRouter);
 
 export default router;
