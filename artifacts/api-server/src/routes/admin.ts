@@ -342,9 +342,10 @@ router.patch('/api/admin/feedback/:id', ...adminGuard, async (req, res): Promise
 // Admin-only. Used to verify email delivery is working in production.
 router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<void> => {
   const { to } = req.body as { to?: string };
-  const recipient = to?.trim() || 'receiptguard01@gmail.com';
+  const recipient = to?.trim() || 'feedback@getreceiptguard.xyz';
 
-  const emailConfigured = !!(
+  const usingResend = !!process.env.RESEND_API_KEY;
+  const emailConfigured = usingResend || !!(
     process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS
   );
 
@@ -352,19 +353,19 @@ router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<voi
     res.status(503).json({
       success: false,
       configured: false,
-      error: 'SMTP not configured — EMAIL_HOST, EMAIL_USER, and EMAIL_PASS must all be set in Railway environment variables.',
-      hint: 'Set EMAIL_HOST=smtp.gmail.com, EMAIL_PORT=587, EMAIL_USER=your@gmail.com, EMAIL_PASS=<16-char app password>',
+      error: 'Email is not configured — set RESEND_API_KEY (preferred), or EMAIL_HOST/EMAIL_USER/EMAIL_PASS as a fallback.',
+      hint: usingResend ? undefined : 'Set EMAIL_HOST=smtp.gmail.com, EMAIL_PORT=587, EMAIL_USER=your@gmail.com, EMAIL_PASS=<16-char app password>',
     });
     return;
   }
 
   const ok = await sendEmail({
     to: recipient,
-    subject: '[ReceiptGuard] SMTP Test — delivery confirmed',
+    subject: `[ReceiptGuard] ${usingResend ? 'Resend' : 'SMTP'} test — delivery confirmed`,
     html: `
       <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
-        <h2>✅ SMTP Test Successful</h2>
-        <p>This email was sent at <strong>${new Date().toISOString()}</strong> via the ReceiptGuard admin SMTP test endpoint.</p>
+        <h2>✅ ${usingResend ? 'Resend' : 'SMTP'} test successful</h2>
+        <p>This email was sent at <strong>${new Date().toISOString()}</strong> via the ReceiptGuard admin email test endpoint.</p>
         <p style="color:#666;font-size:12px">If you received this, email delivery is working correctly in production.</p>
       </div>
     `,
@@ -373,11 +374,14 @@ router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<voi
   res.json({
     success: ok,
     configured: true,
+    provider: usingResend ? 'resend' : 'smtp',
     recipient,
     sentAt: new Date().toISOString(),
     message: ok
       ? `Test email sent to ${recipient}. Check the inbox (and spam folder) to confirm delivery.`
-      : `SMTP is configured but sendMail failed. Check Railway logs for [email] sendMail FAILED with the full error code and SMTP response.`,
+      : usingResend
+        ? `Resend is configured but the send failed — this is usually a domain not yet verified (SPF/DKIM pending DNS propagation). Check server logs for [email][resend] send FAILED.`
+        : `SMTP is configured but sendMail failed. Check logs for [email] sendMail FAILED with the full error code and SMTP response.`,
   });
 });
 

@@ -1,23 +1,83 @@
 /**
- * Email helper using Nodemailer.
- * Configure via env vars:
- *   EMAIL_HOST     — SMTP host (e.g. smtp.gmail.com)
- *   EMAIL_PORT     — SMTP port (default 587)
- *   EMAIL_USER     — SMTP username / sender address
- *   EMAIL_PASS     — SMTP password or app password (Gmail: 16-char app password, no spaces)
- *   EMAIL_FROM     — "From" display (default: EMAIL_USER)
+ * Email helper. Two transports, tried in this order:
  *
- * If EMAIL_HOST/USER/PASS are not set, emails are logged to stdout (dev mode).
- * All SMTP errors are logged with full detail — never silently swallowed.
+ *   1. Resend (preferred) — configure via RESEND_API_KEY.
+ *      Uses the getreceiptguard.xyz domain senders (noreply@, reminders@,
+ *      support@, feedback@). Requires that domain's SPF/DKIM/DMARC records
+ *      to be verified in the Resend dashboard, otherwise Resend will reject
+ *      or quarantine mail from an unverified domain.
+ *   2. Nodemailer/SMTP (legacy fallback) — configure via EMAIL_HOST,
+ *      EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM. Kept so existing
+ *      Railway deployments that only have SMTP configured keep working.
+ *
+ * If neither is configured, emails are logged to stdout (dev mode).
+ * All errors are logged with full detail — never silently swallowed.
  */
 import nodemailer from 'nodemailer';
 import { logger } from './logger';
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? 'getreceiptguard.xyz';
+
+// Default senders on the verified domain. Callers can override `from` per-call
+// (e.g. reminder-scheduler uses reminders@, feedback uses feedback@).
+export const EMAIL_SENDERS = {
+  noreply: `ReceiptGuard <noreply@${EMAIL_DOMAIN}>`,
+  support: `ReceiptGuard Support <support@${EMAIL_DOMAIN}>`,
+  reminders: `ReceiptGuard <reminders@${EMAIL_DOMAIN}>`,
+  feedback: `ReceiptGuard <feedback@${EMAIL_DOMAIN}>`,
+} as const;
 
 const EMAIL_HOST = process.env.EMAIL_HOST;
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT ?? '587', 10);
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
-const EMAIL_FROM = process.env.EMAIL_FROM ?? EMAIL_USER ?? 'noreply@receiptguard.app';
+const EMAIL_FROM = process.env.EMAIL_FROM ?? EMAIL_USER ?? EMAIL_SENDERS.noreply;
+
+// ─── Resend transport ──────────────────────────────────────────────────────────
+
+async function sendViaResend(opts: { to: string; subject: string; html: string; text?: string; from?: string }): Promise<boolean> {
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: opts.from ?? EMAIL_SENDERS.noreply,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({} as any));
+      logger.error({
+        to: opts.to,
+        subject: opts.subject,
+        status: res.status,
+        errBody,
+      }, '[email][resend] send FAILED');
+      // Domain not verified yet (pending DNS) shows up as a 403 with a
+      // "domain is not verified" message — surface that distinctly so it's
+      // not confused with a real auth failure.
+      if (res.status === 403) {
+        logger.warn({ to: opts.to }, '[email][resend] likely cause: sending domain SPF/DKIM not verified yet in Resend dashboard (DNS propagation pending)');
+      }
+      return false;
+    }
+
+    const info = await res.json().catch(() => ({})) as { id?: string };
+    logger.info({ to: opts.to, subject: opts.subject, id: info?.id }, '[email][resend] sent successfully');
+    return true;
+  } catch (err: any) {
+    logger.error({ to: opts.to, subject: opts.subject, message: err?.message }, '[email][resend] request threw');
+    return false;
+  }
+}
 
 // Validate Gmail App Password format: exactly 16 non-whitespace chars
 // (Google strips spaces in the UI but the actual password has no spaces)
@@ -82,12 +142,21 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   text?: string;
+  from?: string;
 }): Promise<boolean> {
+  // Prefer Resend when configured — it's the production email path going
+  // forward (see EMAIL_SENDERS). Falls through to SMTP/dev-log only if
+  // RESEND_API_KEY isn't set, so existing Railway SMTP setups keep working
+  // until they're migrated.
+  if (RESEND_API_KEY) {
+    return sendViaResend(opts);
+  }
+
   const transport = getTransport();
   if (!transport) {
     logger.info(
       { to: opts.to, subject: opts.subject },
-      '[email] SMTP not configured — email not sent (set EMAIL_HOST, EMAIL_USER, EMAIL_PASS)',
+      '[email] Neither Resend nor SMTP configured — email not sent (set RESEND_API_KEY, or EMAIL_HOST/EMAIL_USER/EMAIL_PASS)',
     );
     logEmailConfigDiagnostics('sendEmail — not configured');
     return false;
@@ -113,7 +182,7 @@ export async function sendEmail(opts: {
 
   try {
     const info = await transport.sendMail({
-      from: EMAIL_FROM,
+      from: opts.from ?? EMAIL_FROM,
       to: opts.to,
       subject: opts.subject,
       html: opts.html,

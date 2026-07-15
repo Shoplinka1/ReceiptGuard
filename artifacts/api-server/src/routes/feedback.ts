@@ -6,7 +6,7 @@
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../lib/supabase';
-import { sendEmail } from '../lib/email';
+import { sendEmail, EMAIL_SENDERS } from '../lib/email';
 import { logger } from '../lib/logger';
 
 const router: IRouter = Router();
@@ -74,7 +74,8 @@ router.post('/api/feedback', requireAuth, async (req, res): Promise<void> => {
     emailSent = await Promise.race([
       emailTimeout,
       sendEmail({
-        to: 'receiptguard01@gmail.com',
+        to: process.env.FEEDBACK_NOTIFY_EMAIL ?? 'feedback@getreceiptguard.xyz',
+        from: EMAIL_SENDERS.feedback,
         subject: `[ReceiptGuard] New ${typeLabel}: ${subject.trim()}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto">

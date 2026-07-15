@@ -15,7 +15,7 @@
  * The current approach fires reminders within ±12 hours of the user's local date.
  */
 import { supabaseAdmin } from './supabase';
-import { sendEmail } from './email';
+import { sendEmail, EMAIL_SENDERS } from './email';
 import { logger } from './logger';
 import { runGmailScan } from '../routes/gmail';
 
@@ -183,6 +183,7 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
 
     const sent = await sendEmail({
       to: profile.email,
+      from: EMAIL_SENDERS.reminders,
       subject: `Reminder: ${renewal.merchant_name} renews in ${daysAway} day${daysAway === 1 ? '' : 's'}`,
       html: reminderEmailHtml({
         firstName: profile.full_name?.split(' ')[0] ?? 'there',
@@ -252,6 +253,7 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
 
     const sent = await sendEmail({
       to: profile.email,
+      from: EMAIL_SENDERS.reminders,
       subject: `Warranty alert: ${name} expires in ${daysAway} day${daysAway === 1 ? '' : 's'}`,
       html: reminderEmailHtml({
         firstName: profile.full_name?.split(' ')[0] ?? 'there',
