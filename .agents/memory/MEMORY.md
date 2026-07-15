@@ -30,3 +30,5 @@
 - [Dashboard metrics design](dashboard-metrics.md) — what each widget queries, the validAmount filter, and why "Money Saved" was renamed to "Monthly Subs".
 - [Admin access fix](admin-access-fix.md) — three root causes: single()→maybeSingle(), missing profile rows, PostgREST join FK gap. Phase 7 migration + is_admin must be set manually.
 - [ENCRYPTION_KEY format](encryption-key-format.md) — must be exactly 64 hex chars (32 bytes for AES-256-CBC). Changing it breaks all existing Gmail connections.
+- [Resend email integration](resend-email-integration.md) — Resend key here is send-only restricted (can't query /domains); verify delivery with a real test send, not the domains API.
+- [ReceiptGuard dev setup](receiptguard-replit-dev.md) — Replit is dev-only for this project; production stays on Railway (API) + Vercel (frontend) + Supabase (DB). Never propose switching deployment here.
