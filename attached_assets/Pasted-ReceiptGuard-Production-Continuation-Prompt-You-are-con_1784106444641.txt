@@ -1,0 +1,633 @@
+ReceiptGuard Production Continuation Prompt
+
+You are continuing development of an existing production SaaS called ReceiptGuard.
+
+CRITICAL RULES
+
+Treat this as a live production SaaS.
+
+Never redesign working features.
+
+Never rewrite code unless absolutely necessary.
+
+Always read the existing implementation before changing anything.
+
+If a change could affect production, explain why first.
+
+Keep changes as small as possible.
+
+⸻
+
+NEVER MODIFY THESE
+
+Do NOT rewrite or redesign:
+	•	Gmail Scanner
+	•	Gmail OAuth
+	•	Google Branding Verification
+	•	Receipt Parsing
+	•	Subscription Detection
+	•	Warranty Detection
+	•	Billing
+	•	Authentication
+	•	Existing Database Tables
+	•	Existing API Routes
+	•	Existing User Dashboard
+	•	Pricing
+	•	Paystack Integration
+
+Assume these already work.
+
+⸻
+
+CURRENT PRODUCTION STATUS
+
+ReceiptGuard already contains:
+	•	Gmail OAuth
+	•	Receipt Scanner
+	•	Receipt Dashboard
+	•	Subscription Tracking
+	•	Warranty Tracking
+	•	Spending Analytics
+	•	Paystack
+	•	Pricing
+	•	Google Verification
+	•	Privacy Policy
+	•	Terms
+	•	Support Page
+	•	Feedback Page
+	•	Custom Domain
+	•	Resend Account Connected
+
+These must continue working exactly as they do now.
+
+⸻
+
+CURRENT GOAL
+
+Finish the production system.
+
+NOT redesign it.
+
+Only finish the remaining production infrastructure.
+
+⸻
+
+PRIORITY 1
+
+Verify Gmail Scanner
+
+DO NOT rewrite it.
+
+Audit it.
+
+Test it.
+
+Connect a Gmail account.
+
+Run scans.
+
+Verify:
+
+✓ receipts
+
+✓ subscriptions
+
+✓ warranties
+
+✓ shipping emails ignored
+
+✓ promotional emails ignored
+
+✓ free limits
+
+✓ pro limits
+
+Print scan statistics:
+
+Total emails fetched
+
+Receipts imported
+
+Subscriptions imported
+
+Warranties imported
+
+Skipped
+
+Failed
+
+No code changes unless a bug is confirmed.
+
+⸻
+
+PRIORITY 2
+
+Finish Automatic Gmail Scheduler
+
+Current requirement:
+
+Every connected account should automatically scan Gmail.
+
+Free
+
+Manual Scan only
+
+Pro
+
+Automatic scans every 6 hours
+
+Scheduler must:
+
+Skip disconnected accounts
+
+Skip expired plans
+
+Refresh OAuth tokens automatically
+
+Retry failed scans
+
+Log every scan
+
+Store:
+
+last_scan
+
+next_scan
+
+scan_duration
+
+scan_status
+
+⸻
+
+PRIORITY 3
+
+Configure Resend
+
+ReceiptGuard already owns its domain.
+
+Use Resend.
+
+Do NOT use fake email sending.
+
+Configure production email sending.
+
+Use:
+
+support@getreceiptguard.xyz
+
+noreply@getreceiptguard.xyz
+
+reminders@getreceiptguard.xyz
+
+feedback@getreceiptguard.xyz
+
+Verify SPF
+
+Verify DKIM
+
+Verify DMARC
+
+Never hardcode API keys.
+
+Use environment variables.
+
+⸻
+
+PRIORITY 4
+
+Reminder Emails
+
+Implement production reminder system.
+
+Receipt reminders
+
+Subscription reminders
+
+Warranty reminders
+
+Weekly summaries
+
+Monthly summaries
+
+Yearly summaries
+
+Subscription reminders:
+
+30 days
+
+14 days
+
+7 days
+
+3 days
+
+1 day
+
+Warranty reminders:
+
+90
+
+60
+
+30
+
+14
+
+7
+
+3
+
+1
+
+Emails should automatically send.
+
+No manual trigger.
+
+⸻
+
+PRIORITY 5
+
+Email Templates
+
+Create professional responsive emails.
+
+ReceiptGuard branding.
+
+Dark mode.
+
+Mobile friendly.
+
+CTA buttons.
+
+Support links.
+
+Footer.
+
+Privacy.
+
+Terms.
+
+Unsubscribe.
+
+Templates:
+
+Receipt Reminder
+
+Subscription Reminder
+
+Warranty Reminder
+
+Weekly Summary
+
+Monthly Summary
+
+Yearly Summary
+
+Feedback Confirmation
+
+Welcome Email
+
+⸻
+
+PRIORITY 6
+
+Feedback System
+
+Current feedback page exists.
+
+Finish backend.
+
+Workflow:
+
+User submits feedback.
+
+↓
+
+Store in database.
+
+↓
+
+Notify
+
+feedback@getreceiptguard.xyz
+
+↓
+
+Show inside Admin Dashboard.
+
+Admin can:
+
+Read
+
+Reply
+
+Archive
+
+Mark resolved
+
+Search
+
+Filter
+
+⸻
+
+PRIORITY 7
+
+Separate Admin Application
+
+Move Admin completely outside customer app.
+
+Current:
+
+getreceiptguard.xyz/admin
+
+Target:
+
+admin.getreceiptguard.xyz
+
+Separate React application.
+
+Never expose admin code to customers.
+
+Technology:
+
+React
+
+TypeScript
+
+Tailwind
+
+Shadcn
+
+Shared backend.
+
+Separate authentication.
+
+⸻
+
+ADMIN FEATURES
+
+Dashboard
+
+Show:
+
+Users
+
+Free users
+
+Pro users
+
+Revenue
+
+MRR
+
+Receipts
+
+Subscriptions
+
+Warranties
+
+Connected Gmail
+
+Today’s scans
+
+Failed scans
+
+Storage usage
+
+API usage
+
+⸻
+
+USER MANAGEMENT
+
+Search
+
+View
+
+Suspend
+
+Delete
+
+Upgrade
+
+Downgrade
+
+Reset Scan History
+
+Disconnect Gmail
+
+View Scan Logs
+
+⸻
+
+SCAN QUEUE
+
+Show:
+
+Running
+
+Waiting
+
+Completed
+
+Failed
+
+Retry
+
+Cancel
+
+Duration
+
+⸻
+
+REMINDER MANAGER
+
+Create
+
+Pause
+
+Resume
+
+Delete
+
+Campaigns
+
+Templates
+
+Schedules
+
+⸻
+
+LOGS
+
+OAuth Logs
+
+Scanner Logs
+
+Cron Logs
+
+Email Logs
+
+API Logs
+
+Payment Logs
+
+Searchable.
+
+⸻
+
+EMAIL QUEUE
+
+Sent
+
+Pending
+
+Failed
+
+Retry
+
+⸻
+
+FEEDBACK
+
+Read
+
+Reply
+
+Archive
+
+Delete
+
+⸻
+
+ADMIN SECURITY
+
+Separate login.
+
+JWT.
+
+Roles.
+
+Audit Logs.
+
+Rate Limiting.
+
+Never allow customer accounts into Admin.
+
+⸻
+
+CRON JOBS
+
+Production cron jobs only.
+
+Jobs:
+
+Automatic Gmail Scan
+
+Reminder Scheduler
+
+Weekly Summary
+
+Monthly Summary
+
+Warranty Reminder
+
+Subscription Reminder
+
+Retry Failed Scan
+
+Cleanup Expired Jobs
+
+⸻
+
+API RULES
+
+Reuse existing APIs.
+
+Never duplicate business logic.
+
+Create only secure admin endpoints.
+
+⸻
+
+BEFORE EVERY CHANGE
+
+Always:
+
+Read implementation.
+
+Explain planned change.
+
+Change only required files.
+
+Avoid touching unrelated files.
+
+Preserve production behavior.
+
+⸻
+
+AFTER EVERY CHANGE
+
+Run production build.
+
+Verify:
+
+No TypeScript errors.
+
+No lint errors.
+
+No build errors.
+
+No broken routes.
+
+No broken scanner.
+
+⸻
+
+FINAL TEST
+
+Do NOT say “done” until all of these are verified:
+
+✓ Gmail scanner works
+
+✓ Receipt detection works
+
+✓ Subscription detection works
+
+✓ Warranty detection works
+
+✓ Automatic Gmail scanning works
+
+✓ Reminder emails send through Resend
+
+✓ Feedback emails send
+
+✓ Weekly summaries send
+
+✓ Monthly summaries send
+
+✓ Admin dashboard works
+
+✓ Customer dashboard still works
+
+✓ Google OAuth still works
+
+✓ Google Verification pages still work
+
+✓ Production build passes
+
+⸻
+
+ABSOLUTE RULE
+
+Do NOT add random new features.
+
+Do NOT redesign UI.
+
+Do NOT refactor working code.
+
+Do NOT touch unrelated files.
+
+Only complete the remaining production work while preserving everything that already works.
