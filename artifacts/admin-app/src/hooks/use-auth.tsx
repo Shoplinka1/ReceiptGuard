@@ -17,16 +17,39 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchIsAdmin(accessToken: string): Promise<boolean> {
+/**
+ * Returns:
+ *   true  — server confirmed is_admin = true
+ *   false — server explicitly said is_admin = false (user authenticated, not admin)
+ *   null  — indeterminate: network error, non-200 status, or parse failure
+ *           → caller should NOT change existing isAdmin state on null
+ */
+async function fetchIsAdmin(accessToken: string): Promise<boolean | null> {
+  const url = `${API_BASE}/api/user/profile`;
   try {
-    const res = await fetch(`${API_BASE}/api/user/profile`, {
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) return false;
-    const data = await res.json();
+    let data: Record<string, unknown> = {};
+    try { data = await res.json(); } catch { /* non-JSON body */ }
+
+    // Log to browser console so devtools shows exactly what the API returned
+    console.info(
+      `[AdminApp] fetchIsAdmin ${res.status} from ${url}`,
+      { isAdmin: data?.isAdmin, data },
+    );
+
+    if (!res.ok) {
+      // 401 = JWT rejected by Railway (wrong Supabase project?), 404 = profile row missing,
+      // 5xx = server error. All are indeterminate — do not flip existing isAdmin state.
+      console.warn(`[AdminApp] fetchIsAdmin: non-ok status ${res.status} — treating as indeterminate (null)`);
+      return null;
+    }
+
     return Boolean(data?.isAdmin);
-  } catch {
-    return false;
+  } catch (err) {
+    console.error('[AdminApp] fetchIsAdmin: network/parse error — treating as indeterminate (null)', err);
+    return null;
   }
 }
 
@@ -43,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.session?.user ?? null);
       if (data.session?.access_token) {
         const admin = await fetchIsAdmin(data.session.access_token);
-        setIsAdmin(admin);
+        // null = indeterminate (API error on initial load) → treat as false so the
+        // user sees /login rather than an infinite spinner.
+        setIsAdmin(admin ?? false);
       } else {
         setIsAdmin(false);
       }
@@ -53,11 +78,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN') {
+        // Fresh sign-in: get a definitive answer.  null = API unavailable on this
+        // attempt; treat as false so the user sees a clear error rather than
+        // spinning forever.
         queryClient.removeQueries({ queryKey: ['admin'] });
         if (session?.access_token) {
           const admin = await fetchIsAdmin(session.access_token);
-          setIsAdmin(admin);
+          setIsAdmin(admin ?? false);
+        }
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Token auto-refresh: only update isAdmin when we get a definitive answer.
+        // A null (network/server error) must NOT flip a previously-confirmed true
+        // to false — that was the regression: every ~1h token refresh that hit a
+        // transient Railway error would silently revoke admin access.
+        queryClient.removeQueries({ queryKey: ['admin'] });
+        if (session?.access_token) {
+          const admin = await fetchIsAdmin(session.access_token);
+          if (admin !== null) setIsAdmin(admin);
+          // else: keep existing isAdmin value intact
         }
       } else if (event === 'SIGNED_OUT') {
         setIsAdmin(false);

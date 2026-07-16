@@ -6,13 +6,18 @@ export default function AuthCallbackPage() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, _session) => {
+    // Capture the subscription so it can be cleaned up when the component
+    // unmounts. Without this the listener persisted across navigation events
+    // and fired on every subsequent TOKEN_REFRESHED / SIGNED_OUT, causing
+    // unexpected redirects.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_IN') {
         navigate('/');
       } else if (!_session) {
         navigate('/login');
       }
     });
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   return (
