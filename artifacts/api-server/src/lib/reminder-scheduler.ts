@@ -197,7 +197,14 @@ async function runRenewalRemindersForWindow(daysAway: number, appUrl: string): P
       text: `Hi ${profile.full_name?.split(' ')[0] ?? 'there'},\n\nYour ${renewal.merchant_name} subscription (${renewal.currency ?? 'USD'} ${Number(renewal.amount).toFixed(2)}) renews on ${renewalDateFormatted}.\n\nManage at ${appUrl}/subscriptions`,
     });
 
-    if (!sent) {
+    if (sent) {
+      // Write to activity_logs so the diagnostics endpoint can confirm the
+      // scheduler is running — it looks for 'reminder_sent' entries within 2h.
+      void supabaseAdmin.from('activity_logs').insert({
+        user_id: renewal.user_id, type: 'reminder_sent',
+        description: `Renewal reminder for ${renewal.merchant_name} sent (${daysAway}d window)`,
+      }).then(undefined, () => {});
+    } else {
       logger.warn({ userId: renewal.user_id, merchantName: renewal.merchant_name }, '[reminders] Email delivery failed for renewal reminder');
     }
   }
@@ -267,7 +274,12 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
       text: `Hi ${profile.full_name?.split(' ')[0] ?? 'there'},\n\nThe warranty for ${name} expires on ${expiryFormatted}.\n\nView at ${appUrl}/warranties`,
     });
 
-    if (!sent) {
+    if (sent) {
+      void supabaseAdmin.from('activity_logs').insert({
+        user_id: warranty.user_id, type: 'reminder_sent',
+        description: `Warranty reminder for ${name} sent (${daysAway}d window)`,
+      }).then(undefined, () => {});
+    } else {
       logger.warn({ userId: warranty.user_id, productName: name }, '[reminders] Email delivery failed for warranty reminder');
     }
   }
@@ -313,6 +325,12 @@ async function runExpiryDowngrade(): Promise<void> {
         user_id: sub.user_id, type: 'plan_downgraded',
         description: 'Subscription expired — downgraded to Free plan automatically.',
       });
+      // Also write a 'expiry_downgrade' entry so the diagnostics scheduler
+      // check can confirm the downgrade job ran.
+      void supabaseAdmin.from('activity_logs').insert({
+        user_id: sub.user_id, type: 'expiry_downgrade',
+        description: `Auto-downgrade to Free (sub ${sub.id})`,
+      }).then(undefined, () => {});
 
       // In-app notification for the downgrade
       void supabaseAdmin.from('notifications').insert({

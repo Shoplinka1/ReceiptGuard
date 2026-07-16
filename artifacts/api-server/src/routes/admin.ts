@@ -477,6 +477,25 @@ router.get('/api/admin/diagnostics', ...adminGuard, async (_req, res): Promise<v
   // ── Railway (self — this server is running if we respond) ──────────────
   checks.railway = { status: 'ok', detail: `NODE_ENV=${process.env.NODE_ENV ?? 'not set'}` };
 
+  // ── Resend (email delivery) ───────────────────────────────────────────
+  checks.resend = process.env.RESEND_API_KEY
+    ? { status: 'ok', detail: 'RESEND_API_KEY is set' }
+    : { status: 'unconfigured', detail: 'RESEND_API_KEY not set — falling back to SMTP if configured' };
+
+  // ── Paystack (payments) ───────────────────────────────────────────────
+  checks.paystack = process.env.PAYSTACK_SECRET_KEY
+    ? { status: 'ok', detail: 'PAYSTACK_SECRET_KEY is set' }
+    : { status: 'unconfigured', detail: 'PAYSTACK_SECRET_KEY not set — payment webhooks and upgrades will fail' };
+
+  // ── Gmail token encryption ────────────────────────────────────────────
+  const encKey = process.env.ENCRYPTION_KEY ?? '';
+  const encOk = /^[0-9a-fA-F]{64}$/.test(encKey);
+  checks.encryptionKey = encOk
+    ? { status: 'ok', detail: 'ENCRYPTION_KEY is set and 64-hex-char format is valid' }
+    : encKey
+      ? { status: 'error', detail: `ENCRYPTION_KEY is set but wrong format (${encKey.length} chars, must be exactly 64 hex chars)` }
+      : { status: 'unconfigured', detail: 'ENCRYPTION_KEY not set — Gmail token encryption/decryption will fail' };
+
   // ── Gmail API (check at least one active account exists) ──────────────
   try {
     const { count, error } = await supabaseAdmin
@@ -490,20 +509,27 @@ router.get('/api/admin/diagnostics', ...adminGuard, async (_req, res): Promise<v
     checks.gmailApi = { status: 'error', detail: e.message };
   }
 
-  // ── Scheduler (check for recent scheduler activity in the last 2h) ────
+  // ── Scheduler (check for recent scheduler activity in the last 25h) ─────
+  // Looks for any of: reminder_sent, expiry_downgrade, plan_downgraded,
+  // weekly_summary_sent, monthly_summary_sent. The scheduler writes
+  // 'reminder_sent' each time an email fires and 'expiry_downgrade' on each
+  // auto-downgrade; it also writes 'plan_downgraded' (which predates the
+  // newer type names). Using a 25h window so the check passes even when
+  // there are no reminders due today (scheduler may have fired yesterday).
   try {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
     const { data: schedulerLogs } = await supabaseAdmin
       .from('activity_logs')
-      .select('created_at')
-      .in('type', ['reminder_sent', 'expiry_downgrade', 'weekly_summary_sent', 'monthly_summary_sent'])
-      .gte('created_at', twoHoursAgo)
+      .select('created_at, type')
+      .in('type', ['reminder_sent', 'expiry_downgrade', 'plan_downgraded', 'weekly_summary_sent', 'monthly_summary_sent'])
+      .gte('created_at', twentyFiveHoursAgo)
+      .order('created_at', { ascending: false })
       .limit(1);
     checks.scheduler = {
       status: 'ok',
       detail: schedulerLogs?.length
-        ? `Last activity within 2h`
-        : 'No scheduler activity in last 2h (may be idle if no reminders are due)',
+        ? `Last activity: ${schedulerLogs[0].type} at ${schedulerLogs[0].created_at}`
+        : 'No scheduler activity in last 25h — scheduler is running but no reminders were due',
     };
   } catch (e: any) {
     checks.scheduler = { status: 'error', detail: e.message };
