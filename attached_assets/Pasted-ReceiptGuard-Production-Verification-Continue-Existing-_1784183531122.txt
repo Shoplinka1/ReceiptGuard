@@ -1,0 +1,108 @@
+ReceiptGuard Production Verification (Continue Existing Project)
+
+This project is an existing production SaaS. Continue from the current codebase exactly as it is.
+
+IMPORTANT
+
+Do NOT redesign, refactor, or rewrite working features.
+
+Do NOT modify unless a verified production bug is found:
+	•	Gmail OAuth
+	•	Gmail Scanner architecture
+	•	Google verification pages
+	•	Receipt parsing
+	•	Subscription detection
+	•	Warranty detection
+	•	Billing
+	•	Authentication
+	•	Paystack
+	•	Railway deployment
+	•	Vercel deployment
+	•	Existing database schema (except using the migration already applied)
+
+The database migration has already been run successfully in Supabase.
+
+⸻
+
+Task 1 — Audit the Gmail Scanner
+
+Read the current implementation before making any changes.
+
+Connect a Gmail account (or use the existing connected test account if available) and perform a complete end-to-end verification.
+
+Verify:
+	•	Receipt detection accuracy
+	•	Subscription detection accuracy
+	•	Warranty detection accuracy
+	•	Promotional email filtering
+	•	Shipping email filtering
+	•	Duplicate detection
+	•	Automatic warranty estimation
+	•	Free vs Pro scan limits
+	•	OAuth token refresh
+	•	Gmail scheduler compatibility
+
+Do not modify the scanner unless a real bug is found.
+
+⸻
+
+Task 2 — Produce a Verification Report
+
+Include:
+	•	Total emails scanned
+	•	Receipts imported
+	•	Subscriptions imported
+	•	Warranties imported
+	•	Skipped emails grouped by reason
+	•	Failed emails
+	•	False positives
+	•	False negatives
+	•	Any scanner performance issues
+
+⸻
+
+Task 3 — Fix Only Verified Bugs
+
+If and only if a real production bug is found:
+	•	modify only artifacts/api-server/src/routes/gmail.ts
+	•	keep the existing architecture
+	•	preserve every existing feature
+	•	avoid touching unrelated files
+
+After every fix:
+	•	rerun the scan
+	•	compare the new results with the previous results
+	•	explain exactly what improved
+
+⸻
+
+Task 4 — Production Verification
+
+After all tests:
+
+Verify that all of these still work:
+	•	Gmail OAuth
+	•	Receipt scanner
+	•	Subscription detection
+	•	Warranty detection
+	•	Gmail scheduler
+	•	Duplicate protection
+	•	Dashboard statistics
+	•	Feedback system
+	•	Resend integration
+	•	Reminder scheduler
+	•	Customer dashboard
+
+⸻
+
+Final Report
+
+Do not simply say “everything works.”
+
+Provide a detailed report showing:
+	•	What was tested
+	•	What passed
+	•	What failed
+	•	What was fixed
+	•	What still requires manual testing
+	•	Any recommendations to further improve scanner accuracy without redesigning it
