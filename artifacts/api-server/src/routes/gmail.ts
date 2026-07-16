@@ -389,9 +389,12 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     // or data-entry error — not a retail purchase.
     if (isNaN(amount) || amount < 0.50 || amount > 50_000) continue;
 
-    // Detect currency from context
-    const symMatch = text.match(/[$£€₦₹¥₩]/);
-    const codeMatch = text.match(currencyCodes);
+    // Detect currency from the matched substring first (most accurate), then
+    // fall back to the full email text.  Searching the whole text risks
+    // picking up a different-currency symbol that appears earlier in the email
+    // (e.g. a "Convert to USD: $0.00" header line above "Total: ₦5,000").
+    const symMatch = m[0].match(/[$£€₦₹¥₩]/) ?? text.match(/[$£€₦₹¥₩]/);
+    const codeMatch = m[0].match(currencyCodes) ?? text.match(currencyCodes);
     const currency = symMatch
       ? (currencySymbols[symMatch[0]] ?? 'USD')
       : codeMatch
