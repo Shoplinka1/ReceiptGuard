@@ -1,0 +1,101 @@
+Continue from the exact point where you stopped. Do not restart or repeat completed work.
+
+Current state:
+	•	Gmail scanner audit completed.
+	•	Resend is configured with the verified domain getreceiptguard.xyz.
+	•	RESEND_API_KEY is already stored in Replit Secrets.
+	•	Railway and Vercel remain the production deployments. Do not deploy anything to Replit.
+	•	Continue working only in this Replit workspace and push the completed changes to the existing GitHub repository when everything passes.
+
+Complete the remaining production work in this order:
+
+1. Gmail Scheduler
+	•	Free users: manual scan only.
+	•	Pro users: automatic Gmail scan every 6 hours.
+	•	Skip disconnected Gmail accounts.
+	•	Skip expired subscriptions.
+	•	Refresh OAuth tokens where possible.
+	•	Retry failed scans.
+	•	Log:
+	•	last_scan
+	•	next_scan
+	•	scan_status
+	•	scan_duration
+
+2. Reminder System
+
+Implement automatic:
+	•	Subscription reminders (30, 14, 7, 3, 1 days).
+	•	Warranty reminders (90, 60, 30, 14, 7, 3, 1 days).
+	•	Weekly spending summaries.
+	•	Monthly spending summaries.
+	•	Yearly spending summaries.
+
+Use:
+	•	noreply@getreceiptguard.xyz
+	•	reminders@getreceiptguard.xyz
+
+3. Feedback Workflow
+
+Complete:
+	•	Save feedback.
+	•	Notify feedback@getreceiptguard.xyz.
+	•	Send confirmation email to the user.
+	•	Use environment variables only.
+
+4. Email Templates
+
+Complete responsive production templates for:
+	•	Welcome
+	•	Feedback confirmation
+	•	Subscription reminder
+	•	Warranty reminder
+	•	Weekly summary
+	•	Monthly summary
+	•	Yearly summary
+
+5. Separate Admin Application
+
+Continue building the separate admin application for:
+admin.getreceiptguard.xyz
+
+Do not expose admin code inside the customer application.
+
+6. Full Production Testing
+
+Before pushing anything, verify:
+	•	Gmail OAuth
+	•	Gmail scanner
+	•	Receipt detection
+	•	Subscription detection
+	•	Warranty detection
+	•	Automatic scheduler
+	•	Reminder emails
+	•	Feedback emails
+	•	Weekly summaries
+	•	Monthly summaries
+	•	Yearly summaries
+	•	Customer dashboard
+	•	Admin application
+	•	Production build
+	•	No TypeScript errors
+	•	No lint errors
+	•	No failing tests
+
+7. GitHub
+
+Only if every check passes:
+	•	Commit with clear commit messages.
+	•	Push directly to the existing GitHub repository.
+	•	Report:
+	•	Commit hash.
+	•	Production build status.
+	•	Test results.
+	•	Any remaining known issues.
+
+Do not redesign the application.
+Do not rewrite working features.
+Do not modify Railway or Vercel deployments.
+Reuse existing business logic instead of creating duplicates.
+
+Only report “Complete” after everything has been implemented, tested successfully, and pushed to GitHub.

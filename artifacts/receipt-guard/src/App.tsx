@@ -31,7 +31,6 @@ const SettingsPage = lazy(() => import('./pages/settings'));
 const BillingPage = lazy(() => import('./pages/billing'));
 const ProfilePage = lazy(() => import('./pages/profile'));
 const ConnectGmailPage = lazy(() => import('./pages/connect-gmail'));
-const AdminPage = lazy(() => import('./pages/admin'));
 const FeedbackPage = lazy(() => import('./pages/feedback'));
 const SearchPage = lazy(() => import('./pages/search'));
 const SupportPage = lazy(() => import('./pages/support'));
@@ -90,9 +89,6 @@ function Router() {
         </Route>
         <Route path="/connect-gmail">
           {() => <ProtectedRoute component={ConnectGmailPage} />}
-        </Route>
-        <Route path="/admin">
-          {() => <ProtectedRoute component={AdminPage} adminOnly />}
         </Route>
         <Route path="/feedback">
           {() => <ProtectedRoute component={FeedbackPage} />}

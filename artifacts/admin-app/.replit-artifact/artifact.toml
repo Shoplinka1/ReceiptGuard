@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/admin/"
+title = "ReceiptGuard Admin"
+version = "1.0.0"
+id = "artifacts/admin-app"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/admin/" ]
+localPort = 18391
+
+[services.development]
+run = "pnpm --filter @workspace/admin-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/admin-app", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/admin-app/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18391"
+BASE_PATH = "/admin/"

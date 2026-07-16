@@ -6,7 +6,10 @@
  *      user's enabled reminder windows (30/14/7/3/1).
  *   2. Sends warranty expiry reminders for warranties expiring in those same windows.
  *   3. Auto-downgrades users whose billing period has ended.
- *   4. Rescans connected Gmail accounts once per day for new receipts.
+ *   4. Once per day, checks whether it's time to send weekly/monthly/yearly
+ *      spending summary emails (see summary-emails.ts).
+ *
+ * Automatic Gmail rescanning is a separate scheduler — see gmail-scheduler.ts.
  *
  * All reminders respect the user's email_notifications setting.
  * Deduplication: at most one notification per (type, reference, day-window) per calendar day.
@@ -17,7 +20,7 @@
 import { supabaseAdmin } from './supabase';
 import { sendEmail, EMAIL_SENDERS } from './email';
 import { logger } from './logger';
-import { runGmailScan } from '../routes/gmail';
+import { runSummaryEmails } from './summary-emails';
 
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -47,7 +50,7 @@ const WARRANTY_REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
 
 // ─── Email templates ──────────────────────────────────────────────────────────
 
-function reminderEmailHtml(opts: {
+export function reminderEmailHtml(opts: {
   firstName: string; companyName: string; amount: number; currency: string;
   renewalDate: string; appUrl: string; daysAway: number; type: 'renewal' | 'warranty';
 }): string {
@@ -327,37 +330,11 @@ async function runExpiryDowngrade(): Promise<void> {
   }
 }
 
-// ─── Gmail periodic rescan ────────────────────────────────────────────────────
-
-async function runGmailRescan(): Promise<void> {
-  try {
-    const cutoff = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
-    const { data: accounts, error } = await supabaseAdmin
-      .from('email_accounts')
-      .select('*')
-      .eq('is_active', true)
-      .or(`last_scanned_at.is.null,last_scanned_at.lte.${cutoff}`);
-
-    if (error) { logger.error({ error }, '[gmail-rescan] Failed to fetch accounts'); return; }
-    if (!accounts?.length) { logger.debug('[gmail-rescan] All accounts scanned recently'); return; }
-
-    logger.info({ count: accounts.length }, '[gmail-rescan] Starting periodic inbox rescan');
-
-    for (const account of accounts) {
-      try {
-        logger.info({ email: account.email }, '[gmail-rescan] Rescanning account (new emails only)');
-        // isInitialScan=false so it only checks new emails since last_scanned_at
-        await runGmailScan(account, account.user_id, false, false);
-      } catch (scanErr: any) {
-        logger.warn({ email: account.email, err: scanErr.message }, '[gmail-rescan] Scan failed for account');
-      }
-    }
-  } catch (err) {
-    logger.error({ err }, '[gmail-rescan] Error');
-  }
-}
-
 // ─── Main check ───────────────────────────────────────────────────────────────
+// Note: automatic Gmail rescanning is handled exclusively by
+// lib/gmail-scheduler.ts (Pro-only, 6h cadence, with proper retry/disconnect
+// handling). It used to also run from a second loop here; that duplicate has
+// been removed to avoid double-scanning every connected account.
 
 async function runAllReminders(): Promise<void> {
   const appUrl = process.env.FRONTEND_URL ?? 'https://receiptguard.app';
@@ -383,8 +360,7 @@ export function startReminderScheduler(): void {
     runCount++;
     await runAllReminders();
     await runExpiryDowngrade();
-    // Gmail rescan runs every 24 ticks (approximately once per day)
-    if (runCount % 24 === 1) await runGmailRescan();
+    if (runCount % 24 === 1) await runSummaryEmails();
   };
 
   tick();

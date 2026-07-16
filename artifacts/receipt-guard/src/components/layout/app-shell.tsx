@@ -11,7 +11,6 @@ import {
   Bell,
   LogOut,
   Search,
-  ShieldAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -22,7 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation()
   const { user, signOut } = useAuth()
   const { data: profile, isError: profileError, error: profileFetchError } = useGetUserProfile({
-    query: { enabled: !!user, retry: 1, staleTime: 0 },
+    query: { queryKey: ['/api/user/profile'], enabled: !!user, retry: 1, staleTime: 0 },
   })
   const isAdmin = profile?.isAdmin ?? false
 
@@ -124,19 +123,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               )
             })}
-            {isAdmin && (
-              <Link href="/admin">
-                <div className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all cursor-pointer",
-                  location === '/admin'
-                    ? "bg-destructive/10 text-destructive"
-                    : "text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                )}>
-                  <ShieldAlert className={cn("w-4 h-4", location === '/admin' ? "" : "opacity-70")} />
-                  Admin
-                </div>
-              </Link>
-            )}
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4"

@@ -215,5 +215,26 @@ alter table public.warranties add column if not exists reminder_enabled boolean 
 -- the UI can label them "Estimated" instead of presenting a guess as fact.
 alter table public.warranties add column if not exists is_estimated boolean not null default false;
 
+-- ─── Phase 5: email_accounts — scan tracking columns ──────────────────────────
+-- Consolidates the two previously-independent Gmail rescan loops
+-- (gmail-scheduler.ts + reminder-scheduler.ts) into a single scheduler that
+-- persists scan state per account instead of relying purely on in-process
+-- timers, so status survives restarts and is visible to the admin app.
+alter table public.email_accounts add column if not exists last_scan timestamptz;
+alter table public.email_accounts add column if not exists next_scan timestamptz;
+alter table public.email_accounts add column if not exists scan_status text not null default 'idle'; -- idle | scanning | success | failed
+alter table public.email_accounts add column if not exists scan_duration_ms integer;
+alter table public.email_accounts add column if not exists scan_error text;
+alter table public.email_accounts add column if not exists scan_retry_count integer not null default 0;
+
+-- ─── Phase 6: settings — per-summary email opt-out columns ───────────────────
+-- Absence of these columns is treated as "enabled" everywhere they're read
+-- (summary-emails.ts), so this migration is not required for summaries to
+-- start working — it just lets users opt out of one summary cadence
+-- without disabling all email notifications.
+alter table public.settings add column if not exists weekly_summary boolean not null default true;
+alter table public.settings add column if not exists monthly_summary boolean not null default true;
+alter table public.settings add column if not exists yearly_summary boolean not null default true;
+
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

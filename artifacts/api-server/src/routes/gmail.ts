@@ -861,12 +861,26 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+// Result contract consumed by the scheduler (lib/gmail-scheduler.ts) to decide
+// whether to disconnect the account, retry soon, or resume the normal cadence.
+// `errorType: 'auth'` means the connection itself is broken (bad/revoked
+// token, missing scopes) — retrying won't help, the user must reconnect.
+// `errorType: 'transient'` means a rate limit or Gmail-side outage — worth
+// retrying. Manual scans (routes below) still call this the same way and
+// simply ignore the return value, so this is backward compatible.
+export type GmailScanResult = {
+  success: boolean;
+  errorType?: 'auth' | 'transient';
+  message?: string;
+  importedCount?: number;
+};
+
 export async function runGmailScan(
   account: any,
   userId: string,
   forceRescan: boolean,
   isInitialScan: boolean,
-): Promise<void> {
+): Promise<GmailScanResult> {
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken(account);
@@ -874,7 +888,10 @@ export async function runGmailScan(
     await supabaseAdmin.from('activity_logs').insert({
       user_id: userId, type: 'gmail_scan_failed', description: err.message,
     });
-    return;
+    // Both "No refresh token" and "Failed to refresh Gmail token" mean the
+    // connection is dead and the user must reconnect — that's an auth-type
+    // failure, not a transient one.
+    return { success: false, errorType: 'auth', message: err.message };
   }
 
   // Determine plan
@@ -907,7 +924,7 @@ export async function runGmailScan(
         metadata: { currentCount: currentReceiptCount, limit: FREE_RECEIPT_LIMIT },
       });
       logger.info({ email: account.email, currentReceiptCount, limit: FREE_RECEIPT_LIMIT }, '[Gmail Scan] free receipt limit already reached, skipping scan');
-      return;
+      return { success: true, importedCount: 0, message: 'Free receipt limit already reached' };
     }
   }
 
@@ -993,7 +1010,7 @@ export async function runGmailScan(
       description: userMessage,
       metadata: { queryErrors, isAuthFailure },
     });
-    return;
+    return { success: false, errorType: isAuthFailure ? 'auth' : 'transient', message: userMessage };
   }
 
   allIds = [...new Set(allIds)];
@@ -1261,6 +1278,8 @@ export async function runGmailScan(
   logger.info({
     email: account.email, importedCount, skippedCount, failedCount, freeLimitReached, limitStoppedCount,
   }, '[Gmail Scan] done');
+
+  return { success: true, importedCount };
 }
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {

@@ -22,7 +22,7 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
     isError,
     error,
   } = useGetUserProfile({
-    query: { enabled: !!user && !!adminOnly, retry: false },
+    query: { queryKey: ['/api/user/profile'], enabled: !!user && !!adminOnly, retry: false },
   });
 
   // ── Diagnostic logging ────────────────────────────────────────────────────
