@@ -22,7 +22,12 @@ export function ProtectedRoute({ component: Component, adminOnly }: ProtectedRou
     isError,
     error,
   } = useGetUserProfile({
-    query: { queryKey: ['/api/user/profile'], enabled: !!user && !!adminOnly, retry: false },
+    // staleTime: 0 forces a fresh fetch every time ProtectedRoute mounts,
+    // even if AppShell already populated the cache.  Without this the default
+    // 30-second staleTime means a pre-fix cached profile (isAdmin: false or
+    // isAdmin: undefined) is used to make the redirect decision without ever
+    // hitting the network, causing an immediate redirect to /dashboard.
+    query: { queryKey: ['/api/user/profile'], enabled: !!user && !!adminOnly, retry: false, staleTime: 0 },
   });
 
   // ── Diagnostic logging ────────────────────────────────────────────────────

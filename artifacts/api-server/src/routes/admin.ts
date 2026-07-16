@@ -337,6 +337,284 @@ router.patch('/api/admin/feedback/:id', ...adminGuard, async (req, res): Promise
   res.json(data);
 });
 
+// ─── Activity Logs ────────────────────────────────────────────────────────────
+
+router.get('/api/admin/activity-logs', ...adminGuard, async (req, res): Promise<void> => {
+  const { page: pageRaw = '1', pageSize: pageSizeRaw = '50' } = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(pageRaw, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(pageSizeRaw, 10) || 50));
+  const offset = (page - 1) * pageSize;
+
+  const { data: rawLogs, count, error } = await supabaseAdmin
+    .from('activity_logs')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (error) { res.status(500).json({ error: 'Failed to load activity logs' }); return; }
+
+  // Enrich with profile emails
+  const userIds = [...new Set((rawLogs ?? []).map((l: any) => l.user_id as string))];
+  const { data: profileRows } = userIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email, full_name').in('id', userIds)
+    : { data: [] };
+  const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.id, p]));
+
+  const logs = (rawLogs ?? []).map((l: any) => ({ ...l, profiles: profileMap[l.user_id] ?? null }));
+  res.json({ logs, total: count ?? 0, page, pageSize });
+});
+
+// ─── Scan Logs ────────────────────────────────────────────────────────────────
+
+const SCAN_LOG_TYPES = [
+  'gmail_scan_start', 'gmail_scan_complete', 'gmail_scan_partial',
+  'gmail_scan_failed', 'gmail_connected', 'gmail_disconnected',
+];
+
+router.get('/api/admin/scan-logs', ...adminGuard, async (req, res): Promise<void> => {
+  const { page: pageRaw = '1', pageSize: pageSizeRaw = '50' } = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(pageRaw, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(pageSizeRaw, 10) || 50));
+  const offset = (page - 1) * pageSize;
+
+  const { data: rawLogs, count, error } = await supabaseAdmin
+    .from('activity_logs')
+    .select('*', { count: 'exact' })
+    .in('type', SCAN_LOG_TYPES)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (error) { res.status(500).json({ error: 'Failed to load scan logs' }); return; }
+
+  const userIds = [...new Set((rawLogs ?? []).map((l: any) => l.user_id as string))];
+  const { data: profileRows } = userIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email, full_name').in('id', userIds)
+    : { data: [] };
+  const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.id, p]));
+
+  const logs = (rawLogs ?? []).map((l: any) => ({ ...l, profiles: profileMap[l.user_id] ?? null }));
+  res.json({ logs, total: count ?? 0, page, pageSize });
+});
+
+// ─── All Receipts (admin) ─────────────────────────────────────────────────────
+
+router.get('/api/admin/receipts', ...adminGuard, async (req, res): Promise<void> => {
+  const { page: pageRaw = '1', pageSize: pageSizeRaw = '30' } = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(pageRaw, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(pageSizeRaw, 10) || 30));
+  const offset = (page - 1) * pageSize;
+
+  const { data: rawReceipts, count, error } = await supabaseAdmin
+    .from('receipts')
+    .select('id, user_id, merchant_name, amount, currency, purchase_date, category, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (error) { res.status(500).json({ error: 'Failed to load receipts' }); return; }
+
+  const userIds = [...new Set((rawReceipts ?? []).map((r: any) => r.user_id as string))];
+  const { data: profileRows } = userIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email').in('id', userIds)
+    : { data: [] };
+  const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.id, p]));
+
+  const receipts = (rawReceipts ?? []).map((r: any) => ({ ...r, profiles: profileMap[r.user_id] ?? null }));
+  res.json({ receipts, total: count ?? 0, page, pageSize });
+});
+
+// ─── All Warranties (admin) ───────────────────────────────────────────────────
+
+router.get('/api/admin/warranties', ...adminGuard, async (req, res): Promise<void> => {
+  const { page: pageRaw = '1', pageSize: pageSizeRaw = '30' } = req.query as Record<string, string>;
+  const page = Math.max(1, parseInt(pageRaw, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(pageSizeRaw, 10) || 30));
+  const offset = (page - 1) * pageSize;
+
+  const { data: rawWarranties, count, error } = await supabaseAdmin
+    .from('warranties')
+    .select('id, user_id, product_name, merchant_name, purchase_date, warranty_end_date, is_estimated, created_at', { count: 'exact' })
+    .order('warranty_end_date', { ascending: true })
+    .range(offset, offset + pageSize - 1);
+
+  if (error) { res.status(500).json({ error: 'Failed to load warranties' }); return; }
+
+  const userIds = [...new Set((rawWarranties ?? []).map((w: any) => w.user_id as string))];
+  const { data: profileRows } = userIds.length
+    ? await supabaseAdmin.from('profiles').select('id, email').in('id', userIds)
+    : { data: [] };
+  const profileMap = Object.fromEntries((profileRows ?? []).map((p: any) => [p.id, p]));
+
+  const warranties = (rawWarranties ?? []).map((w: any) => ({ ...w, profiles: profileMap[w.user_id] ?? null }));
+  res.json({ warranties, total: count ?? 0, page, pageSize });
+});
+
+// ─── Diagnostics ──────────────────────────────────────────────────────────────
+// GET /api/admin/diagnostics — live production status for all subsystems.
+
+router.get('/api/admin/diagnostics', ...adminGuard, async (_req, res): Promise<void> => {
+  const checks: Record<string, { status: 'ok' | 'error' | 'unconfigured'; detail?: string }> = {};
+
+  // ── Supabase ─────────────────────────────────────────────────────────────
+  try {
+    const { error } = await supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true });
+    checks.supabase = error ? { status: 'error', detail: error.message } : { status: 'ok' };
+  } catch (e: any) {
+    checks.supabase = { status: 'error', detail: e.message };
+  }
+
+  // ── SMTP ─────────────────────────────────────────────────────────────────
+  const smtpConfigured = !!(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
+  checks.smtp = smtpConfigured
+    ? { status: 'ok', detail: `${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT ?? 587} as ${process.env.EMAIL_USER}` }
+    : { status: 'unconfigured', detail: 'EMAIL_HOST, EMAIL_USER, EMAIL_PASS not set' };
+
+  // ── Google OAuth (env vars only — no live call) ────────────────────────
+  const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
+  checks.googleOAuth = googleConfigured
+    ? { status: 'ok', detail: `Redirect: ${process.env.GOOGLE_REDIRECT_URI}` }
+    : { status: 'unconfigured', detail: 'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URI not set' };
+
+  // ── Railway (self — this server is running if we respond) ──────────────
+  checks.railway = { status: 'ok', detail: `NODE_ENV=${process.env.NODE_ENV ?? 'not set'}` };
+
+  // ── Gmail API (check at least one active account exists) ──────────────
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('email_accounts')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+    checks.gmailApi = error
+      ? { status: 'error', detail: error.message }
+      : { status: 'ok', detail: `${count ?? 0} active connected account(s)` };
+  } catch (e: any) {
+    checks.gmailApi = { status: 'error', detail: e.message };
+  }
+
+  // ── Scheduler (check for recent scheduler activity in the last 2h) ────
+  try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const { data: schedulerLogs } = await supabaseAdmin
+      .from('activity_logs')
+      .select('created_at')
+      .in('type', ['reminder_sent', 'expiry_downgrade', 'weekly_summary_sent', 'monthly_summary_sent'])
+      .gte('created_at', twoHoursAgo)
+      .limit(1);
+    checks.scheduler = {
+      status: 'ok',
+      detail: schedulerLogs?.length
+        ? `Last activity within 2h`
+        : 'No scheduler activity in last 2h (may be idle if no reminders are due)',
+    };
+  } catch (e: any) {
+    checks.scheduler = { status: 'error', detail: e.message };
+  }
+
+  // ── Last successful Gmail scan ────────────────────────────────────────
+  try {
+    const { data: lastScan } = await supabaseAdmin
+      .from('activity_logs')
+      .select('created_at, description')
+      .in('type', ['gmail_scan_complete', 'gmail_scan_partial'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    checks.lastGmailScan = {
+      status: 'ok',
+      detail: lastScan
+        ? `${new Date(lastScan.created_at).toISOString()} — ${lastScan.description ?? ''}`
+        : 'No successful scans recorded',
+    };
+  } catch (e: any) {
+    checks.lastGmailScan = { status: 'error', detail: e.message };
+  }
+
+  // ── Last reminder email ──────────────────────────────────────────────
+  try {
+    const { data: lastReminder } = await supabaseAdmin
+      .from('activity_logs')
+      .select('created_at, description')
+      .eq('type', 'reminder_sent')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    checks.lastReminderEmail = {
+      status: 'ok',
+      detail: lastReminder
+        ? `${new Date(lastReminder.created_at).toISOString()} — ${lastReminder.description ?? ''}`
+        : 'No reminder emails recorded',
+    };
+  } catch (e: any) {
+    checks.lastReminderEmail = { status: 'error', detail: e.message };
+  }
+
+  // ── Last feedback email ──────────────────────────────────────────────
+  try {
+    const { data: lastFeedback } = await supabaseAdmin
+      .from('activity_logs')
+      .select('created_at, description')
+      .eq('type', 'feedback_submitted')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    checks.lastFeedbackEmail = {
+      status: 'ok',
+      detail: lastFeedback
+        ? `${new Date(lastFeedback.created_at).toISOString()} — ${lastFeedback.description ?? ''}`
+        : 'No feedback emails recorded',
+    };
+  } catch (e: any) {
+    checks.lastFeedbackEmail = { status: 'error', detail: e.message };
+  }
+
+  // ── Scan success rate (last 30 days) ─────────────────────────────────
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: successCount }, { count: failCount }] = await Promise.all([
+      supabaseAdmin.from('activity_logs').select('*', { count: 'exact', head: true })
+        .in('type', ['gmail_scan_complete', 'gmail_scan_partial']).gte('created_at', thirtyDaysAgo),
+      supabaseAdmin.from('activity_logs').select('*', { count: 'exact', head: true })
+        .eq('type', 'gmail_scan_failed').gte('created_at', thirtyDaysAgo),
+    ]);
+    const total = (successCount ?? 0) + (failCount ?? 0);
+    const rate = total > 0 ? Math.round(((successCount ?? 0) / total) * 100) : null;
+    checks.scanSuccessRate = {
+      status: 'ok',
+      detail: total > 0 ? `${rate}% (${successCount ?? 0} ok / ${failCount ?? 0} failed in 30d)` : 'No scans in last 30 days',
+    };
+  } catch (e: any) {
+    checks.scanSuccessRate = { status: 'error', detail: e.message };
+  }
+
+  // ── Queue health (pending notifications) ─────────────────────────────
+  try {
+    const { count: pendingNotifs, error } = await supabaseAdmin
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_read', false);
+    checks.queueHealth = error
+      ? { status: 'error', detail: error.message }
+      : { status: 'ok', detail: `${pendingNotifs ?? 0} unread notification(s) in queue` };
+  } catch (e: any) {
+    checks.queueHealth = { status: 'error', detail: e.message };
+  }
+
+  // ── Connected Gmail accounts ─────────────────────────────────────────
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('email_accounts')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+    checks.connectedGmailAccounts = error
+      ? { status: 'error', detail: error.message }
+      : { status: 'ok', detail: `${count ?? 0} active account(s)` };
+  } catch (e: any) {
+    checks.connectedGmailAccounts = { status: 'error', detail: e.message };
+  }
+
+  const overall = Object.values(checks).some(c => c.status === 'error') ? 'degraded' : 'ok';
+  res.json({ overall, checks, generatedAt: new Date().toISOString() });
+});
+
 // ─── SMTP test ────────────────────────────────────────────────────────────────
 // POST /api/admin/smtp-test  — sends a test email and returns full SMTP diagnostics.
 // Admin-only. Used to verify email delivery is working in production.

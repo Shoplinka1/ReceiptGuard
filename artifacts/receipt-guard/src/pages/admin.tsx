@@ -43,12 +43,12 @@ function useAdminUsers(search: string) {
   return useQuery({
     queryKey: ['admin', 'users', search],
     // Backend returns { users: [...], total, page, pageSize }
-    queryFn: () => apiFetch(`/api/admin/users?search=${encodeURIComponent(search)}&limit=50`),
+    queryFn: () => apiFetch(`/api/admin/users?search=${encodeURIComponent(search)}&pageSize=50`),
     retry: false,
   })
 }
 function useAdminPayments() {
-  return useQuery({ queryKey: ['admin', 'payments'], queryFn: () => apiFetch('/api/admin/payments?limit=20'), retry: false })
+  return useQuery({ queryKey: ['admin', 'payments'], queryFn: () => apiFetch('/api/admin/payments?pageSize=50'), retry: false })
 }
 function useAdminFeedback() {
   return useQuery({ queryKey: ['admin', 'feedback'], queryFn: () => apiFetch('/api/admin/feedback?limit=30'), retry: false })
@@ -71,6 +71,9 @@ function useAdminReceipts() {
 }
 function useAdminWarranties() {
   return useQuery({ queryKey: ['admin', 'warranties'], queryFn: () => apiFetch('/api/admin/warranties?pageSize=30'), retry: false })
+}
+function useAdminDiagnostics() {
+  return useQuery({ queryKey: ['admin', 'diagnostics'], queryFn: () => apiFetch('/api/admin/diagnostics'), retry: false, refetchInterval: 60_000 })
 }
 
 function SmtpTestCard({ apiFetch }: { apiFetch: (path: string, opts?: RequestInit) => Promise<any> }) {
@@ -122,7 +125,7 @@ function SmtpTestCard({ apiFetch }: { apiFetch: (path: string, opts?: RequestIni
 }
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail' | 'activity' | 'scan-logs' | 'receipts' | 'warranties'>('overview')
+  const [tab, setTab] = useState<'overview' | 'users' | 'payments' | 'feedback' | 'subscriptions' | 'gmail' | 'activity' | 'scan-logs' | 'receipts' | 'warranties' | 'diagnostics'>('overview')
   const [search, setSearch] = useState('')
   const [receiptSearch, setReceiptSearch] = useState('')
   const [gmailSearch, setGmailSearch] = useState('')
@@ -138,6 +141,7 @@ export default function AdminPage() {
   const { data: scanData, isLoading: loadingScan } = useAdminScanLogs()
   const { data: receiptsData, isLoading: loadingReceipts } = useAdminReceipts()
   const { data: warrantiesData, isLoading: loadingWarranties } = useAdminWarranties()
+  const { data: diagnostics, isLoading: loadingDiagnostics, refetch: refetchDiagnostics } = useAdminDiagnostics()
 
   const patchUser = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
@@ -163,6 +167,7 @@ export default function AdminPage() {
     { id: 'activity' as const, label: 'Activity Logs' },
     { id: 'scan-logs' as const, label: 'Scan Logs' },
     { id: 'feedback' as const, label: 'Feedback' },
+    { id: 'diagnostics' as const, label: 'Diagnostics' },
   ]
 
   const statCards = [
@@ -660,6 +665,86 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* DIAGNOSTICS */}
+        {tab === 'diagnostics' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Live production status — auto-refreshes every 60 s.</p>
+              <Button size="sm" variant="outline" onClick={() => void refetchDiagnostics()} disabled={loadingDiagnostics}>
+                {loadingDiagnostics ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Checking…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Refresh</>}
+              </Button>
+            </div>
+
+            {loadingDiagnostics ? (
+              <div className="space-y-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+            ) : !diagnostics ? (
+              <div className="p-8 text-center text-muted-foreground">No diagnostics data.</div>
+            ) : (
+              <>
+                {/* Overall health */}
+                <div className={`flex items-center gap-3 p-4 rounded-lg border text-sm font-medium ${
+                  (diagnostics as any).overall === 'ok'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-destructive/10 border-destructive/30 text-destructive'
+                }`}>
+                  {(diagnostics as any).overall === 'ok'
+                    ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  Overall: {(diagnostics as any).overall === 'ok' ? 'All systems operational' : 'Degraded — one or more checks failed'}
+                  <span className="ml-auto text-xs font-normal text-muted-foreground">
+                    {new Date((diagnostics as any).generatedAt).toLocaleTimeString()}
+                  </span>
+                </div>
+
+                {/* Per-check cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.entries((diagnostics as any).checks as Record<string, { status: string; detail?: string }>).map(([key, check]) => {
+                    const labels: Record<string, string> = {
+                      supabase: 'Supabase',
+                      smtp: 'SMTP / Email',
+                      googleOAuth: 'Google OAuth',
+                      railway: 'Railway (API Server)',
+                      gmailApi: 'Gmail API',
+                      scheduler: 'Scheduler',
+                      lastGmailScan: 'Last Gmail Scan',
+                      lastReminderEmail: 'Last Reminder Email',
+                      lastFeedbackEmail: 'Last Feedback Email',
+                      scanSuccessRate: 'Scan Success Rate (30d)',
+                      queueHealth: 'Notification Queue',
+                      connectedGmailAccounts: 'Connected Gmail Accounts',
+                    };
+                    const statusColor = check.status === 'ok'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : check.status === 'unconfigured'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-destructive';
+                    const StatusIcon = check.status === 'ok' ? CheckCircle2 : AlertTriangle;
+                    return (
+                      <Card key={key}>
+                        <CardContent className="p-4 flex gap-3 items-start">
+                          <StatusIcon className={`w-4 h-4 mt-0.5 shrink-0 ${statusColor}`} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{labels[key] ?? key}</p>
+                            {check.detail && (
+                              <p className="text-xs text-muted-foreground mt-0.5 break-words">{check.detail}</p>
+                            )}
+                          </div>
+                          <Badge
+                            variant={check.status === 'ok' ? 'outline' : 'destructive'}
+                            className={`ml-auto shrink-0 text-[10px] capitalize ${check.status === 'ok' ? 'text-emerald-600 border-emerald-500/30' : check.status === 'unconfigured' ? 'bg-amber-500/10 text-amber-700 border-amber-500/30' : ''}`}
+                          >
+                            {check.status}
+                          </Badge>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 
