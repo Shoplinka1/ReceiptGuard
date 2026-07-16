@@ -6,10 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
 import { ShieldCheck } from 'lucide-react';
+import { SiGoogle } from 'react-icons/si';
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { signInWithEmail, user, loading } = useAuth();
+  const { signInWithEmail, signInWithGoogle, user, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +48,30 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent>
+          <div className="space-y-4">
+            {/* Google — primary sign-in for accounts created via OAuth */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 rounded-lg font-medium border-border hover:bg-secondary"
+              onClick={async () => {
+                try { await signInWithGoogle(); } catch (err: any) {
+                  toast.error(err?.message ?? 'Google sign in failed.');
+                }
+              }}
+              disabled={submitting}
+            >
+              <SiGoogle className="mr-2 h-4 w-4" />
+              Sign in with Google
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground font-medium">Or</span>
+              </div>
+            </div>
+
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Email address</label>
@@ -86,6 +111,7 @@ export default function LoginPage() {
               ) : 'Sign in'}
             </Button>
           </form>
+          </div>
         </CardContent>
       </Card>
     </div>

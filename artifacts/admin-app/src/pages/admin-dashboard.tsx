@@ -41,15 +41,15 @@ function useAdminStats() {
 function useAdminUsers(search: string) {
   return useQuery({
     queryKey: ['admin', 'users', search],
-    queryFn: () => apiFetch(`/api/admin/users?search=${encodeURIComponent(search)}&limit=50`),
+    queryFn: () => apiFetch(`/api/admin/users?search=${encodeURIComponent(search)}&pageSize=50`),
     retry: false,
   })
 }
 function useAdminPayments() {
-  return useQuery({ queryKey: ['admin', 'payments'], queryFn: () => apiFetch('/api/admin/payments?limit=20'), retry: false })
+  return useQuery({ queryKey: ['admin', 'payments'], queryFn: () => apiFetch('/api/admin/payments?pageSize=50'), retry: false })
 }
 function useAdminFeedback() {
-  return useQuery({ queryKey: ['admin', 'feedback'], queryFn: () => apiFetch('/api/admin/feedback?limit=30'), retry: false })
+  return useQuery({ queryKey: ['admin', 'feedback'], queryFn: () => apiFetch('/api/admin/feedback?pageSize=30'), retry: false })
 }
 function useAdminGmailAccounts(search: string) {
   return useQuery({
