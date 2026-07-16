@@ -8,6 +8,7 @@ import { ProtectedAdminRoute } from '@/components/auth/protected-admin-route';
 import LoginPage from '@/pages/login';
 import AuthCallbackPage from '@/pages/auth-callback';
 import AdminDashboard from '@/pages/admin-dashboard';
+import DebugPage from '@/pages/debug';
 import NotFound from '@/pages/not-found';
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={() => <ProtectedAdminRoute component={AdminDashboard} />} />
       <Route path="/login" component={LoginPage} />
       <Route path="/auth/callback" component={AuthCallbackPage} />
+      <Route path="/debug" component={DebugPage} />
       <Route component={NotFound} />
     </Switch>
   );
