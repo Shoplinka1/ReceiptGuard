@@ -813,9 +813,12 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 });
 
 router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> => {
+  // Include scheduler tracking fields (last_scan, next_scan, scan_status,
+  // scan_duration_ms, scan_retry_count) so the UI and admin dashboard can
+  // display real-time scan health without querying activity_logs.
   const { data, error } = await supabaseAdmin
     .from('email_accounts')
-    .select('id, email, provider, is_active, last_scanned_at, created_at')
+    .select('id, email, provider, is_active, last_scanned_at, last_scan, next_scan, scan_status, scan_duration_ms, scan_retry_count, created_at')
     .eq('user_id', req.userId)
     .order('created_at', { ascending: false });
 
@@ -894,6 +897,20 @@ export async function runGmailScan(
     // Both "No refresh token" and "Failed to refresh Gmail token" mean the
     // connection is dead and the user must reconnect — that's an auth-type
     // failure, not a transient one.
+    //
+    // Also create a bell notification so the user sees an actionable prompt
+    // rather than having to discover the failure by revisiting Settings.
+    // Fire-and-forget: a notification write failure must not mask the real error.
+    supabaseAdmin.from('notifications').insert({
+      user_id: userId,
+      type: 'gmail_auth_error',
+      title: 'Gmail connection needs to be reconnected',
+      body: 'Your Gmail connection has expired or lost permission. Go to Settings → Gmail to reconnect.',
+      is_read: false,
+      metadata: { error: err.message, email: account.email },
+    }).then(({ error: notifErr }) => {
+      if (notifErr) logger.warn({ err: notifErr.message }, '[Gmail Scan] could not write auth-error notification');
+    });
     return { success: false, errorType: 'auth', message: err.message };
   }
 
@@ -1013,6 +1030,21 @@ export async function runGmailScan(
       description: userMessage,
       metadata: { queryErrors, isAuthFailure },
     });
+    // For auth failures (insufficient scopes / revoked token), also create a
+    // bell notification so the user sees an actionable prompt to reconnect Gmail
+    // instead of having to discover the failure by revisiting Settings.
+    if (isAuthFailure) {
+      supabaseAdmin.from('notifications').insert({
+        user_id: userId,
+        type: 'gmail_auth_error',
+        title: 'Gmail connection needs to be reconnected',
+        body: 'Your Gmail connection lost read permission. Go to Settings → Gmail to reconnect.',
+        is_read: false,
+        metadata: { email: account.email, queryErrors },
+      }).then(({ error: notifErr }) => {
+        if (notifErr) logger.warn({ err: notifErr.message }, '[Gmail Scan] could not write auth-error notification');
+      });
+    }
     return { success: false, errorType: isAuthFailure ? 'auth' : 'transient', message: userMessage };
   }
 
