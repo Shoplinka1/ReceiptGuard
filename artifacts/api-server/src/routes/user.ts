@@ -9,14 +9,15 @@ router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => 
   // ── DIAGNOSTIC ── req.userId comes from the Supabase JWT verified by requireAuth
   logger.info({ userId: req.userId }, '[profile] called — req.userId from JWT');
 
-  // ── 1. Core profile + subscriptions ──────────────────────────────────────
-  // email_accounts is fetched separately below.  Embedding it here requires
-  // the email_accounts_profiles_fkey FK (Phase 7 migration).  If that FK is
-  // not yet applied in production the embedded join throws a PostgREST 400,
-  // which surfaces as error != null → 404 before we ever read is_admin.
+  // ── 1. Core profile ───────────────────────────────────────────────────────
+  // Embedded joins (email_accounts, user_subscriptions) are fetched separately
+  // below. Both tables have their user_id FK pointing to auth.users(id) rather
+  // than profiles.id, so PostgREST cannot resolve the join from the profiles
+  // side. Embedding them here triggers a schema-cache error which surfaces as
+  // error != null → 404 before we ever read is_admin.
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('*, is_admin, user_subscriptions(*, plans(*))')
+    .select('*, is_admin')
     .eq('id', req.userId)
     .maybeSingle();                   // maybeSingle: null on 0 rows, never PGRST116
 
