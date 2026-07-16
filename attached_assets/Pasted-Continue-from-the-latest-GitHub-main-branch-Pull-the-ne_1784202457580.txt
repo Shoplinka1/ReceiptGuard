@@ -1,0 +1,368 @@
+Continue from the latest GitHub main branch
+
+Pull the newest commits before making any changes.
+
+The entire Admin Application has already been completed and verified.
+
+Do NOT revisit, redesign, or audit the Admin application unless you discover a verified regression.
+
+Already completed:
+	•	✅ Admin authentication
+	•	✅ Google OAuth
+	•	✅ Admin Dashboard
+	•	✅ ProtectedAdminRoute
+	•	✅ Railway API proxy
+	•	✅ Diagnostics page
+	•	✅ Admin API endpoints
+	•	✅ Feedback management
+	•	✅ Pagination
+	•	✅ Environment configuration
+	•	✅ Admin deployment
+	•	✅ Backend is_admin verification
+	•	✅ Admin production login
+
+Treat the Admin application as COMPLETE.
+
+⸻
+
+Begin remaining production work only.
+
+⸻
+
+Priority 1 — Real Production Gmail Scanner Verification
+
+Using the currently connected Gmail account(s):
+
+Perform a real production scan using actual Gmail data.
+
+Do NOT fabricate results.
+
+Do NOT simulate emails.
+
+Do NOT assume emails exist.
+
+If something cannot be fully verified because it requires external access (for example, confirming that an email actually arrived in a mailbox), clearly state what was verified and what could not be independently verified.
+
+Produce a detailed report containing:
+	•	Total emails scanned
+	•	Receipts imported
+	•	Subscriptions imported
+	•	Warranties imported
+	•	Failed emails
+	•	Skipped emails grouped by reason
+	•	Duplicate handling accuracy
+	•	Merchant recognition accuracy
+	•	Currency detection accuracy
+	•	Language detection accuracy
+	•	Category accuracy
+	•	Warranty estimation accuracy
+	•	Reminder scheduling accuracy
+	•	False positives
+	•	False negatives
+	•	Missed receipts
+	•	Missed subscriptions
+	•	Missed warranties
+
+Whenever a detection failure is found, include:
+	•	Why it failed
+	•	Root cause
+	•	Exact fix applied
+	•	Regression test added
+
+Only improve verified weaknesses.
+
+⸻
+
+Priority 2 — Gmail Scanner Improvements
+
+Audit gmail.ts only.
+
+Do NOT redesign:
+	•	Scheduler
+	•	APIs
+	•	Database schema
+	•	OAuth flow
+	•	Existing parser pipeline
+
+Improve only verified production weaknesses.
+
+⸻
+
+Currency Detection
+
+Correctly detect:
+	•	USD
+	•	NGN
+	•	EUR
+	•	GBP
+	•	CAD
+	•	AUD
+	•	JPY
+	•	INR
+	•	ZAR
+	•	AED
+	•	CHF
+	•	SEK
+	•	NOK
+	•	DKK
+	•	PLN
+
+Detect and store the actual transaction amount together with its matching currency.
+
+Ignore informational monetary values such as:
+	•	currency conversion examples
+	•	“equivalent in…”
+	•	exchange-rate references
+	•	previous balances
+	•	estimated totals
+	•	promotional prices
+	•	“you saved…”
+	•	taxes when a final charged total exists
+	•	subtotals when a final total exists
+
+Always prioritize the amount representing the final amount actually charged to the customer.
+
+If multiple monetary values appear, determine which one represents the completed transaction and store that amount together with its corresponding currency.
+
+If an email genuinely contains multiple completed purchases (not simply multiple prices for one purchase), extract each completed transaction separately.
+
+Add regression tests covering:
+	•	multiple currencies in one email
+	•	subtotal vs total
+	•	tax vs total
+	•	discounts
+	•	exchange-rate references
+	•	previous balance vs amount paid
+	•	multilingual receipts
+
+⸻
+
+Language Support
+
+Verify receipts written in:
+	•	English
+	•	German
+	•	French
+	•	Spanish
+	•	Italian
+	•	Portuguese
+	•	Dutch
+
+Improve detection only where verified failures exist.
+
+⸻
+
+Merchant Recognition
+
+Normalize merchant aliases into canonical merchant names while preserving the original merchant text for debugging where useful.
+
+Examples:
+	•	AMZN
+	•	Amazon EU
+	•	Amazon Marketplace
+
+→ Amazon
+
+Apply similar normalization for:
+	•	Apple
+	•	Google
+	•	Microsoft
+	•	PayPal
+	•	Adobe
+	•	Netflix
+	•	Spotify
+	•	Uber
+	•	Airbnb
+	•	Booking.com
+
+Only improve verified failures.
+
+⸻
+
+Warranty Detection
+
+Verify warranty extraction for:
+	•	electronics
+	•	phones
+	•	laptops
+	•	appliances
+	•	watches
+	•	headphones
+	•	cameras
+
+Do NOT create warranties for:
+	•	digital goods
+	•	software subscriptions
+	•	gift cards
+	•	travel bookings
+	•	food deliveries
+	•	services
+
+unless warranty information is explicitly present.
+
+Improve only verified weaknesses.
+
+⸻
+
+Priority 3 — Subscription Detection
+
+Verify subscription detection using real Gmail data.
+
+Expand detection only where verified failures exist.
+
+Verify support for:
+	•	Amazon
+	•	Apple
+	•	Google Play
+	•	Netflix
+	•	Spotify
+	•	ChatGPT
+	•	Microsoft
+	•	Adobe
+	•	Dropbox
+	•	GitHub
+	•	Canva
+	•	PayPal
+	•	Uber
+	•	Bolt
+	•	Airbnb
+	•	Booking.com
+	•	Temu
+	•	AliExpress
+	•	Walmart
+	•	Best Buy
+	•	eBay
+	•	Disney+
+	•	Hulu
+	•	Max
+	•	Prime Video
+	•	Apple TV+
+	•	YouTube Premium
+	•	Google One
+	•	Slack
+	•	Zoom
+	•	Notion
+	•	Figma
+	•	LinkedIn Premium
+	•	X Premium
+
+Verify that recurring subscriptions are not confused with one-time purchases.
+
+Do NOT increase false positives.
+
+Add regression tests for every verified improvement.
+
+⸻
+
+Priority 4 — Reminder Verification
+
+Perform a complete production audit.
+
+Verify:
+	•	Gmail Scheduler
+	•	Reminder Scheduler
+	•	Notification creation
+	•	Queue processing
+	•	SMTP / Resend configuration
+	•	Email sending
+	•	Retry behaviour
+	•	Failure logging
+
+Verify:
+
+Subscription reminders
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Warranty reminders
+	•	90 days
+	•	60 days
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Also verify:
+	•	Weekly summaries
+	•	Monthly summaries
+	•	Yearly summaries
+
+Verify that reminder emails are successfully generated, queued, sent through the configured email provider, and that no delivery errors are reported.
+
+If inbox delivery cannot be independently confirmed, clearly state that limitation instead of assuming success.
+
+Fix only verified issues.
+
+Do NOT redesign the reminder system.
+
+⸻
+
+Priority 5 — Feedback Verification
+
+Verify the complete feedback workflow.
+
+Confirm:
+	•	Feedback row inserted into Supabase
+	•	Admin notification email attempted
+	•	User confirmation email attempted
+	•	SMTP responses logged
+	•	Failures visible
+	•	No silent failures
+
+Fix only verified issues.
+
+⸻
+
+Priority 6 — Production Diagnostics
+
+Verify the production diagnostics page using live production data.
+
+Confirm it correctly reports:
+	•	Gmail API
+	•	Google OAuth
+	•	SMTP / Resend
+	•	Railway
+	•	Supabase
+	•	Scheduler
+	•	Queue health
+	•	Last Gmail scan
+	•	Last reminder email
+	•	Last feedback email
+	•	Scan success rate
+	•	Failed scans
+	•	Failed emails
+
+Fix only verified issues.
+
+⸻
+
+Final Production Verification
+
+After all work is complete:
+
+Run one final end-to-end production verification.
+
+Produce a comprehensive report including:
+	•	Scanner accuracy
+	•	Receipt detection accuracy
+	•	Subscription detection accuracy
+	•	Warranty detection accuracy
+	•	Merchant recognition accuracy
+	•	Currency detection accuracy
+	•	Language detection accuracy
+	•	Reminder accuracy
+	•	Email delivery status
+	•	Feedback workflow status
+	•	Remaining verified issues
+
+Finally provide a Production Readiness Assessment that categorizes any remaining issues as:
+	•	Critical
+	•	High
+	•	Medium
+	•	Low
+
+Only declare “Production Ready” if there are no remaining Critical or High severity issues, and base every conclusion on real production data, not assumptions or static code inspection.
