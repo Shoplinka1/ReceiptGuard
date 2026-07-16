@@ -29,6 +29,8 @@
 - [Subscription renewal_date backfill](subscription-renewal-date.md) — Gmail scan never set renewal_date; added calendar-safe calculation + a separate UPDATE to backfill null rows (ignoreDuplicates skips conflicts entirely).
 - [Dashboard metrics design](dashboard-metrics.md) — what each widget queries, the validAmount filter, and why "Money Saved" was renamed to "Monthly Subs".
 - [Admin access fix](admin-access-fix.md) — three root causes: single()→maybeSingle(), missing profile rows, PostgREST join FK gap. Phase 7 migration + is_admin must be set manually.
+- [Admin app architecture](admin-app-architecture.md) — separate artifact at /admin; own Supabase auth + direct apiFetch; VITE_API_URL="" for same-origin; /api/admin/* enforced server-side.
+- [receipt-guard admin removal](receipt-guard-app-cleanup.md) — /admin route + AdminPage import + nav link removed from customer app; queryKey fix for useGetUserProfile calls.
 - [ENCRYPTION_KEY format](encryption-key-format.md) — must be exactly 64 hex chars (32 bytes for AES-256-CBC). Changing it breaks all existing Gmail connections.
 - [Resend email integration](resend-email-integration.md) — Resend key here is send-only restricted (can't query /domains); verify delivery with a real test send, not the domains API.
 - [ReceiptGuard dev setup](receiptguard-replit-dev.md) — Replit is dev-only for this project; production stays on Railway (API) + Vercel (frontend) + Supabase (DB). Never propose switching deployment here.
