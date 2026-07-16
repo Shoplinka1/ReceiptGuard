@@ -186,18 +186,25 @@ async function fetchAllMessageIds(
 // ─── Receipt parser ───────────────────────────────────────────────────────────
 
 const MERCHANT_DOMAINS: Record<string, string> = {
+  // Amazon — regional storefronts
   'amazon.com': 'Amazon', 'amazon.co.uk': 'Amazon UK', 'amazon.ca': 'Amazon CA',
+  'amazon.de': 'Amazon', 'amazon.fr': 'Amazon', 'amazon.it': 'Amazon',
+  'amazon.es': 'Amazon', 'amazon.co.jp': 'Amazon', 'amazon.com.au': 'Amazon',
   'apple.com': 'Apple', 'itunes.com': 'Apple', 'apps.apple.com': 'Apple',
   'google.com': 'Google', 'googleplay.com': 'Google Play',
   'netflix.com': 'Netflix', 'spotify.com': 'Spotify', 'hulu.com': 'Hulu',
-  'disneyplus.com': 'Disney+', 'hbomax.com': 'HBO Max', 'paramountplus.com': 'Paramount+',
+  'disneyplus.com': 'Disney+', 'hbomax.com': 'Max', 'max.com': 'Max',
+  'paramountplus.com': 'Paramount+', 'peacocktv.com': 'Peacock',
+  'primevideo.com': 'Prime Video', 'audible.com': 'Audible',
   'paypal.com': 'PayPal', 'stripe.com': 'Stripe',
   'uber.com': 'Uber', 'lyft.com': 'Lyft', 'doordash.com': 'DoorDash',
+  'bolt.eu': 'Bolt', 'bolt.africa': 'Bolt',
   'grubhub.com': 'Grubhub', 'instacart.com': 'Instacart',
   'airbnb.com': 'Airbnb', 'booking.com': 'Booking.com', 'expedia.com': 'Expedia',
   'hotels.com': 'Hotels.com',
   'shopify.com': 'Shopify', 'etsy.com': 'Etsy', 'ebay.com': 'eBay',
   'walmart.com': 'Walmart', 'target.com': 'Target', 'bestbuy.com': 'Best Buy',
+  'temu.com': 'Temu', 'aliexpress.com': 'AliExpress',
   'costco.com': 'Costco', 'homedepot.com': 'Home Depot', 'lowes.com': "Lowe's",
   'microsoft.com': 'Microsoft', 'xbox.com': 'Xbox', 'office.com': 'Microsoft Office',
   'steam.com': 'Steam', 'steampowered.com': 'Steam',
@@ -207,6 +214,7 @@ const MERCHANT_DOMAINS: Record<string, string> = {
   'notion.so': 'Notion', 'slack.com': 'Slack', 'zoom.us': 'Zoom',
   'figma.com': 'Figma', 'sketch.com': 'Sketch',
   'github.com': 'GitHub', 'gitlab.com': 'GitLab',
+  'linkedin.com': 'LinkedIn', 'twitter.com': 'X', 'x.com': 'X',
   'adobe.com': 'Adobe', 'canva.com': 'Canva', 'shutterstock.com': 'Shutterstock',
   'squarespace.com': 'Squarespace', 'godaddy.com': 'GoDaddy', 'namecheap.com': 'Namecheap',
   'cloudflare.com': 'Cloudflare', 'fastly.com': 'Fastly',
@@ -227,14 +235,33 @@ const CRYPTO_EXCHANGE_DOMAINS = new Set([
   'ftx.com', 'deribit.com', 'blockchain.com', 'exodus.com', 'trustwallet.com',
 ]);
 
-// Subject patterns that reliably indicate a purchase email
+// Subject patterns that reliably indicate a purchase email.
+// Covers English plus the most common European languages (DE/FR/ES/IT/PT/NL).
 const RECEIPT_SUBJECT_PATTERNS = [
+  // English
   /receipt/i, /order\s*(confirmation|confirmed)/i, /invoice/i,
   /payment\s*(confirmation|received|successful)/i, /your\s*purchase/i,
   /shipping\s*confirmation/i, /your\s*order/i,
   /subscription\s*(confirmed|renewed|activated)/i, /trial\s*(started|activated|ending)/i,
   /warranty/i, /bill\s*(statement|due|paid)/i, /charge\s*from/i,
   /thank.*for.*order/i, /thank.*for.*purchase/i, /transaction\s*confirmed/i,
+  // German (DE)
+  /rechnung/i, /bestellbest[äa]tigung/i, /zahlungsbest[äa]tigung/i,
+  /zahlungseingang/i, /abonnement/i, /quittung/i, /versandbest[äa]tigung/i,
+  // French (FR)
+  /facture/i, /confirmation\s*de\s*(commande|paiement|achat)/i,
+  /votre\s*(commande|achat|abonnement)/i, /re[çc]u\s*(de\s*paiement)?/i,
+  // Spanish (ES)
+  /factura/i, /confirmaci[oó]n\s*de\s*(pedido|pago|compra)/i,
+  /recibo\s*(de\s*pago)?/i,
+  // Italian (IT)
+  /fattura/i, /conferma\s*d[ií]\s*(ordine|pagamento|acquisto)/i, /ricevuta/i,
+  // Portuguese (PT/BR)
+  /fatura/i, /nota\s*fiscal/i,
+  /confirma[çc][aã]o\s*de\s*(pedido|pagamento|compra)/i,
+  // Dutch (NL)
+  /factuur/i, /bevestiging\s*van\s*(bestelling|betaling)/i,
+  /uw\s*(bestelling|aankoop|abonnement)/i, /verzendbevestiging/i,
 ];
 
 // Subject patterns that reliably indicate non-receipt emails to skip
@@ -277,7 +304,8 @@ function extractEmailDomain(from: string): string {
 // "Google Play Store", "Google LLC" → "Google"
 export function normalizeMerchantName(name: string): string {
   const NORMALIZATIONS: [RegExp, string][] = [
-    [/^amazon(\.(com|co\.uk|ca|de|fr|jp|in|com\.au))?(\s+(marketplace|services|web\s*services|aws|prime|digital|fresh|music|video))?$/i, 'Amazon'],
+    // Amazon — includes AMZN (credit-card billing descriptor) and regional variants
+    [/^(amazon|amzn)(\.(com|co\.uk|ca|de|fr|jp|in|com\.au))?(\s+(marketplace|mktp\s*\w*|services|web\s*services|aws|prime|digital|fresh|music|video|eu\b.*))?$/i, 'Amazon'],
     [/^apple(\s+(inc\.?|store|itunes|app\s*store|tv\+?|music|arcade))?$/i, 'Apple'],
     [/^google(\s+(llc|play(\s*store)?|workspace|one|cloud|fi|photos|drive))?$/i, 'Google'],
     [/^microsoft(\s+(corporation|office|365|azure|teams|xbox))?$/i, 'Microsoft'],
@@ -299,6 +327,12 @@ export function normalizeMerchantName(name: string): string {
     [/^atlassian(\s+pty\s*ltd\.?)?$/i, 'Atlassian'],
     [/^openai(\s+llc\.?)?$/i, 'OpenAI'],
     [/^anthropic(\s+pbc\.?)?$/i, 'Anthropic'],
+    [/^linkedin(\s+(ireland|corporation|premium))?$/i, 'LinkedIn'],
+    [/^(twitter|x\s*corp\.?)$/i, 'X'],
+    [/^bolt(\s+(technologies|operations|africa|pass|food))?$/i, 'Bolt'],
+    [/^temu(\s+inc\.?)?$/i, 'Temu'],
+    [/^ali\s*express(\s+logistics)?$/i, 'AliExpress'],
+    [/^audible(\s+inc\.?)?$/i, 'Audible'],
   ];
   const trimmed = name.trim();
   for (const [pattern, canonical] of NORMALIZATIONS) {
@@ -343,14 +377,19 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     /(?:total|amount\s*(?:charged|due|paid)|charged|paid|price|subtotal|grand\s*total)[^\d$£€₦₹¥₩\-(]*([-(])?\s*[$£€₦₹¥₩]?\s*([\d]{1,6}(?:[,\.][\d]{3})*(?:[.,]\d{1,2})?)/i,
     // Currency symbol immediately before number: $12.99
     /([-(])?\s*[$£€₦₹¥₩]\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)/,
-    // Number followed by currency code: 12.99 USD
-    /([-(])?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2}))\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED)\b/i,
+    // Number followed by currency code: 12.99 USD or 5000 NGN.
+    // Decimal (\.\d{1,2})? is optional — the previous \.\d{2} (no ?) silently
+    // rejected whole-number amounts like "5000 NGN", "100 EUR", "1500 JPY".
+    // PLN (Polish Zloty) added; was missing from this pattern entirely.
+    /([-(])?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|PLN|NZD|SGD|HKD|MXN|BRL|ZAR|AED|TRY)\b/i,
   ];
 
   const currencySymbols: Record<string, string> = {
     '$': 'USD', '£': 'GBP', '€': 'EUR', '₦': 'NGN', '₹': 'INR', '¥': 'JPY', '₩': 'KRW',
   };
-  const currencyCodes = /USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED/i;
+  // Includes all spec currencies (USD/NGN/EUR/GBP/CAD/AUD/JPY/INR/ZAR/AED/CHF/SEK/NOK/DKK/PLN).
+  // PLN was missing; TRY added as common additional currency.
+  const currencyCodes = /USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|PLN|NZD|SGD|HKD|MXN|BRL|ZAR|AED|TRY/i;
 
   for (const pat of pats) {
     const m = text.match(pat);
@@ -389,12 +428,17 @@ export function extractAmount(text: string): { amount: number | null; currency: 
     // or data-entry error — not a retail purchase.
     if (isNaN(amount) || amount < 0.50 || amount > 50_000) continue;
 
-    // Detect currency from the matched substring first (most accurate), then
-    // fall back to the full email text.  Searching the whole text risks
-    // picking up a different-currency symbol that appears earlier in the email
-    // (e.g. a "Convert to USD: $0.00" header line above "Total: ₦5,000").
-    const symMatch = m[0].match(/[$£€₦₹¥₩]/) ?? text.match(/[$£€₦₹¥₩]/);
-    const codeMatch = m[0].match(currencyCodes) ?? text.match(currencyCodes);
+    // Currency detection — prefer the symbol/code found inside the matched
+    // substring, then fall back to a narrow ±50-char window around the match.
+    // We do NOT search the full email body: that picks up the first symbol
+    // anywhere (e.g. "Convert to USD: $0.00" disclaimer near the top) instead
+    // of the symbol actually adjacent to the charge amount.
+    const matchIndex = text.indexOf(m[0]);
+    const nearby = matchIndex >= 0
+      ? text.slice(Math.max(0, matchIndex - 50), matchIndex + m[0].length + 50)
+      : m[0];
+    const symMatch  = m[0].match(/[$£€₦₹¥₩]/) ?? nearby.match(/[$£€₦₹¥₩]/);
+    const codeMatch = m[0].match(currencyCodes) ?? nearby.match(currencyCodes);
     const currency = symMatch
       ? (currencySymbols[symMatch[0]] ?? 'USD')
       : codeMatch
@@ -1133,11 +1177,11 @@ export async function runGmailScan(
         // Spotify "Payment receipt", and many SaaS invoices that only say "subscription" in the body.
         const subCheckText = `${parsed.rawSubject} ${parsed.rawFrom} ${parsed.rawBody}`.toLowerCase();
         const isSubscriptionEmail = (
-          // Explicit subscription/billing keywords
-          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment)|annual\s+(?:plan|charge|payment)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew))\b/i.test(subCheckText) ||
+          // Explicit subscription/billing keywords — English + multilingual
+          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment)|annual\s+(?:plan|charge|payment)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew)|abonnement|abonnamento|suscripci[oó]n|assinatura)\b/i.test(subCheckText) ||
           // Known subscription services by category — many don't use "subscription" in their receipts
           parsed.category === 'streaming' ||
-          /\b(netflix|spotify|hulu|disney|apple\s+tv|youtube\s+premium|hbo|paramount|peacock|amazon\s+prime|audible|kindle\s+unlimited|adobe\s+creative|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce)\b/i.test(subCheckText)
+          /\b(netflix|spotify|hulu|disney|apple\s+tv|youtube\s+(premium|music)|hbo|max\.com|hbomax|paramount|peacock|amazon\s+prime|prime\s+video|audible|kindle\s+unlimited|adobe\s+(creative|acrobat)|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce|canva|google\s+one|linkedin\s+premium|x\s+premium|twitter\s+(blue|premium)|bolt\s+(pass|premium|protect)|temu\s+(vip|member))\b/i.test(subCheckText)
         );
         if (isSubscriptionEmail) {
           const isYearly = /\b(annual|yearly|per\s+year|\/year|yr)\b/i.test(`${parsed.rawSubject} ${parsed.rawBody}`);
