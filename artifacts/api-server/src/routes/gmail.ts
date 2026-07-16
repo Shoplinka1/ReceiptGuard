@@ -333,6 +333,33 @@ export function normalizeMerchantName(name: string): string {
     [/^temu(\s+inc\.?)?$/i, 'Temu'],
     [/^ali\s*express(\s+logistics)?$/i, 'AliExpress'],
     [/^audible(\s+inc\.?)?$/i, 'Audible'],
+    // Streaming services — often appear as billing descriptors with suffixes
+    [/^hulu(\s+inc\.?|\s+llc\.?)?$/i, 'Hulu'],
+    [/^disney\+?(\s+(?:inc\.?|hotstar|streaming))?$/i, 'Disney+'],
+    [/^paramount\+?(\s+(?:pictures|media|streaming|global))?$/i, 'Paramount+'],
+    [/^peacock(\s+(?:tv|premium|inc\.?))?$/i, 'Peacock'],
+    [/^youtube(\s+(?:premium|music|tv|llc))?$/i, 'YouTube'],
+    // E-commerce / retail
+    [/^walmart(\s+(?:inc\.?|\+|plus))?$/i, 'Walmart'],
+    [/^best\s*buy(\s+(?:inc\.?|co\.?|totaltech|membership|geek\s*squad))?$/i, 'Best Buy'],
+    [/^geek\s*squad(\s+inc\.?)?$/i, 'Best Buy'],
+    [/^ebay(\s+inc\.?)?$/i, 'eBay'],
+    // Travel / accommodation
+    [/^airbnb(\s+inc\.?)?$/i, 'Airbnb'],
+    [/^booking\.?com(\s+b\.?v\.?|\s+inc\.?)?$/i, 'Booking.com'],
+    // Delivery
+    [/^doordash(\s+inc\.?)?$/i, 'DoorDash'],
+    [/^grubhub(\s+inc\.?)?$/i, 'Grubhub'],
+    [/^instacart(\s+(?:inc\.?|maplebear))?$/i, 'Instacart'],
+    // Gaming / communities
+    [/^discord(\s+inc\.?)?$/i, 'Discord'],
+    [/^epic\s*games(\s+inc\.?)?$/i, 'Epic Games'],
+    [/^playstation(\s+(?:network|store|network\s+inc\.?))?$/i, 'PlayStation'],
+    [/^xbox(\s+(?:game\s+pass|live|inc\.?))?$/i, 'Xbox'],
+    [/^steam(\s+(?:powered|valve))?$/i, 'Steam'],
+    // Cloud / infra
+    [/^digitalocean(\s+(?:llc\.?|inc\.?))?$/i, 'DigitalOcean'],
+    [/^cloudflare(\s+inc\.?)?$/i, 'Cloudflare'],
   ];
   const trimmed = name.trim();
   for (const [pattern, canonical] of NORMALIZATIONS) {
@@ -620,7 +647,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
   let warrantyMonths = explicitWarrantyMonths;
   let warrantyIsEstimated = false;
   if (warrantyMonths === null && isWarrantyEligible(category, merchantName)) {
-    warrantyMonths = estimateWarrantyMonths(category, merchantName);
+    warrantyMonths = estimateWarrantyMonths(category, merchantName, combined);
     warrantyIsEstimated = true;
   }
 
@@ -666,10 +693,34 @@ function isWarrantyEligible(category: string, merchantName: string): boolean {
 
 // Category-based estimate, clearly marked with `warrantyIsEstimated: true`
 // so the UI can label it "Estimated" instead of presenting a guess as a
-// confirmed manufacturer warranty. 12 months matches the standard US
-// consumer-electronics manufacturer warranty and is a reasonable default
-// for "shopping" purchases where the actual warranty term is unknown.
-function estimateWarrantyMonths(_category: string, _merchantName: string): number {
+// confirmed manufacturer warranty. Estimates vary by detected product type;
+// 12 months is the standard US consumer-electronics manufacturer warranty
+// and is the default when the product type cannot be determined.
+//
+// productText: subject + body, used to detect product type keywords.
+function estimateWarrantyMonths(_category: string, _merchantName: string, productText?: string): number {
+  if (productText) {
+    const t = productText.toLowerCase();
+    // Major home appliances: washer, dryer, refrigerator, dishwasher, oven,
+    // microwave, freezer. Standard is 1-year parts + labour; many brands
+    // give 2 years on sealed system components. Use 24 as the safe estimate.
+    if (/\b(wash(?:er|ing\s+machine)|dryer|refrigerator|fridge|dishwasher|oven|range|freezer|microwave|air\s+conditioner|a\/c|hvac|heat\s+pump|water\s+heater|vacuum\s+cleaner)\b/.test(t)) return 24;
+    // Watches (including smartwatches) — most manufacturers give 2 years.
+    if (/\b(watch|smartwatch|wristwatch|chronograph|timepiece)\b/.test(t)) return 24;
+    // Cameras and camera lenses — typically 12 months; use 12 (default).
+    if (/\b(camera|dslr|mirrorless|lens|camcorder|action\s+cam|gopro)\b/.test(t)) return 12;
+    // Headphones, earbuds, speakers — typically 12 months.
+    if (/\b(headphones?|earbuds?|earphones?|airpods?|speaker|soundbar|earpiece)\b/.test(t)) return 12;
+    // Phones and tablets — typically 12 months.
+    if (/\b(iphone|android|smartphone|mobile\s+phone|cell\s+phone|tablet|ipad|galaxy\s+tab)\b/.test(t)) return 12;
+    // Laptops and desktops — typically 12 months (some give 2yr on premium lines).
+    if (/\b(laptop|notebook|macbook|chromebook|desktop|pc\b|computer|imac|mac\s+mini|mac\s+pro)\b/.test(t)) return 12;
+    // TVs and monitors — typically 12 months.
+    if (/\b(tv\b|television|monitor|display|smart\s+tv|oled|qled|4k\s+tv)\b/.test(t)) return 12;
+    // Gaming consoles — typically 12 months.
+    if (/\b(playstation|xbox|nintendo|switch|console|ps5|ps4)\b/.test(t)) return 12;
+  }
+  // Default: 12 months (standard US consumer warranty baseline).
   return 12;
 }
 
@@ -1178,10 +1229,10 @@ export async function runGmailScan(
         const subCheckText = `${parsed.rawSubject} ${parsed.rawFrom} ${parsed.rawBody}`.toLowerCase();
         const isSubscriptionEmail = (
           // Explicit subscription/billing keywords — English + multilingual
-          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment)|annual\s+(?:plan|charge|payment)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew)|abonnement|abonnamento|suscripci[oó]n|assinatura)\b/i.test(subCheckText) ||
+          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment|renewal)|annual\s+(?:plan|charge|payment)|yearly\s+(?:plan|charge|payment|renewal)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|renewal\s+confirmation|payment\s+succeeded|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew)|abonnement|abonnamento|suscripci[oó]n|assinatura)\b/i.test(subCheckText) ||
           // Known subscription services by category — many don't use "subscription" in their receipts
           parsed.category === 'streaming' ||
-          /\b(netflix|spotify|hulu|disney|apple\s+tv|youtube\s+(premium|music)|hbo|max\.com|hbomax|paramount|peacock|amazon\s+prime|prime\s+video|audible|kindle\s+unlimited|adobe\s+(creative|acrobat)|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce|canva|google\s+one|linkedin\s+premium|x\s+premium|twitter\s+(blue|premium)|bolt\s+(pass|premium|protect)|temu\s+(vip|member))\b/i.test(subCheckText)
+          /\b(netflix|spotify|hulu|disney\+?|apple\s+(?:tv\+?|one|music|arcade)|youtube\s+(?:premium|music)|hbo|max\.com|hbomax|paramount\+?|peacock|amazon\s+prime|prime\s+video|audible|kindle\s+unlimited|adobe\s+(?:creative|acrobat|express)|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce|canva|google\s+one|google\s+workspace|icloud\+?|uber\s+one|uber\s+pass|walmart\+|walmart\s+plus|discord\s+nitro|linkedin\s+premium|x\s+premium|twitter\s+(?:blue|premium)|bolt\s+(?:pass|premium|protect)|temu\s+(?:vip|member)|geek\s+squad|best\s+buy\s+totaltech)\b/i.test(subCheckText)
         );
         if (isSubscriptionEmail) {
           const isYearly = /\b(annual|yearly|per\s+year|\/year|yr)\b/i.test(`${parsed.rawSubject} ${parsed.rawBody}`);
@@ -1227,14 +1278,16 @@ export async function runGmailScan(
             return (count ?? 0) < 5;
           })();
           if (canAddSub) {
+            // Column is `name` (the DB was migrated from `company_name`).
+            // onConflict key must match the unique constraint: (user_id, name).
             await supabaseAdmin.from('subscriptions').upsert({
-              user_id: userId, company_name: parsed.merchantName,
+              user_id: userId, name: parsed.merchantName,
               monthly_price: monthlyPrice, yearly_price: yearlyPrice,
               currency: parsed.currency,
               billing_cycle: billingCycle,
               renewal_date: renewalDate,
               category: parsed.category, status: 'active',
-            }, { onConflict: 'user_id,company_name', ignoreDuplicates: true });
+            }, { onConflict: 'user_id,name', ignoreDuplicates: true });
 
             // Backfill renewal_date for subscriptions that were imported before
             // this field was added. ignoreDuplicates:true skips the full row on
@@ -1243,7 +1296,7 @@ export async function runGmailScan(
               await supabaseAdmin.from('subscriptions')
                 .update({ renewal_date: renewalDate })
                 .eq('user_id', userId)
-                .eq('company_name', parsed.merchantName)
+                .eq('name', parsed.merchantName)
                 .is('renewal_date', null);
             }
           }

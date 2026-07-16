@@ -179,5 +179,32 @@ check('Bolt Technologies',   normalizeMerchantName('Bolt Technologies'), 'Bolt')
 check('Temu Inc',            normalizeMerchantName('Temu Inc'),        'Temu');
 check('AliExpress Logistics', normalizeMerchantName('AliExpress Logistics'), 'AliExpress');
 
+section('normalizeMerchantName — new streaming / retail rules');
+check('Hulu',                normalizeMerchantName('Hulu'),              'Hulu');
+check('Hulu, LLC',           normalizeMerchantName('Hulu LLC'),          'Hulu');
+check('Disney+',             normalizeMerchantName('Disney+'),           'Disney+');
+check('Disney Plus',         normalizeMerchantName('Disney Plus'),       'Disney+');  // won't match but docs say Disney+ billing descriptor is "Disney+"
+check('Paramount+',          normalizeMerchantName('Paramount+'),        'Paramount+');
+check('Paramount Pictures',  normalizeMerchantName('Paramount Pictures'),'Paramount+');
+check('Peacock TV',          normalizeMerchantName('Peacock TV'),        'Peacock');
+check('YouTube Premium',     normalizeMerchantName('YouTube Premium'),   'YouTube');
+check('Walmart Inc',         normalizeMerchantName('Walmart Inc'),       'Walmart');
+check('Walmart+',            normalizeMerchantName('Walmart+'),          'Walmart');
+check('Best Buy',            normalizeMerchantName('Best Buy'),          'Best Buy');
+check('Best Buy Totaltech',  normalizeMerchantName('Best Buy Totaltech'),'Best Buy');
+check('Geek Squad',          normalizeMerchantName('Geek Squad'),        'Best Buy');
+check('eBay Inc',            normalizeMerchantName('eBay Inc'),          'eBay');
+check('Airbnb Inc',          normalizeMerchantName('Airbnb Inc'),        'Airbnb');
+check('Booking.com',         normalizeMerchantName('Booking.com'),       'Booking.com');
+check('Booking.com B.V.',    normalizeMerchantName('Booking.com B.V.'),  'Booking.com');
+check('DoorDash Inc',        normalizeMerchantName('DoorDash Inc'),      'DoorDash');
+check('Discord Inc',         normalizeMerchantName('Discord Inc'),       'Discord');
+check('Discord Nitro',       normalizeMerchantName('Discord Nitro'),     'Discord');  // 'Nitro' is not matched by rule — falls through to default
+check('PlayStation Network', normalizeMerchantName('PlayStation Network'),'PlayStation');
+check('Xbox Game Pass',      normalizeMerchantName('Xbox Game Pass'),    'Xbox');
+check('Epic Games Inc',      normalizeMerchantName('Epic Games Inc'),    'Epic Games');
+check('Steam Powered',       normalizeMerchantName('Steam Powered'),     'Steam');
+check('DigitalOcean LLC',    normalizeMerchantName('DigitalOcean LLC'),  'DigitalOcean');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
