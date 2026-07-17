@@ -359,56 +359,87 @@ function GeneralTab() {
     },
   })
 
+  const selectCls = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+
   return (
     <div className="space-y-6 mt-6">
       <Card>
         <CardHeader>
           <CardTitle>Regional Preferences</CardTitle>
-          <CardDescription>Set your default currency, timezone, and language.</CardDescription>
+          <CardDescription>Set your preferred currency, language, and timezone.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Language */}
           <div className="grid gap-2">
             <label className="text-sm font-medium">Language</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <select
+              className={selectCls}
               value={(settings as any)?.language || 'en'}
-              onChange={e => updateSettings.mutate({ data: { language: e.target.value } as any })}>
+              onChange={e => updateSettings.mutate({ data: { language: e.target.value } as any })}
+            >
               <option value="en">English</option>
+              <option value="de">Deutsch</option>
               <option value="fr">Français</option>
               <option value="es">Español</option>
-              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
               <option value="pt">Português</option>
-              <option value="yo">Yorùbá</option>
-              <option value="ig">Igbo</option>
-              <option value="ha">Hausa</option>
+              <option value="nl">Nederlands</option>
             </select>
           </div>
+
+          {/* Preferred Currency */}
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Default Currency</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <label className="text-sm font-medium">Preferred Currency</label>
+            <p className="text-xs text-muted-foreground -mt-1">Dashboard totals are converted to this currency using live exchange rates.</p>
+            <select
+              className={selectCls}
               value={settings?.currency || 'USD'}
-              onChange={e => updateSettings.mutate({ data: { currency: e.target.value } })}>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="NGN">NGN (₦)</option>
-              <option value="CAD">CAD (C$)</option>
-              <option value="AUD">AUD (A$)</option>
+              onChange={e => updateSettings.mutate({ data: { currency: e.target.value } })}
+            >
+              <option value="USD">USD — US Dollar ($)</option>
+              <option value="EUR">EUR — Euro (€)</option>
+              <option value="GBP">GBP — British Pound (£)</option>
+              <option value="NGN">NGN — Nigerian Naira (₦)</option>
+              <option value="CAD">CAD — Canadian Dollar (C$)</option>
+              <option value="AUD">AUD — Australian Dollar (A$)</option>
+              <option value="JPY">JPY — Japanese Yen (¥)</option>
+              <option value="INR">INR — Indian Rupee (₹)</option>
+              <option value="ZAR">ZAR — South African Rand (R)</option>
+              <option value="AED">AED — UAE Dirham (د.إ)</option>
+              <option value="CHF">CHF — Swiss Franc (Fr)</option>
+              <option value="SEK">SEK — Swedish Krona (kr)</option>
+              <option value="NOK">NOK — Norwegian Krone (kr)</option>
+              <option value="DKK">DKK — Danish Krone (kr)</option>
+              <option value="PLN">PLN — Polish Złoty (zł)</option>
             </select>
           </div>
+
+          {/* Timezone */}
           <div className="grid gap-2">
             <label className="text-sm font-medium">Timezone</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <select
+              className={selectCls}
               value={settings?.timezone || 'UTC'}
-              onChange={e => updateSettings.mutate({ data: { timezone: e.target.value } })}>
+              onChange={e => updateSettings.mutate({ data: { timezone: e.target.value } })}
+            >
               <option value="UTC">UTC</option>
               <option value="Africa/Lagos">West Africa Time (WAT)</option>
+              <option value="Africa/Nairobi">East Africa Time (EAT)</option>
+              <option value="Africa/Johannesburg">South Africa (SAST)</option>
               <option value="America/New_York">Eastern Time (ET)</option>
               <option value="America/Chicago">Central Time (CT)</option>
+              <option value="America/Denver">Mountain Time (MT)</option>
               <option value="America/Los_Angeles">Pacific Time (PT)</option>
-              <option value="Europe/London">London (GMT)</option>
+              <option value="America/Sao_Paulo">Brazil (BRT)</option>
+              <option value="Europe/London">London (GMT/BST)</option>
               <option value="Europe/Paris">Central European Time (CET)</option>
-              <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
-              <option value="Australia/Sydney">Australian Eastern Time (AEST)</option>
+              <option value="Europe/Amsterdam">Amsterdam (CET)</option>
+              <option value="Asia/Dubai">Dubai (GST)</option>
+              <option value="Asia/Kolkata">India (IST)</option>
+              <option value="Asia/Tokyo">Japan (JST)</option>
+              <option value="Asia/Singapore">Singapore (SGT)</option>
+              <option value="Australia/Sydney">Australian Eastern (AEST)</option>
             </select>
           </div>
         </CardContent>
@@ -425,14 +456,20 @@ function GeneralTab() {
               <p className="font-medium text-sm">Email Notifications</p>
               <p className="text-xs text-muted-foreground">Receive reminders and alerts via email</p>
             </div>
-            <Switch checked={settings?.emailNotifications ?? true} onCheckedChange={v => updateSettings.mutate({ data: { emailNotifications: v } })} />
+            <Switch
+              checked={settings?.emailNotifications ?? true}
+              onCheckedChange={v => updateSettings.mutate({ data: { emailNotifications: v } })}
+            />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-sm">Browser Notifications</p>
               <p className="text-xs text-muted-foreground">Receive push notifications in your browser</p>
             </div>
-            <Switch checked={settings?.browserNotifications ?? true} onCheckedChange={v => updateSettings.mutate({ data: { browserNotifications: v } })} />
+            <Switch
+              checked={settings?.browserNotifications ?? true}
+              onCheckedChange={v => updateSettings.mutate({ data: { browserNotifications: v } })}
+            />
           </div>
         </CardContent>
       </Card>

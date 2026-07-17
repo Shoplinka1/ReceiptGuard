@@ -7,6 +7,7 @@ import { ThemeProvider } from './components/theme-provider';
 import { AuthProvider } from './hooks/use-auth';
 import { ProtectedRoute } from './components/auth/protected-route';
 import { ErrorBoundary } from './components/error-boundary';
+import { I18nProvider } from './lib/i18n';
 
 // Public pages
 import LandingPage from './pages/landing';
@@ -112,10 +113,12 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
-          <Toaster position="top-right" theme="system" richColors />
+          <I18nProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <Router />
+            </WouterRouter>
+            <Toaster position="top-right" theme="system" richColors />
+          </I18nProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

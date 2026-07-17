@@ -36,7 +36,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     { data: gmailAccounts },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('full_name, plan_id').eq('id', userId).single(),
-    supabaseAdmin.from('receipts').select('amount, purchase_date').eq('user_id', userId),
+    supabaseAdmin.from('receipts').select('amount, currency, purchase_date').eq('user_id', userId),
     supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
     supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
     supabaseAdmin.from('email_accounts').select('id, email').eq('user_id', userId).eq('is_active', true),
@@ -48,9 +48,19 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     validAmount: validAmount(r.amount),
   })).filter(r => r.validAmount !== null);
 
-  const monthlySpending = validReceipts
-    .filter(r => r.purchase_date >= firstOfMonth)
-    .reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
+  const thisMonthReceipts = validReceipts.filter(r => r.purchase_date >= firstOfMonth);
+
+  // Raw sum (backward-compat — used as fallback when exchange rates are unavailable)
+  const monthlySpending = thisMonthReceipts.reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
+
+  // Per-currency breakdown so the frontend can convert each group using live FX rates
+  const monthlySpendingByCurrency: Record<string, number> = {};
+  for (const r of thisMonthReceipts) {
+    const cur = (r.currency ?? 'USD').toUpperCase();
+    monthlySpendingByCurrency[cur] = Math.round(
+      ((monthlySpendingByCurrency[cur] ?? 0) + (r.validAmount ?? 0)) * 100
+    ) / 100;
+  }
 
   const upcomingRenewals = (activeSubs ?? []).filter(
     s => s.renewal_date >= today && s.renewal_date <= thirtyDaysLater
@@ -86,6 +96,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
   res.json({
     firstName,
     monthlySpending: Math.round(monthlySpending * 100) / 100,
+    monthlySpendingByCurrency,
     totalReceipts: (receipts ?? []).length,
     validReceiptCount: validReceipts.length,
     activeSubscriptions: (activeSubs ?? []).length,

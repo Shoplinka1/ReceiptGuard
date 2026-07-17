@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { useGetUserProfile } from "@workspace/api-client-react"
 import { NotificationBell } from "./notification-bell"
+import { useTranslation } from "@/lib/i18n"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation()
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     query: { queryKey: ['/api/user/profile'], enabled: !!user, retry: 1, staleTime: 0 },
   })
   const isAdmin = profile?.isAdmin ?? false
+  const { t } = useTranslation()
 
   // Diagnostic logging — visible in browser DevTools Console
   useEffect(() => {
@@ -50,17 +52,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   
   const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Search", href: "/search", icon: Search },
-    { name: "Receipts", href: "/receipts", icon: Receipt },
-    { name: "Subscriptions", href: "/subscriptions", icon: Repeat },
-    { name: "Renewals", href: "/renewals", icon: CalendarDays },
-    { name: "Warranties", href: "/warranties", icon: ShieldCheck },
+    { name: t('nav_dashboard'), href: "/dashboard", icon: LayoutDashboard },
+    { name: t('nav_search'), href: "/search", icon: Search },
+    { name: t('nav_receipts'), href: "/receipts", icon: Receipt },
+    { name: t('nav_subscriptions'), href: "/subscriptions", icon: Repeat },
+    { name: t('nav_renewals'), href: "/renewals", icon: CalendarDays },
+    { name: t('nav_warranties'), href: "/warranties", icon: ShieldCheck },
   ]
   
   const bottomItems = [
-    { name: "Reminders", href: "/reminders", icon: Bell },
-    { name: "Settings", href: "/settings", icon: Settings },
+    { name: t('nav_reminders'), href: "/reminders", icon: Bell },
+    { name: t('nav_settings'), href: "/settings", icon: Settings },
   ]
 
   return (
@@ -82,7 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         
         <div className="px-4 py-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">Overview</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">{t('nav_overview')}</p>
           <nav className="space-y-1">
             {navItems.map((item) => {
               const isActive = location === item.href
@@ -104,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         
         <div className="mt-auto px-4 py-6 border-t border-border">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">Account</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">{t('nav_account')}</p>
           <nav className="space-y-1">
             <NotificationBell />
             {bottomItems.map((item) => {
@@ -128,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer mt-4"
             >
               <LogOut className="w-4 h-4 opacity-70" />
-              Sign Out
+              {t('nav_sign_out')}
             </button>
           </nav>
         </div>

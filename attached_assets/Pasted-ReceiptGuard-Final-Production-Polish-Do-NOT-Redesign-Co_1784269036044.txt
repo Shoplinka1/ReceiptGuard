@@ -1,0 +1,409 @@
+ReceiptGuard — Final Production Polish (Do NOT Redesign)
+
+Continue from the latest GitHub main branch.
+
+Pull the latest commits before making any changes.
+
+Do NOT redesign the architecture.
+
+Do NOT modify the database schema unless absolutely required for a verified bug.
+
+Preserve:
+	•	Gmail scanner
+	•	OAuth
+	•	Scheduler
+	•	Reminder system
+	•	Receipt parser
+	•	APIs
+	•	Existing UI design
+	•	Existing database structure
+
+Improve only the verified production issues below.
+
+⸻
+
+Priority 1 — Subscription Identification
+
+The scanner is successfully detecting subscriptions, but some are displayed as:
+	•	?
+	•	Unknown
+	•	Missing logo
+	•	Missing merchant name
+
+This is not acceptable for production.
+
+Improve the subscription parser so that every detected subscription attempts to extract:
+	•	merchant name
+	•	product/service name
+	•	logo
+	•	website/domain
+	•	billing frequency
+	•	billing amount
+	•	next renewal
+
+Examples:
+
+Creative Fabrica
+
+Spotify
+
+Netflix
+
+ChatGPT
+
+Google One
+
+Apple TV+
+
+Disney+
+
+Adobe
+
+Microsoft 365
+
+Dropbox
+
+GitHub
+
+Prime Video
+
+Canva
+
+Slack
+
+Zoom
+
+LinkedIn Premium
+
+X Premium
+
+Uber One
+
+Bolt
+
+Temu
+
+AliExpress
+
+Booking.com
+
+Airbnb
+
+PayPal
+
+Amazon Prime
+
+Apple One
+
+iCloud+
+
+YouTube Premium
+
+YouTube Music
+
+Hulu
+
+Max
+
+Paramount+
+
+Peacock
+
+Discord Nitro
+
+Walmart+
+
+Geek Squad
+
+Best Buy Total
+
+Do NOT rely only on hardcoded merchant names.
+
+Also detect subscriptions using:
+	•	recurring payment
+	•	monthly payment
+	•	yearly payment
+	•	annual renewal
+	•	subscription renewed
+	•	membership renewed
+	•	payment successful
+	•	invoice paid
+	•	auto renewal
+	•	recurring invoice
+
+If the merchant still cannot be identified:
+
+Display:
+
+Unknown Subscription
+
+instead of a “?”
+
+and allow future editing.
+
+⸻
+
+Priority 2 — Merchant Logos
+
+If a known merchant exists:
+
+Display its logo.
+
+If no logo exists:
+
+Generate a clean fallback avatar using merchant initials.
+
+Example:
+
+Creative Fabrica
+
+→ CF
+
+Unknown Subscription
+
+→ US
+
+Never display a question mark.
+
+⸻
+
+Priority 3 — Multi-Currency Dashboard
+
+Receipts should continue storing their ORIGINAL currency.
+
+Example:
+
+€45
+
+£19
+
+¥5000
+
+₦35000
+
+must remain unchanged in storage.
+
+However, users should be able to choose a preferred dashboard currency.
+
+Add:
+
+Settings
+
+General
+
+Preferred Currency
+
+Supported:
+
+USD
+
+EUR
+
+GBP
+
+NGN
+
+CAD
+
+AUD
+
+JPY
+
+INR
+
+ZAR
+
+AED
+
+CHF
+
+SEK
+
+NOK
+
+DKK
+
+PLN
+
+Dashboard totals should automatically convert into the selected display currency.
+
+Receipts must still show their original currency.
+
+Never overwrite the original transaction currency.
+
+⸻
+
+Priority 4 — Exchange Rates
+
+Use reliable live exchange rates.
+
+Cache rates appropriately.
+
+Gracefully handle failures.
+
+If rates cannot be loaded:
+
+Keep original currency values visible.
+
+Never display incorrect conversions.
+
+⸻
+
+Priority 5 — Language Settings
+
+Add a production language selector.
+
+Settings
+
+General
+
+Language
+
+Support:
+
+English
+
+Deutsch
+
+Français
+
+Español
+
+Italiano
+
+Português
+
+Nederlands
+
+Changing language should localize:
+
+Navigation
+
+Settings
+
+Dashboard
+
+Receipts
+
+Subscriptions
+
+Warranties
+
+Reminders
+
+Notifications
+
+Dates
+
+Number formatting
+
+Currency formatting
+
+Do NOT translate merchant names.
+
+⸻
+
+Priority 6 — Dashboard Improvements
+
+Ensure dashboard cards display correctly regardless of currency.
+
+Examples:
+
+Monthly Spending
+
+Monthly Subscriptions
+
+Top Merchants
+
+Charts
+
+Statistics
+
+Upcoming Renewals
+
+Everything should respect the selected display currency.
+
+⸻
+
+Priority 7 — Subscription Details
+
+Every subscription card should display:
+
+Merchant
+
+Logo
+
+Plan (if available)
+
+Price
+
+Billing cycle
+
+Next renewal
+
+Status
+
+Category
+
+Website (when available)
+
+If information cannot be extracted:
+
+Hide the missing field instead of displaying placeholder junk.
+
+⸻
+
+Priority 8 — Production Verification
+
+Using the connected Gmail account:
+
+Perform a real scan.
+
+Do NOT fabricate data.
+
+Verify:
+	•	receipts
+	•	subscriptions
+	•	warranties
+
+Check:
+
+Merchant identification
+
+Logo detection
+
+Currency detection
+
+Language detection
+
+Recurring payment detection
+
+Dashboard totals
+
+Exchange-rate conversions
+
+Settings
+
+Language switching
+
+Preferred currency switching
+
+Upcoming renewals
+
+Reminder scheduling
+
+⸻
+
+Final Report
+
+When complete, produce a report including:
+	•	Merchant recognition accuracy
+	•	Subscription recognition accuracy
+	•	Logo coverage
+	•	Currency conversion accuracy
+	•	Language support verification
+	•	Dashboard verification
+	•	Remaining verified issues
+	•	Production readiness assessment
+
+Do not claim functionality has been verified with live Gmail data unless it was actually tested against the connected Gmail account. Clearly distinguish code improvements from real production verification results.
