@@ -317,27 +317,25 @@ router.post('/api/admin/smtp-test', ...adminGuard, async (req, res): Promise<voi
   const { to } = req.body as { to?: string };
   const recipient = to?.trim() || 'receiptguard01@gmail.com';
 
-  const emailConfigured = !!(
-    process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS
-  );
+  const emailConfigured = !!process.env.RESEND_API_KEY;
 
   if (!emailConfigured) {
     res.status(503).json({
       success: false,
       configured: false,
-      error: 'SMTP not configured — EMAIL_HOST, EMAIL_USER, and EMAIL_PASS must all be set in Railway environment variables.',
-      hint: 'Set EMAIL_HOST=smtp.gmail.com, EMAIL_PORT=587, EMAIL_USER=your@gmail.com, EMAIL_PASS=<16-char app password>',
+      error: 'Resend not configured — RESEND_API_KEY must be set in Railway environment variables.',
+      hint: 'Set RESEND_API_KEY=re_... (from resend.com dashboard), and optionally EMAIL_FROM=\"ReceiptGuard <noreply@yourverifieddomain.com>\" once a sending domain is verified in Resend.',
     });
     return;
   }
 
   const ok = await sendEmail({
     to: recipient,
-    subject: '[ReceiptGuard] SMTP Test — delivery confirmed',
+    subject: '[ReceiptGuard] Resend Test — delivery confirmed',
     html: `
       <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
-        <h2>✅ SMTP Test Successful</h2>
-        <p>This email was sent at <strong>${new Date().toISOString()}</strong> via the ReceiptGuard admin SMTP test endpoint.</p>
+        <h2>✅ Resend Test Successful</h2>
+        <p>This email was sent at <strong>${new Date().toISOString()}</strong> via the ReceiptGuard admin email test endpoint.</p>
         <p style="color:#666;font-size:12px">If you received this, email delivery is working correctly in production.</p>
       </div>
     `,
