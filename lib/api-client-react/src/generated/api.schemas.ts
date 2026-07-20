@@ -367,6 +367,7 @@ export interface UserProfile {
   /** @nullable */
   avatarUrl?: string | null;
   plan: UserProfilePlan;
+  isAdmin?: boolean;
   gmailConnected: boolean;
   /** @nullable */
   gmailEmail?: string | null;

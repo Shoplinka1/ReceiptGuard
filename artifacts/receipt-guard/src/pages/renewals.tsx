@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { CalendarDays, Bell, BellOff, Calendar } from "lucide-react"
-import { useListRenewals, useUpdateRenewal } from "@workspace/api-client-react"
+import { useListRenewals, useUpdateRenewal, useGetUserSettings } from "@workspace/api-client-react"
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns"
 import { toast } from "sonner"
+import { formatCurrency } from "@/lib/currency"
 
 export default function RenewalsPage() {
   const [period, setPeriod] = useState<'this_month' | 'today' | 'this_week'>('this_month')
   const { data: renewals, isLoading } = useListRenewals({ period })
+  const { data: userSettings } = useGetUserSettings()
+  const defaultCurrency = userSettings?.currency || 'USD'
   const updateRenewal = useUpdateRenewal()
 
   const toggleReminder = async (id: number, currentEnabled: boolean) => {
@@ -83,7 +86,7 @@ export default function RenewalsPage() {
                       </div>
                       <div>
                         <h3 className="font-bold text-lg leading-tight">{renewal.companyName}</h3>
-                        <p className="text-sm text-muted-foreground">${renewal.amount.toFixed(2)}</p>
+                        <p className="text-sm text-muted-foreground">{formatCurrency(renewal.amount, (renewal as any).currency || defaultCurrency)}</p>
                       </div>
                     </div>
                     <Badge variant={getStatusColor(renewal.daysUntilRenewal) as any} className="uppercase text-[10px]">

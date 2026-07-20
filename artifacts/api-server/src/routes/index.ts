@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import healthRouter from './health';
+import exchangeRatesRouter from './exchange-rates';
 import dashboardRouter from './dashboard';
 import receiptsRouter from './receipts';
 import subscriptionsRouter from './subscriptions';
@@ -12,11 +13,15 @@ import paystackRouter from './paystack';
 import adminRouter from './admin';
 import feedbackRouter from './feedback';
 import notificationsRouter from './notifications';
+import debugRouter from './debug';
+import returnsRouter from './returns';
+import documentsRouter from './documents';
 
 const router = Router();
 
 // Public
 router.use(healthRouter);
+router.use(exchangeRatesRouter);
 
 // Paystack webhook must use raw body — registered before auth middleware
 router.use(paystackRouter);
@@ -34,6 +39,9 @@ router.use(merchantsRouter);
 router.use(userRouter);
 router.use(feedbackRouter);
 router.use(notificationsRouter);
+router.use(returnsRouter);
+router.use(documentsRouter);
 router.use(adminRouter);
+router.use(debugRouter);
 
 export default router;

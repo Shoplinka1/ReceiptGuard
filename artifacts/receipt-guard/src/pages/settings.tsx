@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import {
   Loader2, CheckCircle2, Trash2, Mail, AlertTriangle, RefreshCw,
   Sparkles, CreditCard, ChevronDown, ChevronUp, ExternalLink, LogOut,
-  User, Globe, Palette, Shield, HelpCircle, MessageSquare,
+  User, Globe, Palette, Shield, HelpCircle, MessageSquare, FolderInput,
 } from 'lucide-react'
 import { useLocation, Link } from 'wouter'
 
@@ -180,10 +180,11 @@ function GmailTab() {
 // ─── Billing Tab ─────────────────────────────────────────────────────────────
 
 const PRO_FEATURES = [
-  'Unlimited Gmail accounts', 'Unlimited receipts & subscriptions',
-  'Unlimited reminders', 'Warranty & return tracking',
-  'CSV & PDF export', 'Spending reports & analytics',
-  'Advanced filters & categories', 'Priority support',
+  'Unlimited purchases', 'Unlimited subscriptions',
+  'Unlimited warranties & returns', 'Document storage (10 GB)',
+  'OCR receipt scan', 'CSV & PDF export',
+  'Spending reports & analytics', 'All import sources',
+  'Advanced reminders', 'Priority support',
 ]
 
 const MONTHLY_USD = 5.99
@@ -359,56 +360,87 @@ function GeneralTab() {
     },
   })
 
+  const selectCls = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+
   return (
     <div className="space-y-6 mt-6">
       <Card>
         <CardHeader>
           <CardTitle>Regional Preferences</CardTitle>
-          <CardDescription>Set your default currency, timezone, and language.</CardDescription>
+          <CardDescription>Set your preferred currency, language, and timezone.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Language */}
           <div className="grid gap-2">
             <label className="text-sm font-medium">Language</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <select
+              className={selectCls}
               value={(settings as any)?.language || 'en'}
-              onChange={e => updateSettings.mutate({ data: { language: e.target.value } as any })}>
+              onChange={e => updateSettings.mutate({ data: { language: e.target.value } as any })}
+            >
               <option value="en">English</option>
+              <option value="de">Deutsch</option>
               <option value="fr">Français</option>
               <option value="es">Español</option>
-              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
               <option value="pt">Português</option>
-              <option value="yo">Yorùbá</option>
-              <option value="ig">Igbo</option>
-              <option value="ha">Hausa</option>
+              <option value="nl">Nederlands</option>
             </select>
           </div>
+
+          {/* Preferred Currency */}
           <div className="grid gap-2">
-            <label className="text-sm font-medium">Default Currency</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <label className="text-sm font-medium">Preferred Currency</label>
+            <p className="text-xs text-muted-foreground -mt-1">Dashboard totals are converted to this currency using live exchange rates.</p>
+            <select
+              className={selectCls}
               value={settings?.currency || 'USD'}
-              onChange={e => updateSettings.mutate({ data: { currency: e.target.value } })}>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="NGN">NGN (₦)</option>
-              <option value="CAD">CAD (C$)</option>
-              <option value="AUD">AUD (A$)</option>
+              onChange={e => updateSettings.mutate({ data: { currency: e.target.value } })}
+            >
+              <option value="USD">USD — US Dollar ($)</option>
+              <option value="EUR">EUR — Euro (€)</option>
+              <option value="GBP">GBP — British Pound (£)</option>
+              <option value="NGN">NGN — Nigerian Naira (₦)</option>
+              <option value="CAD">CAD — Canadian Dollar (C$)</option>
+              <option value="AUD">AUD — Australian Dollar (A$)</option>
+              <option value="JPY">JPY — Japanese Yen (¥)</option>
+              <option value="INR">INR — Indian Rupee (₹)</option>
+              <option value="ZAR">ZAR — South African Rand (R)</option>
+              <option value="AED">AED — UAE Dirham (د.إ)</option>
+              <option value="CHF">CHF — Swiss Franc (Fr)</option>
+              <option value="SEK">SEK — Swedish Krona (kr)</option>
+              <option value="NOK">NOK — Norwegian Krone (kr)</option>
+              <option value="DKK">DKK — Danish Krone (kr)</option>
+              <option value="PLN">PLN — Polish Złoty (zł)</option>
             </select>
           </div>
+
+          {/* Timezone */}
           <div className="grid gap-2">
             <label className="text-sm font-medium">Timezone</label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <select
+              className={selectCls}
               value={settings?.timezone || 'UTC'}
-              onChange={e => updateSettings.mutate({ data: { timezone: e.target.value } })}>
+              onChange={e => updateSettings.mutate({ data: { timezone: e.target.value } })}
+            >
               <option value="UTC">UTC</option>
               <option value="Africa/Lagos">West Africa Time (WAT)</option>
+              <option value="Africa/Nairobi">East Africa Time (EAT)</option>
+              <option value="Africa/Johannesburg">South Africa (SAST)</option>
               <option value="America/New_York">Eastern Time (ET)</option>
               <option value="America/Chicago">Central Time (CT)</option>
+              <option value="America/Denver">Mountain Time (MT)</option>
               <option value="America/Los_Angeles">Pacific Time (PT)</option>
-              <option value="Europe/London">London (GMT)</option>
+              <option value="America/Sao_Paulo">Brazil (BRT)</option>
+              <option value="Europe/London">London (GMT/BST)</option>
               <option value="Europe/Paris">Central European Time (CET)</option>
-              <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
-              <option value="Australia/Sydney">Australian Eastern Time (AEST)</option>
+              <option value="Europe/Amsterdam">Amsterdam (CET)</option>
+              <option value="Asia/Dubai">Dubai (GST)</option>
+              <option value="Asia/Kolkata">India (IST)</option>
+              <option value="Asia/Tokyo">Japan (JST)</option>
+              <option value="Asia/Singapore">Singapore (SGT)</option>
+              <option value="Australia/Sydney">Australian Eastern (AEST)</option>
             </select>
           </div>
         </CardContent>
@@ -425,14 +457,20 @@ function GeneralTab() {
               <p className="font-medium text-sm">Email Notifications</p>
               <p className="text-xs text-muted-foreground">Receive reminders and alerts via email</p>
             </div>
-            <Switch checked={settings?.emailNotifications ?? true} onCheckedChange={v => updateSettings.mutate({ data: { emailNotifications: v } })} />
+            <Switch
+              checked={settings?.emailNotifications ?? true}
+              onCheckedChange={v => updateSettings.mutate({ data: { emailNotifications: v } })}
+            />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-sm">Browser Notifications</p>
               <p className="text-xs text-muted-foreground">Receive push notifications in your browser</p>
             </div>
-            <Switch checked={settings?.browserNotifications ?? true} onCheckedChange={v => updateSettings.mutate({ data: { browserNotifications: v } })} />
+            <Switch
+              checked={settings?.browserNotifications ?? true}
+              onCheckedChange={v => updateSettings.mutate({ data: { browserNotifications: v } })}
+            />
           </div>
         </CardContent>
       </Card>
@@ -592,8 +630,8 @@ const feedbackTypes: { value: FeedbackType; label: string; placeholder: string }
 ]
 
 const faqItems = [
-  { q: 'How does ReceiptGuard scan my Gmail?', a: 'We use read-only Gmail access to search for receipts, invoices, and order confirmations. We never read personal emails or modify your inbox.' },
-  { q: 'Is my data secure?', a: 'Yes. All data is encrypted at rest and in transit. Gmail tokens are stored securely and never shared. We use Supabase with row-level security.' },
+  { q: 'How do I import my purchases?', a: 'You can add purchases manually from the Purchases page. The Import Center supports additional sources — Amazon, PayPal, OCR, CSV, and more — coming soon.' },
+  { q: 'Is my data secure?', a: 'Yes. All data is encrypted at rest and in transit. Your credentials are stored securely and never shared. We use Supabase with row-level security.' },
   { q: 'What happens when my Pro subscription expires?', a: 'Your account is automatically downgraded to the Free plan. You retain access to your existing data, but premium features become unavailable until you renew.' },
   { q: 'Can I cancel my subscription at any time?', a: 'Yes. Cancel anytime from Settings → Billing. You keep Pro access until the end of your current billing period.' },
   { q: 'How do I upgrade from Free to Pro?', a: 'Go to Settings → Billing and click Upgrade to Pro. We accept payment via Paystack. Pro is $5.99/month or $59.99/year.' },
@@ -721,6 +759,46 @@ function SupportTab() {
   )
 }
 
+// ─── Import Center Tab ───────────────────────────────────────────────────────
+
+function ImportsTab() {
+  return (
+    <div className="space-y-6 mt-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Center</CardTitle>
+          <CardDescription>
+            Connect accounts and import purchases from external sources. All sources are coming soon — add purchases manually in the meantime.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { name: 'Amazon',             desc: 'Import order history' },
+              { name: 'PayPal',             desc: 'Pull transaction history' },
+              { name: 'Apple App Store',    desc: 'Sync in-app purchases' },
+              { name: 'Google Play',        desc: 'Import app purchases' },
+              { name: 'OCR Receipt Scan',   desc: 'Snap a photo of any receipt' },
+              { name: 'CSV Import',         desc: 'Upload a spreadsheet of transactions' },
+            ].map(s => (
+              <div key={s.name} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{s.name}</p>
+                  <p className="text-xs text-muted-foreground">{s.desc}</p>
+                </div>
+                <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full shrink-0 font-medium">Coming Soon</span>
+              </div>
+            ))}
+          </div>
+          <div className="pt-2 border-t border-border">
+            <a href="/import" className="text-sm text-primary hover:underline">Open full Import Center →</a>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab() {
@@ -789,13 +867,13 @@ function ProfileTab() {
 // ─── Main Settings Page ───────────────────────────────────────────────────────
 
 const TABS = [
-  { value: 'profile', label: 'Profile', icon: User },
-  { value: 'gmail', label: 'Gmail', icon: Mail },
-  { value: 'billing', label: 'Billing', icon: CreditCard },
-  { value: 'general', label: 'General', icon: Globe },
-  { value: 'appearance', label: 'Appearance', icon: Palette },
-  { value: 'security', label: 'Security', icon: Shield },
-  { value: 'support', label: 'Help & Support', icon: HelpCircle },
+  { value: 'profile',    label: 'Profile',        icon: User },
+  { value: 'imports',    label: 'Import Center',  icon: FolderInput },
+  { value: 'billing',    label: 'Billing',        icon: CreditCard },
+  { value: 'general',    label: 'General',        icon: Globe },
+  { value: 'appearance', label: 'Appearance',     icon: Palette },
+  { value: 'security',   label: 'Security',       icon: Shield },
+  { value: 'support',    label: 'Help & Support', icon: HelpCircle },
 ]
 
 export default function SettingsPage() {
@@ -822,7 +900,7 @@ export default function SettingsPage() {
           </TabsList>
 
           <TabsContent value="profile"><ProfileTab /></TabsContent>
-          <TabsContent value="gmail"><GmailTab /></TabsContent>
+          <TabsContent value="imports"><ImportsTab /></TabsContent>
           <TabsContent value="billing"><BillingTab /></TabsContent>
           <TabsContent value="general"><GeneralTab /></TabsContent>
           <TabsContent value="appearance"><AppearanceTab /></TabsContent>

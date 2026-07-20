@@ -1,53 +1,42 @@
 /**
- * Email helper using the Resend HTTP API.
+ * Email helper. Two transports, tried in this order:
  *
- * Configure via env vars:
- *   RESEND_API_KEY — Resend API key (required to actually send)
- *   EMAIL_FROM     — verified "From" address, e.g. "ReceiptGuard <noreply@yourdomain.com>".
- *                    Falls back to Resend's shared test sender (onboarding@resend.dev),
- *                    which can only deliver to the Resend account owner's own email —
- *                    fine for smoke-testing, not for real users. Verify a domain in the
- *                    Resend dashboard and set EMAIL_FROM to an address on it for production.
+ *   1. Resend (preferred) — configure via RESEND_API_KEY.
+ *      Uses the getreceiptguard.xyz domain senders (noreply@, reminders@,
+ *      support@, feedback@). Requires that domain's SPF/DKIM/DMARC records
+ *      to be verified in the Resend dashboard, otherwise Resend will reject
+ *      or quarantine mail from an unverified domain.
+ *   2. Nodemailer/SMTP (legacy fallback) — configure via EMAIL_HOST,
+ *      EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM. Kept so existing
+ *      Railway deployments that only have SMTP configured keep working.
  *
- * If RESEND_API_KEY is not set, emails are logged to stdout (dev mode) instead of sent.
- * All Resend API errors are logged with full detail — never silently swallowed.
- *
- * Migrated off Gmail SMTP on 2026-07-10: Railway blocks outbound SMTP ports
- * (587/465/25) at the network level — transporter.verify()/sendMail() both
- * failed with ETIMEDOUT there regardless of host/DNS/auth config, even
- * though the same SMTP creds worked fine from Replit's network. Sending
- * over HTTPS via Resend's API sidesteps the blocked ports entirely.
+ * If neither is configured, emails are logged to stdout (dev mode).
+ * All errors are logged with full detail — never silently swallowed.
  */
+import nodemailer from 'nodemailer';
 import { logger } from './logger';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM ?? 'ReceiptGuard <onboarding@resend.dev>';
+const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? 'getreceiptguard.xyz';
 
-function logEmailConfigDiagnostics(context: string) {
-  logger.warn({
-    context,
-    resendApiKeySet: !!RESEND_API_KEY,
-    resendApiKeyLooksValid: !!RESEND_API_KEY && RESEND_API_KEY.startsWith('re_'),
-    emailFrom: EMAIL_FROM,
-    usingFallbackSender: EMAIL_FROM.includes('onboarding@resend.dev'),
-  }, `[email][DEBUG] Resend config diagnostic (${context})`);
-}
+// Default senders on the verified domain. Callers can override `from` per-call
+// (e.g. reminder-scheduler uses reminders@, feedback uses feedback@).
+export const EMAIL_SENDERS = {
+  noreply: `ReceiptGuard <noreply@${EMAIL_DOMAIN}>`,
+  support: `ReceiptGuard Support <support@${EMAIL_DOMAIN}>`,
+  reminders: `ReceiptGuard <reminders@${EMAIL_DOMAIN}>`,
+  feedback: `ReceiptGuard <feedback@${EMAIL_DOMAIN}>`,
+} as const;
 
-export async function sendEmail(opts: {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}): Promise<boolean> {
-  if (!RESEND_API_KEY) {
-    logger.info(
-      { to: opts.to, subject: opts.subject },
-      '[email] RESEND_API_KEY not configured — email not sent',
-    );
-    logEmailConfigDiagnostics('sendEmail — not configured');
-    return false;
-  }
+const EMAIL_HOST = process.env.EMAIL_HOST;
+const EMAIL_PORT = parseInt(process.env.EMAIL_PORT ?? '587', 10);
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM ?? EMAIL_USER ?? EMAIL_SENDERS.noreply;
 
+// ─── Resend transport ──────────────────────────────────────────────────────────
+
+async function sendViaResend(opts: { to: string; subject: string; html: string; text?: string; from?: string }): Promise<boolean> {
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -56,7 +45,7 @@ export async function sendEmail(opts: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: EMAIL_FROM,
+        from: opts.from ?? EMAIL_SENDERS.noreply,
         to: [opts.to],
         subject: opts.subject,
         html: opts.html,
@@ -64,25 +53,149 @@ export async function sendEmail(opts: {
       }),
     });
 
-    const body: any = await res.json().catch(() => ({}));
-
     if (!res.ok) {
+      const errBody = await res.json().catch(() => ({} as any));
       logger.error({
         to: opts.to,
         subject: opts.subject,
         status: res.status,
-        statusText: res.statusText,
-        body,
-      }, '[email] Resend API request FAILED — email not delivered');
-      logEmailConfigDiagnostics('send failed');
+        errBody,
+      }, '[email][resend] send FAILED');
+      // Domain not verified yet (pending DNS) shows up as a 403 with a
+      // "domain is not verified" message — surface that distinctly so it's
+      // not confused with a real auth failure.
+      if (res.status === 403) {
+        logger.warn({ to: opts.to }, '[email][resend] likely cause: sending domain SPF/DKIM not verified yet in Resend dashboard (DNS propagation pending)');
+      }
       return false;
     }
 
+    const info = await res.json().catch(() => ({})) as { id?: string };
+    logger.info({ to: opts.to, subject: opts.subject, id: info?.id }, '[email][resend] sent successfully');
+    return true;
+  } catch (err: any) {
+    logger.error({ to: opts.to, subject: opts.subject, message: err?.message }, '[email][resend] request threw');
+    return false;
+  }
+}
+
+// Validate Gmail App Password format: exactly 16 non-whitespace chars
+// (Google strips spaces in the UI but the actual password has no spaces)
+function validateGmailAppPassword(pass: string | undefined): { valid: boolean; hint: string } {
+  if (!pass) return { valid: false, hint: 'EMAIL_PASS is not set' };
+  const stripped = pass.replace(/\s/g, '');
+  if (stripped.length !== 16) {
+    return {
+      valid: false,
+      hint: `EMAIL_PASS length after stripping spaces is ${stripped.length} (expected 16 for Gmail App Password)`,
+    };
+  }
+  if (/\s/.test(pass)) {
+    return {
+      valid: true,
+      hint: 'EMAIL_PASS contains spaces — they will be stripped for SMTP auth. Consider removing them from the env var.',
+    };
+  }
+  return { valid: true, hint: 'looks valid (16 chars, no spaces)' };
+}
+
+function logEmailConfigDiagnostics(context: string) {
+  const { valid: passValid, hint: passHint } = validateGmailAppPassword(EMAIL_PASS);
+  logger.warn({
+    context,
+    emailHostSet: !!EMAIL_HOST,
+    emailHost: EMAIL_HOST ?? '(not set)',
+    emailPort: EMAIL_PORT,
+    emailUserSet: !!EMAIL_USER,
+    emailUserLooksLikeGmail: !!EMAIL_USER && /@gmail\.com$/i.test(EMAIL_USER),
+    emailPassSet: !!EMAIL_PASS,
+    emailPassHint: passHint,
+    emailPassValid: passValid,
+    emailFrom: EMAIL_FROM,
+  }, `[email][DEBUG] SMTP config diagnostic (${context})`);
+}
+
+let _transport: nodemailer.Transporter | null = null;
+
+function getTransport(): nodemailer.Transporter | null {
+  if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) return null;
+  // Reuse the transport across calls — avoids creating a new TCP connection for every email
+  if (!_transport) {
+    // Strip spaces from app password (common copy-paste issue from Google UI)
+    const cleanPass = EMAIL_PASS.replace(/\s/g, '');
+    _transport = nodemailer.createTransport({
+      host: EMAIL_HOST,
+      port: EMAIL_PORT,
+      secure: EMAIL_PORT === 465,
+      auth: { user: EMAIL_USER, pass: cleanPass },
+      // Increase timeouts for slow SMTP servers
+      connectionTimeout: 15_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
+    });
+  }
+  return _transport;
+}
+
+export async function sendEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
+}): Promise<boolean> {
+  // Prefer Resend when configured — it's the production email path going
+  // forward (see EMAIL_SENDERS). Falls through to SMTP/dev-log only if
+  // RESEND_API_KEY isn't set, so existing Railway SMTP setups keep working
+  // until they're migrated.
+  if (RESEND_API_KEY) {
+    return sendViaResend(opts);
+  }
+
+  const transport = getTransport();
+  if (!transport) {
+    logger.info(
+      { to: opts.to, subject: opts.subject },
+      '[email] Neither Resend nor SMTP configured — email not sent (set RESEND_API_KEY, or EMAIL_HOST/EMAIL_USER/EMAIL_PASS)',
+    );
+    logEmailConfigDiagnostics('sendEmail — not configured');
+    return false;
+  }
+
+  // Verify SMTP connection before sending. Log the result either way.
+  try {
+    await transport.verify();
+    logger.info('[email] transporter.verify() succeeded — SMTP connection is healthy');
+  } catch (verifyErr: any) {
+    logger.error({
+      message: verifyErr?.message,
+      code: verifyErr?.code,
+      command: verifyErr?.command,
+      responseCode: verifyErr?.responseCode,
+      response: verifyErr?.response,
+    }, '[email] transporter.verify() FAILED — SMTP connection broken');
+    logEmailConfigDiagnostics('verify failed');
+    // Reset transport so next call reconnects fresh
+    _transport = null;
+    // Still attempt sendMail — some providers respond differently to verify vs actual send
+  }
+
+  try {
+    const info = await transport.sendMail({
+      from: opts.from ?? EMAIL_FROM,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text,
+    });
     logger.info({
       to: opts.to,
       subject: opts.subject,
-      id: body?.id,
-    }, '[email] sent successfully via Resend');
+      messageId: info?.messageId,
+      response: info?.response,
+      accepted: info?.accepted,
+      rejected: info?.rejected,
+    }, '[email] sent successfully');
     return true;
   } catch (err: any) {
     logger.error({
@@ -90,9 +203,16 @@ export async function sendEmail(opts: {
       subject: opts.subject,
       message: err?.message,
       code: err?.code,
+      command: err?.command,
+      responseCode: err?.responseCode,
+      response: err?.response,
       stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
-    }, '[email] Resend API call threw — email not delivered');
-    logEmailConfigDiagnostics('send threw');
+    }, '[email] sendMail FAILED — email not delivered');
+    logEmailConfigDiagnostics('sendMail failed');
+    // Reset transport on auth/connection errors so next attempt gets a fresh connection
+    if (err?.code === 'EAUTH' || err?.code === 'ECONNECTION' || err?.responseCode === 535) {
+      _transport = null;
+    }
     return false;
   }
 }

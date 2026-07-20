@@ -1,0 +1,381 @@
+ReceiptGuard Final Production Hardening & Launch Verification
+
+Continue from the latest GitHub main branch.
+
+Pull the newest commits before making any changes.
+
+The Admin Application is COMPLETE.
+
+Do NOT revisit, redesign, refactor, or audit the Admin application unless you discover a verified production regression.
+
+Completed work includes:
+	•	✅ Admin authentication
+	•	✅ Google OAuth
+	•	✅ Admin Dashboard
+	•	✅ ProtectedAdminRoute
+	•	✅ Railway API proxy
+	•	✅ Diagnostics page
+	•	✅ Admin API endpoints
+	•	✅ Feedback management
+	•	✅ Pagination
+	•	✅ Environment configuration
+	•	✅ Admin deployment
+	•	✅ Backend is_admin verification
+	•	✅ Production admin login
+
+⸻
+
+Priority 1 — Real Production Gmail Scanner Verification
+
+Using the currently connected Gmail account(s):
+
+Perform a real production scan.
+
+Do NOT fabricate data.
+
+Do NOT assume emails exist.
+
+Use real Gmail messages only.
+
+Produce a report showing:
+	•	Total emails scanned
+	•	Receipts detected
+	•	Receipts imported
+	•	Subscriptions detected
+	•	Warranties detected
+	•	Failed emails
+	•	Skipped emails (grouped by reason)
+	•	Duplicate handling accuracy
+	•	Merchant recognition accuracy
+	•	Currency detection accuracy
+	•	Language detection accuracy
+	•	Category accuracy
+	•	Warranty estimation accuracy
+	•	Reminder scheduling accuracy
+	•	False positives
+	•	False negatives
+	•	Missed receipts
+	•	Missed subscriptions
+	•	Missed warranties
+
+If weaknesses are verified:
+
+Improve only the scanner.
+
+Do not redesign the architecture.
+
+⸻
+
+Priority 2 — Scanner Accuracy Improvements
+
+Audit only the Gmail scanner.
+
+Preserve:
+	•	Scheduler
+	•	APIs
+	•	OAuth
+	•	Database schema
+	•	Existing parser pipeline
+
+Improve only verified weaknesses.
+
+⸻
+
+Currency Detection
+
+Support:
+	•	USD
+	•	NGN
+	•	EUR
+	•	GBP
+	•	CAD
+	•	AUD
+	•	JPY
+	•	INR
+	•	ZAR
+	•	AED
+	•	CHF
+	•	SEK
+	•	NOK
+	•	DKK
+	•	PLN
+
+Detect and store the actual completed transaction amount together with its correct currency.
+
+Ignore informational monetary values including:
+	•	exchange-rate examples
+	•	“equivalent in…”
+	•	previous balances
+	•	estimated totals
+	•	promotional prices
+	•	“you saved…”
+	•	taxes when a final charged total exists
+	•	subtotals when a final total exists
+
+Always prioritize the final charged amount.
+
+If one email genuinely contains multiple completed purchases, extract each completed transaction separately.
+
+⸻
+
+Add regression tests covering:
+	•	multiple currencies
+	•	subtotal vs total
+	•	tax vs total
+	•	discounts
+	•	previous balance
+	•	exchange-rate references
+	•	multilingual receipts
+	•	multiple receipts in one email
+
+⸻
+
+Language Verification
+
+Verify receipt detection using real emails in:
+	•	English
+	•	German
+	•	French
+	•	Spanish
+	•	Italian
+	•	Portuguese
+	•	Dutch
+
+Improve only verified failures.
+
+⸻
+
+Merchant Recognition
+
+Normalize merchant names.
+
+Examples:
+
+AMZN
+
+Amazon Marketplace
+
+Amazon EU
+
+Amazon Digital
+
+→ Amazon
+
+Do similar normalization for:
+
+Apple
+
+Google
+
+Microsoft
+
+PayPal
+
+Uber
+
+Adobe
+
+Spotify
+
+Netflix
+
+OpenAI
+
+etc.
+
+⸻
+
+Warranty Detection
+
+Verify warranty extraction for:
+	•	phones
+	•	laptops
+	•	tablets
+	•	cameras
+	•	watches
+	•	headphones
+	•	appliances
+	•	electronics
+
+Improve only verified failures.
+
+⸻
+
+Priority 3 — Subscription Detection
+
+Verify using real Gmail data.
+
+The scanner must NOT rely only on hard-coded merchant names.
+
+It must also detect subscriptions using generic recurring billing patterns such as:
+	•	recurring payment
+	•	monthly renewal
+	•	yearly renewal
+	•	auto renew
+	•	membership
+	•	subscription
+	•	recurring invoice
+	•	payment succeeded
+	•	renewal confirmation
+
+Unknown providers should still be detected when the email clearly represents a recurring subscription.
+
+Additionally verify major providers including:
+	•	Amazon
+	•	Apple
+	•	Google Play
+	•	Google One
+	•	Netflix
+	•	Spotify
+	•	ChatGPT
+	•	OpenAI
+	•	Microsoft
+	•	Adobe
+	•	Dropbox
+	•	GitHub
+	•	Canva
+	•	PayPal
+	•	Uber
+	•	Bolt
+	•	Airbnb
+	•	Booking.com
+	•	Temu
+	•	AliExpress
+	•	Walmart
+	•	Best Buy
+	•	eBay
+	•	Disney+
+	•	Hulu
+	•	Max
+	•	Prime Video
+	•	Apple TV+
+	•	YouTube Premium
+	•	YouTube Music
+	•	Slack
+	•	Zoom
+	•	Notion
+	•	Figma
+	•	LinkedIn Premium
+	•	X Premium
+	•	Audible
+
+Improve only verified failures.
+
+Do NOT increase false positives.
+
+Add regression tests for every improvement.
+
+⸻
+
+Priority 4 — Reminder System Verification
+
+Perform a complete production audit.
+
+Verify:
+	•	Gmail Scheduler
+	•	Reminder Scheduler
+	•	Queue
+	•	Notification creation
+	•	SMTP / Resend
+	•	Email delivery
+	•	Retry behaviour
+	•	Failure logging
+
+Verify reminder timing:
+
+Subscriptions
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Warranties
+	•	90 days
+	•	60 days
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	1 day
+
+Also verify:
+	•	Weekly summaries
+	•	Monthly summaries
+	•	Yearly summaries
+
+⸻
+
+Email Production Audit
+
+Verify that production emails never contain testing content.
+
+Examples that must never reach users:
+	•	TEST —
+	•	DEMO
+	•	SAMPLE
+	•	DEBUG
+	•	DEVELOPMENT
+
+Ensure production emails use production branding only.
+
+Verify every email template.
+
+⸻
+
+Priority 5 — Feedback Verification
+
+Verify:
+	•	feedback inserted
+	•	admin email sent
+	•	user confirmation sent
+	•	SMTP response logged
+	•	failures visible
+	•	no silent failures
+
+⸻
+
+Priority 6 — Production Diagnostics
+
+Verify using live production data.
+
+Confirm diagnostics correctly report:
+	•	Gmail API
+	•	Google OAuth
+	•	SMTP / Resend
+	•	Railway
+	•	Supabase
+	•	Scheduler
+	•	Queue health
+	•	Last Gmail scan
+	•	Last reminder email
+	•	Last feedback email
+	•	Scan success rate
+	•	Failed scans
+	•	Failed emails
+
+⸻
+
+Final Production Verification
+
+Run one complete end-to-end production verification.
+
+Do NOT rely only on static code inspection.
+
+Where possible, verify using live Gmail accounts, real production APIs, and real email delivery.
+
+Produce one final report showing:
+	•	Scanner accuracy
+	•	Receipt detection accuracy
+	•	Subscription detection accuracy
+	•	Warranty detection accuracy
+	•	Merchant recognition accuracy
+	•	Currency detection accuracy
+	•	Language detection accuracy
+	•	Reminder accuracy
+	•	Email delivery status
+	•	Feedback workflow status
+	•	Remaining verified issues
+	•	Production readiness assessment
+
+Only declare “Production Ready” if all critical production workflows have been verified successfully with real production data. If any critical issue remains, clearly identify it instead of declaring the system ready.

@@ -7,6 +7,7 @@ import { ThemeProvider } from './components/theme-provider';
 import { AuthProvider } from './hooks/use-auth';
 import { ProtectedRoute } from './components/auth/protected-route';
 import { ErrorBoundary } from './components/error-boundary';
+import { I18nProvider } from './lib/i18n';
 
 // Public pages
 import LandingPage from './pages/landing';
@@ -23,6 +24,10 @@ import TermsPage from './pages/terms';
 // Protected pages (lazy-loaded)
 const DashboardPage = lazy(() => import('./pages/dashboard'));
 const ReceiptsPage = lazy(() => import('./pages/receipts'));
+const ReturnsPage = lazy(() => import('./pages/returns'));
+const DocumentsPage = lazy(() => import('./pages/documents'));
+const InsightsPage = lazy(() => import('./pages/insights'));
+const ImportCenterPage = lazy(() => import('./pages/import-center'));
 const SubscriptionsPage = lazy(() => import('./pages/subscriptions'));
 const WarrantiesPage = lazy(() => import('./pages/warranties'));
 const RenewalsPage = lazy(() => import('./pages/renewals'));
@@ -31,7 +36,6 @@ const SettingsPage = lazy(() => import('./pages/settings'));
 const BillingPage = lazy(() => import('./pages/billing'));
 const ProfilePage = lazy(() => import('./pages/profile'));
 const ConnectGmailPage = lazy(() => import('./pages/connect-gmail'));
-const AdminPage = lazy(() => import('./pages/admin'));
 const FeedbackPage = lazy(() => import('./pages/feedback'));
 const SearchPage = lazy(() => import('./pages/search'));
 const SupportPage = lazy(() => import('./pages/support'));
@@ -64,8 +68,24 @@ function Router() {
         <Route path="/dashboard">
           {() => <ProtectedRoute component={DashboardPage} />}
         </Route>
+        {/* /purchases is the 2.0 label for the receipts table */}
+        <Route path="/purchases">
+          {() => <ProtectedRoute component={ReceiptsPage} />}
+        </Route>
         <Route path="/receipts">
           {() => <ProtectedRoute component={ReceiptsPage} />}
+        </Route>
+        <Route path="/returns">
+          {() => <ProtectedRoute component={ReturnsPage} />}
+        </Route>
+        <Route path="/documents">
+          {() => <ProtectedRoute component={DocumentsPage} />}
+        </Route>
+        <Route path="/insights">
+          {() => <ProtectedRoute component={InsightsPage} />}
+        </Route>
+        <Route path="/import">
+          {() => <ProtectedRoute component={ImportCenterPage} />}
         </Route>
         <Route path="/subscriptions">
           {() => <ProtectedRoute component={SubscriptionsPage} />}
@@ -91,9 +111,6 @@ function Router() {
         <Route path="/connect-gmail">
           {() => <ProtectedRoute component={ConnectGmailPage} />}
         </Route>
-        <Route path="/admin">
-          {() => <ProtectedRoute component={AdminPage} adminOnly />}
-        </Route>
         <Route path="/feedback">
           {() => <ProtectedRoute component={FeedbackPage} />}
         </Route>
@@ -101,7 +118,7 @@ function Router() {
           {() => <ProtectedRoute component={SearchPage} />}
         </Route>
         <Route path="/support">
-          {() => <ProtectedRoute component={SupportPage} />}
+          {() => <SupportPage />}
         </Route>
 
         <Route component={NotFound} />
@@ -116,10 +133,12 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
-          <Toaster position="top-right" theme="system" richColors />
+          <I18nProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <Router />
+            </WouterRouter>
+            <Toaster position="top-right" theme="system" richColors />
+          </I18nProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

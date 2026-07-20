@@ -6,13 +6,66 @@ import { logger } from '../lib/logger';
 const router: IRouter = Router();
 
 router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => {
-  const { data, error } = await supabaseAdmin.from('profiles').select('*, user_subscriptions(*, plans(*)), email_accounts(id, email, is_active)').eq('id', req.userId).single();
-  if (error || !data) { res.status(404).json({ error: 'Profile not found' }); return; }
-  res.json({
+  // ── DIAGNOSTIC ── req.userId comes from the Supabase JWT verified by requireAuth
+  logger.info({ userId: req.userId }, '[profile] called — req.userId from JWT');
+
+  // ── 1. Core profile ───────────────────────────────────────────────────────
+  // Embedded joins (email_accounts, user_subscriptions) are fetched separately
+  // below. Both tables have their user_id FK pointing to auth.users(id) rather
+  // than profiles.id, so PostgREST cannot resolve the join from the profiles
+  // side. Embedding them here triggers a schema-cache error which surfaces as
+  // error != null → 404 before we ever read is_admin.
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('*, is_admin')
+    .eq('id', req.userId)
+    .maybeSingle();                   // maybeSingle: null on 0 rows, never PGRST116
+
+  // ── DIAGNOSTIC ── log every field that drives the response ───────────────
+  logger.info({
+    userId: req.userId,
+    'profiles.id':        data?.id              ?? null,
+    'profiles.email':     data?.email           ?? null,
+    'profiles.is_admin':  (data as any)?.is_admin ?? '(field missing from row)',
+    'profiles.plan_id':   data?.plan_id         ?? null,
+    dbError:              error?.message         ?? null,
+    rowFound:             !!data,
+  }, '[profile] raw DB row');
+
+  if (error || !data) {
+    logger.error({ userId: req.userId, error: error?.message }, '[profile] profile not found or DB error → 404');
+    res.status(404).json({ error: 'Profile not found' });
+    return;
+  }
+
+  // ── 2. Email accounts — separate query so FK gap can never crash this route
+  const { data: emailAccounts } = await supabaseAdmin
+    .from('email_accounts')
+    .select('id, email, is_active')
+    .eq('user_id', req.userId);
+
+  // ── DIAGNOSTIC ── the value that goes into the response ──────────────────
+  const rawIsAdmin = (data as any).is_admin;
+  const isAdmin    = rawIsAdmin === true;   // explicit === true, not just truthy
+
+  const responseBody = {
     id: data.id, name: data.full_name, email: data.email, avatarUrl: data.avatar_url ?? null,
-    plan: data.plan_id as 'free' | 'pro', gmailConnected: (data.email_accounts as any[])?.some(a => a.is_active) ?? false,
-    gmailEmail: (data.email_accounts as any[])?.[0]?.email ?? null, storageUsed: 0, createdAt: data.created_at,
-  });
+    plan: data.plan_id as 'free' | 'pro', isAdmin,
+    gmailConnected: (emailAccounts ?? []).some((a: any) => a.is_active),
+    gmailEmail:     (emailAccounts ?? [])[0]?.email ?? null,
+    storageUsed: 0, createdAt: data.created_at,
+  };
+
+  logger.info({
+    userId:      req.userId,
+    profileId:   data.id,
+    profileEmail: data.email,
+    rawIsAdmin,                          // exact value from DB before coercion
+    computedIsAdmin: isAdmin,            // what the frontend will receive
+    responseBody,                        // full JSON being sent
+  }, '[profile] sending response');
+
+  res.json(responseBody);
 });
 
 router.patch('/api/user/profile', requireAuth, async (req, res): Promise<void> => {

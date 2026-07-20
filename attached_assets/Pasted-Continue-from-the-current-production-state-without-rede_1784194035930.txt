@@ -1,0 +1,238 @@
+Continue from the current production state without redesigning the application.
+
+Priority 1 — Fix the Admin application
+
+The admin application is deployed on Vercel and loads successfully, but attempting to sign in returns "Invalid login credentials."
+
+Perform a complete end-to-end audit of the admin application and fix every issue required to make it production-ready.
+
+Verify and fix all of the following:
+
+• Supabase authentication configuration.
+• VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY usage.
+• Login flow.
+• Auth callback.
+• ProtectedAdminRoute.
+• Session restoration.
+• Admin authentication middleware.
+• Verify the backend API connection from the admin app.
+• Verify all /api/admin endpoints.
+• Verify CORS.
+• Verify Vercel rewrites to the Railway backend.
+• Verify environment variables.
+• Verify the admin dashboard can successfully communicate with Railway.
+
+Do NOT create a separate authentication system.
+
+Use the existing ReceiptGuard authentication.
+
+The admin application must authenticate using the exact same Supabase users as the customer application.
+
+If an authenticated user does not have admin privileges, show "Access Denied."
+
+If the user is an administrator (is_admin = true), successfully load the dashboard.
+
+If no administrator exists, create a safe migration or seed script that promotes the configured founder account to administrator.
+
+Verify every admin page works:
+
+• Overview
+• Users
+• Payments
+• Subscriptions
+• Receipts
+• Warranties
+• Gmail Accounts
+• Activity Logs
+• Scan Logs
+• Feedback
+• Diagnostics
+
+Fix only verified issues.
+
+Do not redesign the UI.
+
+------------------------------------------------
+
+Priority 2 — Perform a full production verification
+
+Using the currently connected Gmail account(s):
+
+Do not fabricate results.
+
+Do not assume emails exist.
+
+Run a real production scan and produce a report showing:
+
+• Total emails scanned
+• Receipts imported
+• Subscriptions imported
+• Warranties imported
+• Skipped emails grouped by reason
+• False positives
+• False negatives
+• Missed subscriptions
+• Missed warranties
+• Duplicate handling accuracy
+• Merchant recognition accuracy
+• Category accuracy
+• Warranty estimation accuracy
+• Reminder scheduling accuracy
+
+------------------------------------------------
+
+Priority 3 — Improve only verified scanner weaknesses
+
+Audit gmail.ts.
+
+Expand subscription detection to cover major providers including:
+
+Amazon
+Apple
+Netflix
+Spotify
+Google Play
+Adobe
+OpenAI / ChatGPT
+Microsoft
+Dropbox
+GitHub
+Canva
+PayPal
+Uber
+Bolt
+Airbnb
+Booking.com
+Temu
+AliExpress
+Walmart
+Best Buy
+eBay
+Disney+
+Hulu
+Max
+Prime Video
+Apple TV+
+YouTube Premium
+Google One
+Notion
+Figma
+Zoom
+Slack
+X Premium
+LinkedIn Premium
+
+Improve detection only where real failures are verified.
+
+Do not increase false positives.
+
+Do not redesign the scanner.
+
+Preserve the existing architecture.
+
+Add regression tests for every scanner improvement.
+
+------------------------------------------------
+
+Priority 4 — Verify reminder email pipeline
+
+Perform a complete production audit of:
+
+• SMTP configuration
+• Email transport
+• Scheduler execution
+• Reminder generation
+• Notification creation
+• Delivery success
+• Logging
+
+Verify:
+
+Subscription reminders
+
+30
+14
+7
+3
+1 days
+
+Warranty reminders
+
+90
+60
+30
+14
+7
+3
+1 days
+
+Weekly summaries
+
+Monthly summaries
+
+Yearly summaries
+
+If any failure exists:
+
+Identify the exact cause.
+
+Fix only that cause.
+
+Do not redesign the email system.
+
+------------------------------------------------
+
+Priority 5 — Verify feedback workflow
+
+Trace the complete request from frontend to backend.
+
+Verify:
+
+• Feedback row inserted into Supabase
+• Admin notification email attempted
+• User confirmation email attempted
+• SMTP responses logged
+• Failures surfaced in logs
+• No silent failures
+
+If broken:
+
+Fix only verified issues.
+
+------------------------------------------------
+
+Priority 6 — Diagnostics
+
+Complete the admin diagnostics page.
+
+Show live production status for:
+
+• Gmail API
+• Google OAuth
+• SMTP
+• Railway
+• Supabase
+• Scheduler
+• Queue health
+• Last successful Gmail scan
+• Last reminder email
+• Last feedback email
+• Scan success rate
+• Failed scan count
+• Failed email count
+• Connected Gmail accounts
+
+------------------------------------------------
+
+After all fixes:
+
+Run production verification again.
+
+Provide a final report showing:
+
+• What was fixed
+• What was tested
+• Production pass/fail status
+• Remaining manual steps (if any)
+
+Only report "Production Ready" after every verification passes.

@@ -7,9 +7,13 @@
  * Flow:
  *   1. GET  /api/gmail/auth-url  → returns the Google consent screen URL
  *   2. GET  /api/gmail/callback  → exchanges code for tokens, stores encrypted
- *   3. POST /api/gmail/scan      → scans inbox and extracts receipts via AI
+ *   3. POST /api/gmail/scan      → scans inbox and extracts receipts (regex-based parsing)
  *   4. GET  /api/gmail/accounts  → lists connected Gmail accounts
  *   5. DELETE /api/gmail/accounts/:id → revokes and removes account
+ *
+ * Background rescanning: see ../lib/gmail-scheduler.ts, which imports
+ * `runGmailScan` (exported below) and re-runs it periodically for every
+ * active account so newly-arrived receipts are picked up automatically.
  */
 import { Router, type IRouter } from 'express';
 import { requireAuth } from '../middleware/auth';
@@ -182,18 +186,25 @@ async function fetchAllMessageIds(
 // ─── Receipt parser ───────────────────────────────────────────────────────────
 
 const MERCHANT_DOMAINS: Record<string, string> = {
+  // Amazon — regional storefronts
   'amazon.com': 'Amazon', 'amazon.co.uk': 'Amazon UK', 'amazon.ca': 'Amazon CA',
+  'amazon.de': 'Amazon', 'amazon.fr': 'Amazon', 'amazon.it': 'Amazon',
+  'amazon.es': 'Amazon', 'amazon.co.jp': 'Amazon', 'amazon.com.au': 'Amazon',
   'apple.com': 'Apple', 'itunes.com': 'Apple', 'apps.apple.com': 'Apple',
   'google.com': 'Google', 'googleplay.com': 'Google Play',
   'netflix.com': 'Netflix', 'spotify.com': 'Spotify', 'hulu.com': 'Hulu',
-  'disneyplus.com': 'Disney+', 'hbomax.com': 'HBO Max', 'paramountplus.com': 'Paramount+',
+  'disneyplus.com': 'Disney+', 'hbomax.com': 'Max', 'max.com': 'Max',
+  'paramountplus.com': 'Paramount+', 'peacocktv.com': 'Peacock',
+  'primevideo.com': 'Prime Video', 'audible.com': 'Audible',
   'paypal.com': 'PayPal', 'stripe.com': 'Stripe',
   'uber.com': 'Uber', 'lyft.com': 'Lyft', 'doordash.com': 'DoorDash',
+  'bolt.eu': 'Bolt', 'bolt.africa': 'Bolt',
   'grubhub.com': 'Grubhub', 'instacart.com': 'Instacart',
   'airbnb.com': 'Airbnb', 'booking.com': 'Booking.com', 'expedia.com': 'Expedia',
   'hotels.com': 'Hotels.com',
   'shopify.com': 'Shopify', 'etsy.com': 'Etsy', 'ebay.com': 'eBay',
   'walmart.com': 'Walmart', 'target.com': 'Target', 'bestbuy.com': 'Best Buy',
+  'temu.com': 'Temu', 'aliexpress.com': 'AliExpress',
   'costco.com': 'Costco', 'homedepot.com': 'Home Depot', 'lowes.com': "Lowe's",
   'microsoft.com': 'Microsoft', 'xbox.com': 'Xbox', 'office.com': 'Microsoft Office',
   'steam.com': 'Steam', 'steampowered.com': 'Steam',
@@ -203,6 +214,7 @@ const MERCHANT_DOMAINS: Record<string, string> = {
   'notion.so': 'Notion', 'slack.com': 'Slack', 'zoom.us': 'Zoom',
   'figma.com': 'Figma', 'sketch.com': 'Sketch',
   'github.com': 'GitHub', 'gitlab.com': 'GitLab',
+  'linkedin.com': 'LinkedIn', 'twitter.com': 'X', 'x.com': 'X',
   'adobe.com': 'Adobe', 'canva.com': 'Canva', 'shutterstock.com': 'Shutterstock',
   'squarespace.com': 'Squarespace', 'godaddy.com': 'GoDaddy', 'namecheap.com': 'Namecheap',
   'cloudflare.com': 'Cloudflare', 'fastly.com': 'Fastly',
@@ -223,14 +235,33 @@ const CRYPTO_EXCHANGE_DOMAINS = new Set([
   'ftx.com', 'deribit.com', 'blockchain.com', 'exodus.com', 'trustwallet.com',
 ]);
 
-// Subject patterns that reliably indicate a purchase email
+// Subject patterns that reliably indicate a purchase email.
+// Covers English plus the most common European languages (DE/FR/ES/IT/PT/NL).
 const RECEIPT_SUBJECT_PATTERNS = [
+  // English
   /receipt/i, /order\s*(confirmation|confirmed)/i, /invoice/i,
   /payment\s*(confirmation|received|successful)/i, /your\s*purchase/i,
   /shipping\s*confirmation/i, /your\s*order/i,
   /subscription\s*(confirmed|renewed|activated)/i, /trial\s*(started|activated|ending)/i,
   /warranty/i, /bill\s*(statement|due|paid)/i, /charge\s*from/i,
   /thank.*for.*order/i, /thank.*for.*purchase/i, /transaction\s*confirmed/i,
+  // German (DE)
+  /rechnung/i, /bestellbest[äa]tigung/i, /zahlungsbest[äa]tigung/i,
+  /zahlungseingang/i, /abonnement/i, /quittung/i, /versandbest[äa]tigung/i,
+  // French (FR)
+  /facture/i, /confirmation\s*de\s*(commande|paiement|achat)/i,
+  /votre\s*(commande|achat|abonnement)/i, /re[çc]u\s*(de\s*paiement)?/i,
+  // Spanish (ES)
+  /factura/i, /confirmaci[oó]n\s*de\s*(pedido|pago|compra)/i,
+  /recibo\s*(de\s*pago)?/i,
+  // Italian (IT)
+  /fattura/i, /conferma\s*d[ií]\s*(ordine|pagamento|acquisto)/i, /ricevuta/i,
+  // Portuguese (PT/BR)
+  /fatura/i, /nota\s*fiscal/i,
+  /confirma[çc][aã]o\s*de\s*(pedido|pagamento|compra)/i,
+  // Dutch (NL)
+  /factuur/i, /bevestiging\s*van\s*(bestelling|betaling)/i,
+  /uw\s*(bestelling|aankoop|abonnement)/i, /verzendbevestiging/i,
 ];
 
 // Subject patterns that reliably indicate non-receipt emails to skip
@@ -273,7 +304,8 @@ function extractEmailDomain(from: string): string {
 // "Google Play Store", "Google LLC" → "Google"
 export function normalizeMerchantName(name: string): string {
   const NORMALIZATIONS: [RegExp, string][] = [
-    [/^amazon(\.(com|co\.uk|ca|de|fr|jp|in|com\.au))?(\s+(marketplace|services|web\s*services|aws|prime|digital|fresh|music|video))?$/i, 'Amazon'],
+    // Amazon — includes AMZN (credit-card billing descriptor) and regional variants
+    [/^(amazon|amzn)(\.(com|co\.uk|ca|de|fr|jp|in|com\.au))?(\s+(marketplace|mktp\s*\w*|services|web\s*services|aws|prime|digital|fresh|music|video|eu\b.*))?$/i, 'Amazon'],
     [/^apple(\s+(inc\.?|store|itunes|app\s*store|tv\+?|music|arcade))?$/i, 'Apple'],
     [/^google(\s+(llc|play(\s*store)?|workspace|one|cloud|fi|photos|drive))?$/i, 'Google'],
     [/^microsoft(\s+(corporation|office|365|azure|teams|xbox))?$/i, 'Microsoft'],
@@ -295,6 +327,39 @@ export function normalizeMerchantName(name: string): string {
     [/^atlassian(\s+pty\s*ltd\.?)?$/i, 'Atlassian'],
     [/^openai(\s+llc\.?)?$/i, 'OpenAI'],
     [/^anthropic(\s+pbc\.?)?$/i, 'Anthropic'],
+    [/^linkedin(\s+(ireland|corporation|premium))?$/i, 'LinkedIn'],
+    [/^(twitter|x\s*corp\.?)$/i, 'X'],
+    [/^bolt(\s+(technologies|operations|africa|pass|food))?$/i, 'Bolt'],
+    [/^temu(\s+inc\.?)?$/i, 'Temu'],
+    [/^ali\s*express(\s+logistics)?$/i, 'AliExpress'],
+    [/^audible(\s+inc\.?)?$/i, 'Audible'],
+    // Streaming services — often appear as billing descriptors with suffixes
+    [/^hulu(\s+inc\.?|\s+llc\.?)?$/i, 'Hulu'],
+    [/^disney\+?(\s+(?:inc\.?|hotstar|streaming))?$/i, 'Disney+'],
+    [/^paramount\+?(\s+(?:pictures|media|streaming|global))?$/i, 'Paramount+'],
+    [/^peacock(\s+(?:tv|premium|inc\.?))?$/i, 'Peacock'],
+    [/^youtube(\s+(?:premium|music|tv|llc))?$/i, 'YouTube'],
+    // E-commerce / retail
+    [/^walmart(\s+(?:inc\.?|\+|plus))?$/i, 'Walmart'],
+    [/^best\s*buy(\s+(?:inc\.?|co\.?|totaltech|membership|geek\s*squad))?$/i, 'Best Buy'],
+    [/^geek\s*squad(\s+inc\.?)?$/i, 'Best Buy'],
+    [/^ebay(\s+inc\.?)?$/i, 'eBay'],
+    // Travel / accommodation
+    [/^airbnb(\s+inc\.?)?$/i, 'Airbnb'],
+    [/^booking\.?com(\s+b\.?v\.?|\s+inc\.?)?$/i, 'Booking.com'],
+    // Delivery
+    [/^doordash(\s+inc\.?)?$/i, 'DoorDash'],
+    [/^grubhub(\s+inc\.?)?$/i, 'Grubhub'],
+    [/^instacart(\s+(?:inc\.?|maplebear))?$/i, 'Instacart'],
+    // Gaming / communities
+    [/^discord(\s+inc\.?)?$/i, 'Discord'],
+    [/^epic\s*games(\s+inc\.?)?$/i, 'Epic Games'],
+    [/^playstation(\s+(?:network|store|network\s+inc\.?))?$/i, 'PlayStation'],
+    [/^xbox(\s+(?:game\s+pass|live|inc\.?))?$/i, 'Xbox'],
+    [/^steam(\s+(?:powered|valve))?$/i, 'Steam'],
+    // Cloud / infra
+    [/^digitalocean(\s+(?:llc\.?|inc\.?))?$/i, 'DigitalOcean'],
+    [/^cloudflare(\s+inc\.?)?$/i, 'Cloudflare'],
   ];
   const trimmed = name.trim();
   for (const [pattern, canonical] of NORMALIZATIONS) {
@@ -326,19 +391,7 @@ export function getMerchantName(domain: string, rawFrom: string): string {
   return normalizeMerchantName(main.charAt(0).toUpperCase() + main.slice(1));
 }
 
-// Known payment-processor/merchant sender domains whose receipts are
-// denominated in a specific local currency when no explicit currency
-// symbol/code appears next to the amount itself. Without this, a Flutterwave
-// (Nigerian processor) receipt whose body happens to mention "$" anywhere
-// (e.g. an unrelated USD-equivalent disclaimer) was silently imported as USD
-// instead of NGN, because the old code scanned the ENTIRE email body for the
-// first currency symbol rather than looking near the actual matched amount.
-const PROCESSOR_DEFAULT_CURRENCY: Record<string, string> = {
-  'flutterwave.com': 'NGN',
-  'paystack.com': 'NGN',
-};
-
-export function extractAmount(text: string, senderDomain?: string): { amount: number | null; currency: string } {
+export function extractAmount(text: string): { amount: number | null; currency: string } {
   // Patterns ordered from most specific to least specific
   // Each pattern has an explicit optional group 1 capturing a leading "-" or
   // "(" immediately before the currency symbol/number (the accounting
@@ -351,14 +404,19 @@ export function extractAmount(text: string, senderDomain?: string): { amount: nu
     /(?:total|amount\s*(?:charged|due|paid)|charged|paid|price|subtotal|grand\s*total)[^\d$£€₦₹¥₩\-(]*([-(])?\s*[$£€₦₹¥₩]?\s*([\d]{1,6}(?:[,\.][\d]{3})*(?:[.,]\d{1,2})?)/i,
     // Currency symbol immediately before number: $12.99
     /([-(])?\s*[$£€₦₹¥₩]\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)/,
-    // Number followed by currency code: 12.99 USD
-    /([-(])?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2}))\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED)\b/i,
+    // Number followed by currency code: 12.99 USD or 5000 NGN.
+    // Decimal (\.\d{1,2})? is optional — the previous \.\d{2} (no ?) silently
+    // rejected whole-number amounts like "5000 NGN", "100 EUR", "1500 JPY".
+    // PLN (Polish Zloty) added; was missing from this pattern entirely.
+    /([-(])?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|PLN|NZD|SGD|HKD|MXN|BRL|ZAR|AED|TRY)\b/i,
   ];
 
   const currencySymbols: Record<string, string> = {
     '$': 'USD', '£': 'GBP', '€': 'EUR', '₦': 'NGN', '₹': 'INR', '¥': 'JPY', '₩': 'KRW',
   };
-  const currencyCodes = /USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|NZD|SGD|HKD|MXN|BRL|ZAR|AED/i;
+  // Includes all spec currencies (USD/NGN/EUR/GBP/CAD/AUD/JPY/INR/ZAR/AED/CHF/SEK/NOK/DKK/PLN).
+  // PLN was missing; TRY added as common additional currency.
+  const currencyCodes = /USD|GBP|EUR|NGN|CAD|AUD|INR|JPY|KRW|CHF|SEK|NOK|DKK|PLN|NZD|SGD|HKD|MXN|BRL|ZAR|AED|TRY/i;
 
   for (const pat of pats) {
     const m = text.match(pat);
@@ -397,28 +455,22 @@ export function extractAmount(text: string, senderDomain?: string): { amount: nu
     // or data-entry error — not a retail purchase.
     if (isNaN(amount) || amount < 0.50 || amount > 50_000) continue;
 
-    // Detect currency from a narrow window AROUND the matched amount, not
-    // the whole email body — a symbol/code elsewhere in the text (footer
-    // disclaimer, unrelated USD-equivalent note, etc.) must never override
-    // the currency that actually appears next to the charged amount.
-    const windowStart = Math.max(0, (m.index ?? 0) - 20);
-    const windowEnd = Math.min(text.length, (m.index ?? 0) + m[0].length + 20);
-    const window = text.slice(windowStart, windowEnd);
-
-    const symMatch = window.match(/[$£€₦₹¥₩]/);
-    const codeMatch = window.match(currencyCodes);
-    const processorDefault = senderDomain
-      ? PROCESSOR_DEFAULT_CURRENCY[senderDomain.split('.').slice(-2).join('.')]
-      : undefined;
-
+    // Currency detection — prefer the symbol/code found inside the matched
+    // substring, then fall back to a narrow ±50-char window around the match.
+    // We do NOT search the full email body: that picks up the first symbol
+    // anywhere (e.g. "Convert to USD: $0.00" disclaimer near the top) instead
+    // of the symbol actually adjacent to the charge amount.
+    const matchIndex = text.indexOf(m[0]);
+    const nearby = matchIndex >= 0
+      ? text.slice(Math.max(0, matchIndex - 50), matchIndex + m[0].length + 50)
+      : m[0];
+    const symMatch  = m[0].match(/[$£€₦₹¥₩]/) ?? nearby.match(/[$£€₦₹¥₩]/);
+    const codeMatch = m[0].match(currencyCodes) ?? nearby.match(currencyCodes);
     const currency = symMatch
       ? (currencySymbols[symMatch[0]] ?? 'USD')
       : codeMatch
         ? codeMatch[0].toUpperCase()
-        // No explicit symbol/code anywhere: fall back to the sending
-        // processor's known local currency (e.g. Flutterwave -> NGN)
-        // rather than always defaulting to USD.
-        : processorDefault ?? 'USD';
+        : 'USD';
 
     return { amount, currency };
   }
@@ -565,7 +617,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
     return { result: null, skipReason: 'refund_or_credit_body' };
   }
 
-  const { amount, currency } = extractAmount(combined, domain);
+  const { amount, currency } = extractAmount(combined);
 
   const invM = combined.match(/(?:invoice|order|receipt|confirmation|ref(?:erence)?)\s*(?:#|no\.?|num(?:ber)?)?\s*:?\s*([A-Z0-9\-_]{4,30})/i);
   const ordM = combined.match(/order\s*(?:id|#|no\.?)?\s*:?\s*([A-Z0-9\-_]{6,30})/i);
@@ -595,7 +647,7 @@ function parseMessage(msg: any): { result: ParsedMessage | null; skipReason?: Pa
   let warrantyMonths = explicitWarrantyMonths;
   let warrantyIsEstimated = false;
   if (warrantyMonths === null && isWarrantyEligible(category, merchantName)) {
-    warrantyMonths = estimateWarrantyMonths(category, merchantName);
+    warrantyMonths = estimateWarrantyMonths(category, merchantName, combined);
     warrantyIsEstimated = true;
   }
 
@@ -641,10 +693,34 @@ function isWarrantyEligible(category: string, merchantName: string): boolean {
 
 // Category-based estimate, clearly marked with `warrantyIsEstimated: true`
 // so the UI can label it "Estimated" instead of presenting a guess as a
-// confirmed manufacturer warranty. 12 months matches the standard US
-// consumer-electronics manufacturer warranty and is a reasonable default
-// for "shopping" purchases where the actual warranty term is unknown.
-function estimateWarrantyMonths(_category: string, _merchantName: string): number {
+// confirmed manufacturer warranty. Estimates vary by detected product type;
+// 12 months is the standard US consumer-electronics manufacturer warranty
+// and is the default when the product type cannot be determined.
+//
+// productText: subject + body, used to detect product type keywords.
+function estimateWarrantyMonths(_category: string, _merchantName: string, productText?: string): number {
+  if (productText) {
+    const t = productText.toLowerCase();
+    // Major home appliances: washer, dryer, refrigerator, dishwasher, oven,
+    // microwave, freezer. Standard is 1-year parts + labour; many brands
+    // give 2 years on sealed system components. Use 24 as the safe estimate.
+    if (/\b(wash(?:er|ing\s+machine)|dryer|refrigerator|fridge|dishwasher|oven|range|freezer|microwave|air\s+conditioner|a\/c|hvac|heat\s+pump|water\s+heater|vacuum\s+cleaner)\b/.test(t)) return 24;
+    // Watches (including smartwatches) — most manufacturers give 2 years.
+    if (/\b(watch|smartwatch|wristwatch|chronograph|timepiece)\b/.test(t)) return 24;
+    // Cameras and camera lenses — typically 12 months; use 12 (default).
+    if (/\b(camera|dslr|mirrorless|lens|camcorder|action\s+cam|gopro)\b/.test(t)) return 12;
+    // Headphones, earbuds, speakers — typically 12 months.
+    if (/\b(headphones?|earbuds?|earphones?|airpods?|speaker|soundbar|earpiece)\b/.test(t)) return 12;
+    // Phones and tablets — typically 12 months.
+    if (/\b(iphone|android|smartphone|mobile\s+phone|cell\s+phone|tablet|ipad|galaxy\s+tab)\b/.test(t)) return 12;
+    // Laptops and desktops — typically 12 months (some give 2yr on premium lines).
+    if (/\b(laptop|notebook|macbook|chromebook|desktop|pc\b|computer|imac|mac\s+mini|mac\s+pro)\b/.test(t)) return 12;
+    // TVs and monitors — typically 12 months.
+    if (/\b(tv\b|television|monitor|display|smart\s+tv|oled|qled|4k\s+tv)\b/.test(t)) return 12;
+    // Gaming consoles — typically 12 months.
+    if (/\b(playstation|xbox|nintendo|switch|console|ps5|ps4)\b/.test(t)) return 12;
+  }
+  // Default: 12 months (standard US consumer warranty baseline).
   return 12;
 }
 
@@ -832,9 +908,12 @@ router.get('/api/gmail/callback', async (req, res): Promise<void> => {
 });
 
 router.get('/api/gmail/accounts', requireAuth, async (req, res): Promise<void> => {
+  // Include scheduler tracking fields (last_scan, next_scan, scan_status,
+  // scan_duration_ms, scan_retry_count) so the UI and admin dashboard can
+  // display real-time scan health without querying activity_logs.
   const { data, error } = await supabaseAdmin
     .from('email_accounts')
-    .select('id, email, provider, is_active, last_scanned_at, created_at')
+    .select('id, email, provider, is_active, last_scanned_at, last_scan, next_scan, scan_status, scan_duration_ms, scan_retry_count, created_at')
     .eq('user_id', req.userId)
     .order('created_at', { ascending: false });
 
@@ -883,12 +962,26 @@ router.post('/api/gmail/scan', requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+// Result contract consumed by the scheduler (lib/gmail-scheduler.ts) to decide
+// whether to disconnect the account, retry soon, or resume the normal cadence.
+// `errorType: 'auth'` means the connection itself is broken (bad/revoked
+// token, missing scopes) — retrying won't help, the user must reconnect.
+// `errorType: 'transient'` means a rate limit or Gmail-side outage — worth
+// retrying. Manual scans (routes below) still call this the same way and
+// simply ignore the return value, so this is backward compatible.
+export type GmailScanResult = {
+  success: boolean;
+  errorType?: 'auth' | 'transient';
+  message?: string;
+  importedCount?: number;
+};
+
 export async function runGmailScan(
   account: any,
   userId: string,
   forceRescan: boolean,
   isInitialScan: boolean,
-): Promise<void> {
+): Promise<GmailScanResult> {
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken(account);
@@ -896,7 +989,24 @@ export async function runGmailScan(
     await supabaseAdmin.from('activity_logs').insert({
       user_id: userId, type: 'gmail_scan_failed', description: err.message,
     });
-    return;
+    // Both "No refresh token" and "Failed to refresh Gmail token" mean the
+    // connection is dead and the user must reconnect — that's an auth-type
+    // failure, not a transient one.
+    //
+    // Also create a bell notification so the user sees an actionable prompt
+    // rather than having to discover the failure by revisiting Settings.
+    // Fire-and-forget: a notification write failure must not mask the real error.
+    supabaseAdmin.from('notifications').insert({
+      user_id: userId,
+      type: 'gmail_auth_error',
+      title: 'Gmail connection needs to be reconnected',
+      body: 'Your Gmail connection has expired or lost permission. Go to Settings → Gmail to reconnect.',
+      is_read: false,
+      metadata: { error: err.message, email: account.email },
+    }).then(({ error: notifErr }) => {
+      if (notifErr) logger.warn({ err: notifErr.message }, '[Gmail Scan] could not write auth-error notification');
+    });
+    return { success: false, errorType: 'auth', message: err.message };
   }
 
   // Determine plan
@@ -929,7 +1039,7 @@ export async function runGmailScan(
         metadata: { currentCount: currentReceiptCount, limit: FREE_RECEIPT_LIMIT },
       });
       logger.info({ email: account.email, currentReceiptCount, limit: FREE_RECEIPT_LIMIT }, '[Gmail Scan] free receipt limit already reached, skipping scan');
-      return;
+      return { success: true, importedCount: 0, message: 'Free receipt limit already reached' };
     }
   }
 
@@ -1015,7 +1125,22 @@ export async function runGmailScan(
       description: userMessage,
       metadata: { queryErrors, isAuthFailure },
     });
-    return;
+    // For auth failures (insufficient scopes / revoked token), also create a
+    // bell notification so the user sees an actionable prompt to reconnect Gmail
+    // instead of having to discover the failure by revisiting Settings.
+    if (isAuthFailure) {
+      supabaseAdmin.from('notifications').insert({
+        user_id: userId,
+        type: 'gmail_auth_error',
+        title: 'Gmail connection needs to be reconnected',
+        body: 'Your Gmail connection lost read permission. Go to Settings → Gmail to reconnect.',
+        is_read: false,
+        metadata: { email: account.email, queryErrors },
+      }).then(({ error: notifErr }) => {
+        if (notifErr) logger.warn({ err: notifErr.message }, '[Gmail Scan] could not write auth-error notification');
+      });
+    }
+    return { success: false, errorType: isAuthFailure ? 'auth' : 'transient', message: userMessage };
   }
 
   allIds = [...new Set(allIds)];
@@ -1103,11 +1228,11 @@ export async function runGmailScan(
         // Spotify "Payment receipt", and many SaaS invoices that only say "subscription" in the body.
         const subCheckText = `${parsed.rawSubject} ${parsed.rawFrom} ${parsed.rawBody}`.toLowerCase();
         const isSubscriptionEmail = (
-          // Explicit subscription/billing keywords
-          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment)|annual\s+(?:plan|charge|payment)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew))\b/i.test(subCheckText) ||
+          // Explicit subscription/billing keywords — English + multilingual
+          /\b(subscription|recurring|membership|member(?:ship)?|auto.?renew(?:al)?|billed\s+(?:monthly|annually|yearly)|monthly\s+(?:plan|charge|payment|renewal)|annual\s+(?:plan|charge|payment)|yearly\s+(?:plan|charge|payment|renewal)|billing\s+cycle|next\s+(?:billing|renewal|charge|payment)\s+date|plan\s+renewal|renewal\s+confirmation|payment\s+succeeded|your\s+(?:plan|subscription)\s+has\s+(?:renew|been\s+renew)|abonnement|abonnamento|suscripci[oó]n|assinatura)\b/i.test(subCheckText) ||
           // Known subscription services by category — many don't use "subscription" in their receipts
           parsed.category === 'streaming' ||
-          /\b(netflix|spotify|hulu|disney|apple\s+tv|youtube\s+premium|hbo|paramount|peacock|amazon\s+prime|audible|kindle\s+unlimited|adobe\s+creative|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce)\b/i.test(subCheckText)
+          /\b(netflix|spotify|hulu|disney\+?|apple\s+(?:tv\+?|one|music|arcade)|youtube\s+(?:premium|music)|hbo|max\.com|hbomax|paramount\+?|peacock|amazon\s+prime|prime\s+video|audible|kindle\s+unlimited|adobe\s+(?:creative|acrobat|express)|office\s+365|microsoft\s+365|dropbox|notion|slack|zoom|figma|github|gitlab|atlassian|datadog|openai|claude|anthropic|chatgpt|copilot|linear|intercom|hubspot|salesforce|canva|google\s+one|google\s+workspace|icloud\+?|uber\s+one|uber\s+pass|walmart\+|walmart\s+plus|discord\s+nitro|linkedin\s+premium|x\s+premium|twitter\s+(?:blue|premium)|bolt\s+(?:pass|premium|protect)|temu\s+(?:vip|member)|geek\s+squad|best\s+buy\s+totaltech)\b/i.test(subCheckText)
         );
         if (isSubscriptionEmail) {
           const isYearly = /\b(annual|yearly|per\s+year|\/year|yr)\b/i.test(`${parsed.rawSubject} ${parsed.rawBody}`);
@@ -1153,8 +1278,10 @@ export async function runGmailScan(
             return (count ?? 0) < 5;
           })();
           if (canAddSub) {
+            // Column is `name` (the DB was migrated from `company_name`).
+            // onConflict key must match the unique constraint: (user_id, name).
             await supabaseAdmin.from('subscriptions').upsert({
-              user_id: userId, name: parsed.merchantName, merchant_name: parsed.merchantName,
+              user_id: userId, name: parsed.merchantName,
               monthly_price: monthlyPrice, yearly_price: yearlyPrice,
               currency: parsed.currency,
               billing_cycle: billingCycle,
@@ -1283,6 +1410,8 @@ export async function runGmailScan(
   logger.info({
     email: account.email, importedCount, skippedCount, failedCount, freeLimitReached, limitStoppedCount,
   }, '[Gmail Scan] done');
+
+  return { success: true, importedCount };
 }
 
 router.delete('/api/gmail/accounts/:id', requireAuth, async (req, res): Promise<void> => {

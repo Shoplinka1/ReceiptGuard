@@ -41,10 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      // On every sign-in, remove the cached profile so ProtectedRoute and
+      // AppShell always fetch fresh data (including an up-to-date isAdmin
+      // value). Without this, a stale cache entry with isAdmin:false causes
+      // ProtectedRoute to redirect before the background refetch resolves.
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        queryClient.removeQueries({ queryKey: ['/api/user/profile'] });
+      }
     });
 
     return () => subscription.unsubscribe();

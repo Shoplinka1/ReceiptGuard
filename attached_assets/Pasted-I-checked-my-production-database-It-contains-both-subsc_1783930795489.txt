@@ -1,0 +1,76 @@
+I checked my production database. It contains both subscriptions and user_subscriptions.
+
+Before I run the Phase 7 migration, I need you to verify the production schema by reading the entire codebase, not by guessing.
+
+1. Search the entire backend for every reference to:
+	•	subscriptions
+	•	user_subscriptions
+
+List every file and route that references either table.
+
+⸻
+
+2. Tell me exactly which table is actually used by:
+	•	Billing
+	•	Dashboard subscription widget
+	•	Admin dashboard
+	•	Paystack webhook
+	•	Subscription API
+	•	Dashboard summary API
+
+If different parts of the app use different tables, explain why.
+
+⸻
+
+3. If both tables are used
+
+Explain:
+	•	Why both exist.
+	•	Whether one is legacy.
+	•	Whether one should be removed.
+	•	Whether they should be merged.
+	•	Which one the application should use going forward.
+
+⸻
+
+4. Regenerate the Phase 7 migration
+
+Only after reading the codebase.
+
+If the migration needs to change because of user_subscriptions, regenerate the entire SQL migration.
+
+Do not summarize it.
+
+Output the complete SQL.
+
+⸻
+
+5. Feedback system audit
+
+I also noticed my production database contains both:
+	•	feedback
+	•	support_messages
+
+Search the backend and frontend and determine:
+	•	Which table the Admin → Feedback page is actually reading from.
+	•	Which table the user feedback form writes into.
+	•	Which table the reply, delete, and mark as resolved actions use.
+	•	Whether the admin dashboard should use feedback or support_messages.
+	•	If different parts of the app use different tables, explain why.
+	•	If this is the reason feedback isn’t appearing in the Admin Dashboard, fix it.
+
+⸻
+
+6. Verify before finishing
+
+Do not guess.
+
+Read the codebase first.
+
+Before marking the task complete, tell me:
+	•	Every table the production app uses for subscriptions.
+	•	Every table the production app uses for feedback/support.
+	•	Whether the current migration is still correct or needs changes.
+	•	If changes are required, regenerate the full migration.
+
+Do not stop until you’ve confirmed the real production schema and updated the migration accordingly.

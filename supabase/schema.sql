@@ -156,9 +156,8 @@ create policy "Users can delete own receipts"
 create table if not exists public.subscriptions (
   id                  uuid primary key default uuid_generate_v4(),
   user_id             uuid not null references auth.users(id) on delete cascade,
-  name                text not null,
-  merchant_name       text,
-  merchant_logo_url   text,
+  company_name        text not null,
+  company_logo_url    text,
   amount              numeric(10,2),
   monthly_price       numeric(10,2),
   yearly_price        numeric(10,2),
@@ -169,11 +168,12 @@ create table if not exists public.subscriptions (
   renewal_date        date,
   trial_ends_at       date,
   cancellation_url    text,
+  reminder_enabled    boolean not null default true,
   notes               text,
   metadata            jsonb,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
-  unique (user_id, name)
+  unique (user_id, company_name)
 );
 
 create index if not exists subscriptions_user_id_idx on public.subscriptions(user_id);

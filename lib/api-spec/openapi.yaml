@@ -1178,6 +1178,8 @@ components:
         plan:
           type: string
           enum: [free, pro]
+        isAdmin:
+          type: boolean
         gmailConnected:
           type: boolean
         gmailEmail:

@@ -35,6 +35,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     { data: activeSubs },
     { data: warranties },
     { data: gmailAccounts },
+    { data: openReturns },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('full_name, plan_id').eq('id', userId).single(),
     supabaseAdmin.from('settings').select('currency').eq('user_id', userId).maybeSingle(),
@@ -42,6 +43,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, currency, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
     supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
     supabaseAdmin.from('email_accounts').select('id, email').eq('user_id', userId).eq('is_active', true),
+    supabaseAdmin.from('returns').select('id').eq('user_id', userId).eq('status', 'open'),
   ]);
 
   // The dashboard's headline numbers (monthlySpending, subscriptionsMonthlyTotal,
@@ -66,10 +68,17 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
   })).filter(r => r.validAmount !== null);
 
   const validReceipts = allValidReceipts.filter(r => isPrimaryCurrency(r.currency));
+  const thisMonthReceipts = validReceipts.filter(r => r.purchase_date >= firstOfMonth);
 
-  const monthlySpending = validReceipts
-    .filter(r => r.purchase_date >= firstOfMonth)
-    .reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
+  const monthlySpending = thisMonthReceipts.reduce((sum, r) => sum + (r.validAmount ?? 0), 0);
+
+  const monthlySpendingByCurrency: Record<string, number> = {};
+  for (const r of thisMonthReceipts) {
+    const cur = (r.currency ?? 'USD').toUpperCase();
+    monthlySpendingByCurrency[cur] = Math.round(
+      ((monthlySpendingByCurrency[cur] ?? 0) + (r.validAmount ?? 0)) * 100
+    ) / 100;
+  }
 
   // upcomingRenewals count spans ALL currencies (it's a count, not a sum, so
   // there is no currency-mixing risk) — matches the full list returned by
@@ -150,11 +159,13 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
   res.json({
     firstName,
     monthlySpending: Math.round(monthlySpending * 100) / 100,
+    monthlySpendingByCurrency,
     totalReceipts: (receipts ?? []).length,
     validReceiptCount: allValidReceipts.length,
     activeSubscriptions: (activeSubs ?? []).length,
     upcomingRenewalsCount: upcomingRenewals,
     activeWarranties,
+    openReturnsCount: (openReturns ?? []).length,
     moneySaved,
     annualSavings,
     subscriptionsMonthlyTotal: Math.round(monthlySubTotal * 100) / 100,
@@ -313,7 +324,7 @@ router.get('/api/dashboard/upcoming-renewals', requireAuth, async (req, res): Pr
   const result = (subs ?? []).map((s, i) => ({
     id: i + 1,
     subscriptionId: s.id,
-    companyName: s.name ?? s.company_name,
+    companyName: s.company_name,
     companyLogoUrl: s.company_logo_url ?? null,
     amount: s.billing_cycle === 'yearly' ? safeNum(s.yearly_price) : safeNum(s.monthly_price),
     currency: (typeof s.currency === 'string' && s.currency.trim() ? s.currency.toUpperCase() : 'USD'),
