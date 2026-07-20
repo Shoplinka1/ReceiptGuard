@@ -1,0 +1,342 @@
+Receipt Guard 2.0 — Product Transformation
+
+IMPORTANT
+
+Stop treating this as small milestone work.
+
+This is now a full product transformation.
+
+The backend architecture stays.
+
+The product changes completely.
+
+⸻
+
+Product Identity
+
+Receipt Guard is NO LONGER
+	•	Gmail scanner
+	•	Gmail receipt parser
+	•	Email receipt scanner
+
+Receipt Guard IS
+
+The home for everything you buy.
+
+Users organize:
+	•	Purchases
+	•	Receipts
+	•	Invoices
+	•	Manuals
+	•	Warranties
+	•	Return windows
+	•	Subscriptions
+	•	Product documents
+
+Everything in the UI must reflect this.
+
+⸻
+
+Remove Gmail From The Product
+
+Remove Gmail from ALL user-facing screens.
+
+This includes:
+
+Dashboard
+
+Landing page
+
+Pricing
+
+Navigation
+
+Settings
+
+Upgrade prompts
+
+Free plan
+
+Pro plan
+
+Onboarding
+
+Connect Gmail banners
+
+Marketing copy
+
+Empty states
+
+Everywhere.
+
+The Gmail backend can remain untouched.
+
+Users should never feel that Receipt Guard is a Gmail scanner anymore.
+
+⸻
+
+Dashboard
+
+Completely redesign it.
+
+Remove
+	•	Connect Gmail banner
+
+Remove
+	•	Gmail limits
+
+Remove
+	•	Monthly Spending card
+
+Remove
+	•	Gmail messaging
+
+Replace with
+
+Statistics
+	•	Total Purchases
+	•	Active Subscriptions
+	•	Active Warranties
+	•	Open Returns
+
+⸻
+
+Upcoming Renewals
+
+Subscription list
+
+⸻
+
+Expiring Soon
+
+Return windows
+
+Warranty expirations
+
+⸻
+
+Recent Purchases
+
+Latest purchases
+
+⸻
+
+Monthly Subscription Cost
+
+Large summary card
+
+⸻
+
+Empty States
+
+Beautiful illustrations
+
+Helpful CTAs
+
+Not empty tables.
+
+⸻
+
+Plans
+
+Rewrite plans.
+
+Free
+
+50 Purchases
+
+5 Subscriptions
+
+10 Warranties
+
+Documents
+
+OCR
+
+NO Gmail.
+
+Pro
+
+Unlimited
+
+OCR
+
+Documents
+
+Future imports
+
+Family
+
+Shared purchases
+
+Shared warranties
+
+Shared vault
+
+⸻
+
+Import Center
+
+This becomes a major feature.
+
+Categories
+
+Retail
+
+Amazon
+
+App Stores
+
+Apple
+
+Google Play
+
+Payments
+
+PayPal
+
+Stripe
+
+Documents
+
+OCR
+
+CSV
+
+Email
+
+Email Forwarding
+
+Every card should have
+
+Icon
+
+Title
+
+Description
+
+Status
+
+Coming Soon badge
+
+No Connect buttons yet.
+
+⸻
+
+Navigation
+
+Dashboard
+
+Purchases
+
+Subscriptions
+
+Warranties
+
+Returns
+
+Documents
+
+Insights
+
+Import Center
+
+Settings
+
+No Gmail.
+
+⸻
+
+Purchases
+
+Rename Receipts everywhere in the UI.
+
+Database remains
+
+receipts
+
+UI becomes
+
+Purchases
+
+⸻
+
+Landing Page
+
+Completely rewrite.
+
+Hero
+
+“The home for everything you buy.”
+
+Sections
+
+Store every receipt
+
+Track warranties
+
+Never miss returns
+
+Manage subscriptions
+
+Keep manuals forever
+
+Future imports
+
+Remove every Gmail reference.
+
+⸻
+
+Settings
+
+Replace Gmail settings with
+
+Import Center
+
+Notifications
+
+Billing
+
+Appearance
+
+Security
+
+Support
+
+⸻
+
+Overall Goal
+
+When someone opens Receipt Guard they should immediately think
+
+“This is my purchase vault.”
+
+NOT
+
+“This is a Gmail scanner.”
+
+⸻
+
+Git Rules
+
+When finished
+
+Commit
+
+Push
+
+Verify push
+
+Report
+
+Files changed
+
+Components changed
+
+Pages changed
+
+Remaining work
+
+Stop
+
+Do NOT continue automatically.
