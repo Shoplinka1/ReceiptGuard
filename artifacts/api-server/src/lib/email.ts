@@ -13,7 +13,6 @@
  * If neither is configured, emails are logged to stdout (dev mode).
  * All errors are logged with full detail — never silently swallowed.
  */
-import nodemailer from 'nodemailer';
 import { logger } from './logger';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -115,28 +114,6 @@ function logEmailConfigDiagnostics(context: string) {
   }, `[email][DEBUG] SMTP config diagnostic (${context})`);
 }
 
-let _transport: nodemailer.Transporter | null = null;
-
-function getTransport(): nodemailer.Transporter | null {
-  if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) return null;
-  // Reuse the transport across calls — avoids creating a new TCP connection for every email
-  if (!_transport) {
-    // Strip spaces from app password (common copy-paste issue from Google UI)
-    const cleanPass = EMAIL_PASS.replace(/\s/g, '');
-    _transport = nodemailer.createTransport({
-      host: EMAIL_HOST,
-      port: EMAIL_PORT,
-      secure: EMAIL_PORT === 465,
-      auth: { user: EMAIL_USER, pass: cleanPass },
-      // Increase timeouts for slow SMTP servers
-      connectionTimeout: 15_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 30_000,
-    });
-  }
-  return _transport;
-}
-
 export async function sendEmail(opts: {
   to: string;
   subject: string;
@@ -144,75 +121,13 @@ export async function sendEmail(opts: {
   text?: string;
   from?: string;
 }): Promise<boolean> {
-  // Prefer Resend when configured — it's the production email path going
-  // forward (see EMAIL_SENDERS). Falls through to SMTP/dev-log only if
-  // RESEND_API_KEY isn't set, so existing Railway SMTP setups keep working
-  // until they're migrated.
   if (RESEND_API_KEY) {
     return sendViaResend(opts);
   }
-
-  const transport = getTransport();
-  if (!transport) {
-    logger.info(
-      { to: opts.to, subject: opts.subject },
-      '[email] Neither Resend nor SMTP configured — email not sent (set RESEND_API_KEY, or EMAIL_HOST/EMAIL_USER/EMAIL_PASS)',
-    );
-    logEmailConfigDiagnostics('sendEmail — not configured');
-    return false;
-  }
-
-  // Verify SMTP connection before sending. Log the result either way.
-  try {
-    await transport.verify();
-    logger.info('[email] transporter.verify() succeeded — SMTP connection is healthy');
-  } catch (verifyErr: any) {
-    logger.error({
-      message: verifyErr?.message,
-      code: verifyErr?.code,
-      command: verifyErr?.command,
-      responseCode: verifyErr?.responseCode,
-      response: verifyErr?.response,
-    }, '[email] transporter.verify() FAILED — SMTP connection broken');
-    logEmailConfigDiagnostics('verify failed');
-    // Reset transport so next call reconnects fresh
-    _transport = null;
-    // Still attempt sendMail — some providers respond differently to verify vs actual send
-  }
-
-  try {
-    const info = await transport.sendMail({
-      from: opts.from ?? EMAIL_FROM,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    });
-    logger.info({
-      to: opts.to,
-      subject: opts.subject,
-      messageId: info?.messageId,
-      response: info?.response,
-      accepted: info?.accepted,
-      rejected: info?.rejected,
-    }, '[email] sent successfully');
-    return true;
-  } catch (err: any) {
-    logger.error({
-      to: opts.to,
-      subject: opts.subject,
-      message: err?.message,
-      code: err?.code,
-      command: err?.command,
-      responseCode: err?.responseCode,
-      response: err?.response,
-      stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
-    }, '[email] sendMail FAILED — email not delivered');
-    logEmailConfigDiagnostics('sendMail failed');
-    // Reset transport on auth/connection errors so next attempt gets a fresh connection
-    if (err?.code === 'EAUTH' || err?.code === 'ECONNECTION' || err?.responseCode === 535) {
-      _transport = null;
-    }
-    return false;
-  }
+  // No transport configured
+  logger.info(
+    { to: opts.to, subject: opts.subject },
+    '[email] RESEND_API_KEY not set — email not sent. Set RESEND_API_KEY to enable delivery.',
+  );
+  return false;
 }
