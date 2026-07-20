@@ -34,12 +34,14 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     { data: activeSubs },
     { data: warranties },
     { data: gmailAccounts },
+    { data: openReturns },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('full_name, plan_id').eq('id', userId).single(),
     supabaseAdmin.from('receipts').select('amount, currency, purchase_date').eq('user_id', userId),
     supabaseAdmin.from('subscriptions').select('monthly_price, yearly_price, billing_cycle, renewal_date').eq('user_id', userId).eq('status', 'active'),
     supabaseAdmin.from('warranties').select('warranty_end_date').eq('user_id', userId),
     supabaseAdmin.from('email_accounts').select('id, email').eq('user_id', userId).eq('is_active', true),
+    supabaseAdmin.from('returns').select('id').eq('user_id', userId).eq('status', 'open'),
   ]);
 
   // Only sum receipts with valid amounts to prevent malformed data corrupting stats
@@ -102,6 +104,7 @@ router.get('/api/dashboard/summary', requireAuth, async (req, res): Promise<void
     activeSubscriptions: (activeSubs ?? []).length,
     upcomingRenewalsCount: upcomingRenewals,
     activeWarranties,
+    openReturnsCount: (openReturns ?? []).length,
     moneySaved,
     annualSavings,
     subscriptionsMonthlyTotal: Math.round(monthlySubTotal * 100) / 100,

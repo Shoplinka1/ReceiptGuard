@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react"
-import { Link } from "wouter"
 import { AppShell } from "@/components/layout/app-shell"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -7,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Receipt, Mail } from "lucide-react"
+import { Search, ShoppingBag, Plus } from "lucide-react"
 import { useListReceipts } from "@workspace/api-client-react"
 import { format } from "date-fns"
 import { formatCurrency } from "@/lib/currency"
@@ -16,7 +15,6 @@ export default function ReceiptsPage() {
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  // Debounce search: only fire the API query 300ms after the user stops typing
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(t)
@@ -30,17 +28,23 @@ export default function ReceiptsPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Receipt Vault</h1>
-            <p className="text-sm text-muted-foreground">All receipts extracted from your Gmail inbox.</p>
+            <h1 className="text-2xl font-bold tracking-tight">My Purchases</h1>
+            <p className="text-sm text-muted-foreground">All your purchases in one place.</p>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search merchants…"
-              className="pl-9"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search purchases…"
+                className="pl-9"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <Button size="sm" variant="outline" disabled className="shrink-0">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add Purchase
+            </Button>
           </div>
         </div>
 
@@ -70,8 +74,8 @@ export default function ReceiptsPage() {
                 <TableRow>
                   <TableCell colSpan={5} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Receipt className="w-8 h-8 opacity-20" />
-                      <p className="text-sm font-medium text-destructive">Failed to load receipts</p>
+                      <ShoppingBag className="w-8 h-8 opacity-20" />
+                      <p className="text-sm font-medium text-destructive">Failed to load purchases</p>
                       <p className="text-xs">Check your connection and try refreshing.</p>
                     </div>
                   </TableCell>
@@ -88,26 +92,26 @@ export default function ReceiptsPage() {
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-48 text-center">
+                  <TableCell colSpan={5} className="h-56 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                      <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
-                        <Receipt className="w-7 h-7 opacity-40" />
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <ShoppingBag className="w-8 h-8 text-primary/50" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">No receipts yet</p>
-                        <p className="text-xs mt-1">Connect your Gmail to automatically import receipts, invoices, and order confirmations.</p>
+                        <p className="text-sm font-semibold text-foreground">No purchases yet</p>
+                        <p className="text-xs mt-1 max-w-xs mx-auto">
+                          Add purchases manually or import them from the Import Center.
+                        </p>
                       </div>
-                      <Link href="/connect-gmail">
-                        <Button size="sm" className="mt-1">
-                          <Mail className="w-4 h-4 mr-2" />
-                          Connect Gmail
-                        </Button>
-                      </Link>
+                      <Button size="sm" variant="outline" disabled>
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Add your first purchase
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                items.map((receipt) => (
+                items.map((receipt: any) => (
                   <TableRow key={receipt.id} className="cursor-pointer hover:bg-muted/50">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
@@ -138,10 +142,9 @@ export default function ReceiptsPage() {
           </Table>
         </Card>
 
-        {/* Footer count */}
         {!isLoading && items.length > 0 && (
           <p className="text-xs text-muted-foreground text-right">
-            {items.length} receipt{items.length !== 1 ? 's' : ''}{debouncedSearch ? ` matching "${debouncedSearch}"` : ''}
+            {items.length} purchase{items.length !== 1 ? 's' : ''}{debouncedSearch ? ` matching "${debouncedSearch}"` : ''}
           </p>
         )}
       </div>

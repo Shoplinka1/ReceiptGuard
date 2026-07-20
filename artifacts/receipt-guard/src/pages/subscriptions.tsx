@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Calendar, CreditCard, Repeat, Mail, AlertCircle, Globe, Tag } from "lucide-react"
+import { Search, Calendar, CreditCard, Repeat, AlertCircle, Globe, Tag, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useListSubscriptions, useGetUserSettings } from "@workspace/api-client-react"
 import { format } from "date-fns"
@@ -114,10 +114,10 @@ export default function SubscriptionsPage() {
                   <p className="text-sm font-semibold text-foreground">{t('subs_empty_title')}</p>
                   <p className="text-xs mt-1 max-w-xs mx-auto">{t('subs_empty_hint')}</p>
                 </div>
-                <Link href="/connect-gmail">
-                  <Button size="sm">
-                    <Mail className="w-4 h-4 mr-2" />
-                    {t('subs_connect')}
+                <Link href="/import">
+                  <Button size="sm" variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Import subscriptions
                   </Button>
                 </Link>
               </div>
