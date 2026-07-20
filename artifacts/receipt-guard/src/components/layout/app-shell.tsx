@@ -3,14 +3,15 @@ import { Link, useLocation } from "wouter"
 import { toast } from "sonner"
 import { 
   LayoutDashboard, 
-  Receipt, 
+  ShoppingBag,
   Repeat, 
-  CalendarDays, 
   ShieldCheck, 
   Settings,
-  Bell,
+  RotateCcw,
+  FileText,
+  BarChart2,
+  FolderInput,
   LogOut,
-  Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -43,34 +44,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       toast.error(err?.message ?? "Sign out failed")
     } finally {
-      // Always redirect regardless of error — signOut() already clears local
-      // session/cache/storage, so staying on a protected page would just be
-      // caught by ProtectedRoute anyway. Redirecting explicitly avoids a flash
-      // of stale content and matches the Settings page's sign-out flow.
       setLocation("/login")
     }
   }
-  
+
+  // 2.0 nav — "Receipts" table is now surfaced as "Purchases"
   const navItems = [
-    { name: t('nav_dashboard'), href: "/dashboard", icon: LayoutDashboard },
-    { name: t('nav_search'), href: "/search", icon: Search },
-    { name: t('nav_receipts'), href: "/receipts", icon: Receipt },
+    { name: t('nav_dashboard'),     href: "/dashboard",     icon: LayoutDashboard },
+    { name: t('nav_purchases'),     href: "/purchases",     icon: ShoppingBag },
     { name: t('nav_subscriptions'), href: "/subscriptions", icon: Repeat },
-    { name: t('nav_renewals'), href: "/renewals", icon: CalendarDays },
-    { name: t('nav_warranties'), href: "/warranties", icon: ShieldCheck },
-  ]
-  
-  const bottomItems = [
-    { name: t('nav_reminders'), href: "/reminders", icon: Bell },
-    { name: t('nav_settings'), href: "/settings", icon: Settings },
+    { name: t('nav_warranties'),    href: "/warranties",    icon: ShieldCheck },
+    { name: t('nav_returns'),       href: "/returns",       icon: RotateCcw },
+    { name: t('nav_documents'),     href: "/documents",     icon: FileText },
+    { name: t('nav_insights'),      href: "/insights",      icon: BarChart2 },
   ]
 
+  const bottomItems = [
+    { name: t('nav_settings'),  href: "/settings",  icon: Settings },
+    { name: t('nav_import'),    href: "/import",    icon: FolderInput },
+  ]
+
+  // Mobile bottom nav: 5 items max — Dashboard, Purchases, Subscriptions, Warranties, Settings
+  const mobileNavItems = [navItems[0], navItems[1], navItems[2], navItems[3], bottomItems[0]]
+
   return (
-    // `h-screen` (100vh) is a common cause of "stuck"/jumpy scrolling on iPhone
-    // Safari: 100vh is measured against the *largest* viewport (address bar
-    // hidden), so as the address bar shows/hides, the fixed-height container
-    // and the fixed bottom nav below fight the actual visible viewport. `h-dvh`
-    // tracks the real dynamic viewport instead.
     <div className="flex h-dvh w-full bg-background overflow-hidden text-foreground">
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-sidebar h-full">
@@ -83,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
         
-        <div className="px-4 py-2">
+        <div className="px-4 py-2 flex-1 overflow-y-auto">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">{t('nav_overview')}</p>
           <nav className="space-y-1">
             {navItems.map((item) => {
@@ -105,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         
-        <div className="mt-auto px-4 py-6 border-t border-border">
+        <div className="px-4 py-6 border-t border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">{t('nav_account')}</p>
           <nav className="space-y-1">
             <NotificationBell />
@@ -146,11 +143,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       
-      {/* Mobile Bottom Nav — Dashboard, Receipts, Subscriptions, Warranties, Settings.
-          Omits Search/Renewals/Reminders from the tab bar (accessible via sidebar on desktop).
-          Five items is the practical max for a bottom nav before labels become unreadable. */}
+      {/* Mobile Bottom Nav — Dashboard, Purchases, Subscriptions, Warranties, Settings.
+          Five items is the practical max before labels become unreadable. */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-background z-50 flex items-center justify-between px-4 py-2 safe-area-bottom">
-        {[navItems[0], navItems[2], navItems[3], navItems[5], bottomItems[1]].map((item) => {
+        {mobileNavItems.map((item) => {
           const isActive = location === item.href
           return (
             <Link key={item.name} href={item.href}>
