@@ -1,0 +1,63 @@
+Yes. Start with Item 1 and continue sequentially until every production blocker is resolved.
+
+Execution order:
+	1.	Fix the /admin 500 production error by reading the exact Supabase error from production logs and fixing the root cause. Do not hide the error—fix the underlying issue.
+	2.	After the admin panel works, continue immediately to the next blocker. Do not stop after each fix unless you are blocked by missing credentials or external configuration.
+	3.	Build complete CRUD interfaces for:
+	•	Purchases
+	•	Subscriptions
+	•	Warranties
+The existing backend APIs already exist, so connect the frontend to them with fully working Add, Edit, Delete, validation, success/error messages, loading states, and live updates.
+	4.	Build the Returns feature completely:
+	•	Database migration
+	•	Supabase table
+	•	Backend CRUD API
+	•	Frontend page
+	•	Countdown timers
+	•	Eligible / Initiated / Completed / Missed statuses
+	•	Dashboard integration
+	•	Reminder scheduling
+	5.	Build the Documents feature completely:
+	•	Database table
+	•	Storage integration
+	•	Upload
+	•	Preview
+	•	Delete
+	•	Purchase linkage
+	•	PDF and image support
+	6.	Finish the Dashboard:
+	•	Live statistics only
+	•	Total Purchases
+	•	Active Subscriptions
+	•	Active Warranties
+	•	Open Returns
+	•	Monthly spending
+	•	Yearly spending
+	•	Upcoming renewals
+	•	Intelligent insight cards
+	7.	Complete the reminder engine:
+	•	Subscription reminders
+	•	Warranty reminders
+	•	Return reminders
+	•	Email notifications
+	•	In-app notifications
+	•	Verify reminders are actually scheduled and sent
+	8.	Verify the complete Paystack flow:
+	•	Pricing synchronization
+	•	Monthly and yearly plans
+	•	Family plan
+	•	Upgrade popup
+	•	Callback
+	•	Webhook
+	•	Subscription activation
+	•	Invoice generation
+	9.	Test every page manually using live Supabase data.
+	10.	Verify that the deployed Vercel application behaves exactly like the local application.
+
+After each major production fix:
+	•	Run the build.
+	•	Verify there are no errors.
+	•	Commit.
+	•	Push to GitHub.
+
+Only stop if you encounter a blocker that cannot be solved without my input (for example, a missing secret, missing third-party credential, or external service configuration). Otherwise, continue through the full production checklist until the application is genuinely launch-ready.

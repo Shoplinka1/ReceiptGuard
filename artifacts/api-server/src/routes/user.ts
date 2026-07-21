@@ -15,7 +15,7 @@ router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => 
   // than profiles.id, so PostgREST cannot resolve the join from the profiles
   // side. Embedding them here triggers a schema-cache error which surfaces as
   // error != null → 404 before we ever read is_admin.
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('profiles')
     .select('*, is_admin')
     .eq('id', req.userId)
@@ -32,10 +32,68 @@ router.get('/api/user/profile', requireAuth, async (req, res): Promise<void> => 
     rowFound:             !!data,
   }, '[profile] raw DB row');
 
-  if (error || !data) {
-    logger.error({ userId: req.userId, error: error?.message }, '[profile] profile not found or DB error → 404');
-    res.status(404).json({ error: 'Profile not found' });
+  if (error) {
+    logger.error({ userId: req.userId, error: error?.message }, '[profile] DB error fetching profile');
+    res.status(500).json({ error: `DB error: ${error.message}` });
     return;
+  }
+
+  // ── AUTO-CREATE: no profile row exists ───────────────────────────────────
+  // Happens when: (a) the Supabase handle_new_user trigger hadn't been applied
+  // yet when the user signed up, or (b) the user signed in via Google OAuth
+  // which creates a new auth.users row but the trigger missed it, or (c) the
+  // user's profile was deleted. We create it now using Supabase Auth metadata.
+  if (!data) {
+    logger.warn({ userId: req.userId }, '[profile] no row found — auto-creating from auth metadata');
+
+    const { data: authUserData, error: authErr } = await supabaseAdmin.auth.admin.getUserById(req.userId);
+    if (authErr || !authUserData?.user) {
+      logger.error({ userId: req.userId, error: authErr?.message }, '[profile] auth.admin.getUserById failed');
+      res.status(404).json({ error: 'Profile not found and could not read auth user.' });
+      return;
+    }
+
+    const u = authUserData.user;
+    const email     = u.email ?? '';
+    const fullName  = u.user_metadata?.full_name ?? u.user_metadata?.name ?? email.split('@')[0] ?? '';
+    const avatarUrl = u.user_metadata?.avatar_url ?? u.user_metadata?.picture ?? null;
+
+    // Copy is_admin from any existing profile that shares this email (e.g. a
+    // prior email/password account for the same person).
+    let isAdminFromEmail = false;
+    if (email) {
+      const { data: existing } = await supabaseAdmin
+        .from('profiles').select('is_admin').eq('email', email).neq('id', req.userId).maybeSingle();
+      isAdminFromEmail = existing?.is_admin === true;
+    }
+
+    // plan_id has DEFAULT 'free' and is_admin has DEFAULT false — safe to omit
+    // them here; the DB fills defaults on INSERT.
+    const { error: upsertErr } = await supabaseAdmin.from('profiles').upsert(
+      { id: req.userId, email, full_name: fullName, avatar_url: avatarUrl, is_admin: isAdminFromEmail },
+      { onConflict: 'id' },
+    );
+
+    if (upsertErr) {
+      logger.error(
+        { userId: req.userId, code: upsertErr.code, msg: upsertErr.message, detail: upsertErr.details },
+        '[profile] auto-create upsert failed',
+      );
+      res.status(500).json({
+        error: `Profile auto-create failed [${upsertErr.code ?? '?'}]: ${upsertErr.message}${upsertErr.details ? ' — ' + upsertErr.details : ''}`,
+      });
+      return;
+    }
+
+    // Re-fetch the freshly created row
+    const { data: created, error: fetchErr } = await supabaseAdmin
+      .from('profiles').select('*, is_admin').eq('id', req.userId).maybeSingle();
+    if (fetchErr || !created) {
+      res.status(500).json({ error: `Profile created but re-fetch failed: ${fetchErr?.message ?? 'no row'}` });
+      return;
+    }
+    data = created;
+    logger.info({ userId: req.userId, email, isAdminFromEmail }, '[profile] auto-created profile row');
   }
 
   // ── 2. Email accounts — separate query so FK gap can never crash this route

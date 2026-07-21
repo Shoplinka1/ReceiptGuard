@@ -260,3 +260,66 @@ alter table public.receipts add column if not exists return_deadline date;
 
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;
+
+-- ─── Phase 8: returns table ──────────────────────────────────────────────────
+-- Tracks product returns initiated by the user. Status mirrors the lifecycle:
+-- open → in_progress → completed | denied
+create table if not exists public.returns (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  receipt_id       uuid references public.receipts(id) on delete set null,
+  merchant_name    text not null,
+  amount           numeric(12,2),
+  currency         text not null default 'USD',
+  reason           text,
+  status           text not null default 'open',   -- open | in_progress | completed | denied
+  initiated_date   date not null default current_date,
+  resolved_date    date,
+  tracking_number  text,
+  notes            text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create index if not exists returns_user_id_idx     on public.returns(user_id, initiated_date desc);
+create index if not exists returns_receipt_id_idx  on public.returns(receipt_id);
+create index if not exists returns_status_idx      on public.returns(user_id, status);
+
+alter table public.returns enable row level security;
+drop policy if exists "Users can manage their own returns" on public.returns;
+create policy "Users can manage their own returns" on public.returns
+  using  (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ─── Phase 9: documents table ────────────────────────────────────────────────
+-- Stores file metadata for uploaded documents (PDFs, images).
+-- Actual file bytes live in Supabase Storage; this table holds the public URL.
+create table if not exists public.documents (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  receipt_id       uuid references public.receipts(id) on delete set null,
+  warranty_id      uuid references public.warranties(id) on delete set null,
+  return_id        uuid references public.returns(id) on delete set null,
+  name             text not null,
+  file_url         text not null,
+  file_type        text,          -- 'pdf' | 'image' | 'other'
+  file_size_bytes  integer,
+  category         text not null default 'other',  -- receipt | warranty | return | invoice | manual | other
+  notes            text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create index if not exists documents_user_id_idx    on public.documents(user_id, created_at desc);
+create index if not exists documents_receipt_id_idx on public.documents(receipt_id);
+create index if not exists documents_warranty_id_idx on public.documents(warranty_id);
+create index if not exists documents_return_id_idx  on public.documents(return_id);
+
+alter table public.documents enable row level security;
+drop policy if exists "Users can manage their own documents" on public.documents;
+create policy "Users can manage their own documents" on public.documents
+  using  (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ─── Done ─────────────────────────────────────────────────────────────────────
+select 'Migration complete. returns and documents tables added.' as status;
