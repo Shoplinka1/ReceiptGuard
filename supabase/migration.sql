@@ -248,5 +248,15 @@ alter table public.settings add column if not exists weekly_summary boolean not 
 alter table public.settings add column if not exists monthly_summary boolean not null default true;
 alter table public.settings add column if not exists yearly_summary boolean not null default true;
 
+-- ─── Phase 7: receipts — Purchases 2.0 extended fields ───────────────────────
+-- Adds the fields required by the Purchases vertical: product name, serial and
+-- model numbers for product identification, and a return_deadline for the
+-- in-app return-window countdown. order_id and payment_method already exist
+-- (schema.sql lines 123-124); this block is additive and fully idempotent.
+alter table public.receipts add column if not exists product_name   text;
+alter table public.receipts add column if not exists serial_number  text;
+alter table public.receipts add column if not exists model_number   text;
+alter table public.receipts add column if not exists return_deadline date;
+
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

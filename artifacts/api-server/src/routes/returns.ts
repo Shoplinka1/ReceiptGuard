@@ -24,7 +24,7 @@ function mapReturn(r: any) {
 
 // List
 router.get('/api/returns', requireAuth, async (req, res): Promise<void> => {
-  const { status, search } = req.query as Record<string, string>;
+  const { status, search, receiptId } = req.query as Record<string, string>;
 
   let query = supabaseAdmin
     .from('returns')
@@ -33,6 +33,7 @@ router.get('/api/returns', requireAuth, async (req, res): Promise<void> => {
     .order('initiated_date', { ascending: false });
 
   if (status && status !== 'all') query = query.eq('status', status);
+  if (receiptId) query = query.eq('receipt_id', receiptId);
 
   const { data, error } = await query;
   if (error) { res.status(500).json({ error: 'Failed to load returns.' }); return; }
