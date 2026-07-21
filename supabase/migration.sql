@@ -7,11 +7,11 @@
 -- ─── Re-enable uuid extension (safe to run twice) ────────────────────────────
 create extension if not exists "uuid-ossp";
 
--- ─── Plans: correct prices to $5.99/$59.99 ───────────────────────────────────
-update public.plans set price_monthly = 5.99, price_yearly = 59.99 where id = 'pro';
+-- ─── Plans: correct prices to $9.99/$99.99 ───────────────────────────────────
+update public.plans set price_monthly = 9.99, price_yearly = 99.99 where id = 'pro';
 insert into public.plans (id, name, description, price_monthly, price_yearly, features)
-values ('pro', 'Pro', 'Full access for power users', 5.99, 59.99,
-  '["Unlimited Gmail accounts","Unlimited receipts","Unlimited subscriptions","Advanced analytics","CSV & PDF export","Warranty tracking","Priority support","Custom categories","Spending reports"]')
+values ('pro', 'Pro', 'Full access for power users', 9.99, 99.99,
+  '["Unlimited purchases","Unlimited receipts","Unlimited subscriptions","Advanced analytics","CSV & PDF export","Warranty tracking","Priority support","Custom categories","Spending reports","Import Center access"]')
 on conflict (id) do update set
   price_monthly = excluded.price_monthly,
   price_yearly = excluded.price_yearly;
@@ -257,6 +257,66 @@ alter table public.receipts add column if not exists product_name   text;
 alter table public.receipts add column if not exists serial_number  text;
 alter table public.receipts add column if not exists model_number   text;
 alter table public.receipts add column if not exists return_deadline date;
+
+-- ─── Phase 8: returns table ───────────────────────────────────────────────────
+-- Tracks return/refund requests linked optionally to a receipt.
+-- Statuses: open | in_progress | completed | denied
+create table if not exists public.returns (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references public.profiles(id) on delete cascade,
+  receipt_id       uuid references public.receipts(id) on delete set null,
+  merchant_name    text not null,
+  amount           numeric(12,2),
+  currency         text not null default 'USD',
+  reason           text,
+  status           text not null default 'open'
+                   check (status in ('open','in_progress','completed','denied')),
+  initiated_date   date not null default current_date,
+  resolved_date    date,
+  tracking_number  text,
+  notes            text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create index if not exists returns_user_idx      on public.returns(user_id, initiated_date desc);
+create index if not exists returns_receipt_idx   on public.returns(receipt_id) where receipt_id is not null;
+create index if not exists returns_status_idx    on public.returns(user_id, status);
+
+alter table public.returns enable row level security;
+drop policy if exists "Users manage own returns" on public.returns;
+create policy "Users manage own returns" on public.returns
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ─── Phase 8: documents table ────────────────────────────────────────────────
+-- Stores document metadata; actual files are stored in Supabase Storage.
+-- Categories: receipt | warranty | return | invoice | manual | other
+create table if not exists public.documents (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references public.profiles(id) on delete cascade,
+  receipt_id       uuid references public.receipts(id) on delete set null,
+  warranty_id      uuid references public.warranties(id) on delete set null,
+  return_id        uuid references public.returns(id) on delete set null,
+  name             text not null,
+  file_url         text not null,
+  file_type        text,   -- 'pdf' | 'image' | 'other'
+  file_size_bytes  bigint,
+  category         text not null default 'other'
+                   check (category in ('receipt','warranty','return','invoice','manual','other')),
+  notes            text,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create index if not exists documents_user_idx     on public.documents(user_id, created_at desc);
+create index if not exists documents_receipt_idx  on public.documents(receipt_id) where receipt_id is not null;
+create index if not exists documents_warranty_idx on public.documents(warranty_id) where warranty_id is not null;
+create index if not exists documents_return_idx   on public.documents(return_id) where return_id is not null;
+
+alter table public.documents enable row level security;
+drop policy if exists "Users manage own documents" on public.documents;
+create policy "Users manage own documents" on public.documents
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

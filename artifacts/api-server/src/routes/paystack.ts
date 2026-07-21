@@ -175,7 +175,7 @@ router.post('/api/paystack/initialize', requireAuth, async (req, res): Promise<v
   if (planId === 'free') { res.status(400).json({ error: 'Invalid plan' }); return; }
 
   const FALLBACK_PRICES: Record<string, { monthly: number; yearly: number; name: string }> = {
-    pro: { monthly: 5.99, yearly: 59.99, name: 'Pro' },
+    pro: { monthly: 9.99, yearly: 99.99, name: 'Pro' },
   };
 
   let usdPrice: number;

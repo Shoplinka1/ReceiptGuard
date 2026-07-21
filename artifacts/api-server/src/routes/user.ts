@@ -239,6 +239,27 @@ router.get('/api/search', requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+// Usage stats — returns counts against plan limits for the billing page
+router.get('/api/user/usage', requireAuth, async (req, res): Promise<void> => {
+  const uid = req.userId;
+
+  const [profileRes, receiptsRes, subsRes, warrantiesRes] = await Promise.all([
+    supabaseAdmin.from('profiles').select('plan_id').eq('id', uid).maybeSingle(),
+    supabaseAdmin.from('receipts').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    supabaseAdmin.from('subscriptions').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    supabaseAdmin.from('warranties').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+  ]);
+
+  const isPro = profileRes.data?.plan_id === 'pro';
+
+  res.json({
+    isPro,
+    receipts:      { used: receiptsRes.count ?? 0,   limit: isPro ? null : 50  },
+    subscriptions: { used: subsRes.count ?? 0,        limit: isPro ? null : 5   },
+    warranties:    { used: warrantiesRes.count ?? 0,  limit: isPro ? null : 10  },
+  });
+});
+
 // Delete account — removes all user data and auth account
 router.delete('/api/user/account', requireAuth, async (req, res): Promise<void> => {
   const uid = req.userId;
@@ -249,8 +270,10 @@ router.delete('/api/user/account', requireAuth, async (req, res): Promise<void> 
     supabaseAdmin.from('notifications').delete().eq('user_id', uid),
     supabaseAdmin.from('feedback').delete().eq('user_id', uid),
     supabaseAdmin.from('reminders').delete().eq('user_id', uid),
+    supabaseAdmin.from('documents').delete().eq('user_id', uid),
   ]);
   await Promise.all([
+    supabaseAdmin.from('returns').delete().eq('user_id', uid),
     supabaseAdmin.from('renewals').delete().eq('user_id', uid),
     supabaseAdmin.from('warranties').delete().eq('user_id', uid),
     supabaseAdmin.from('subscriptions').delete().eq('user_id', uid),

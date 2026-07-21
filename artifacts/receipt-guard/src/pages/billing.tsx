@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { useGetUserProfile } from '@workspace/api-client-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Sparkles, Loader2, AlertTriangle, CreditCard, Receipt, Repeat, ShieldCheck, Mail } from 'lucide-react'
+import { CheckCircle2, Sparkles, Loader2, AlertTriangle, CreditCard, Receipt, Repeat, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || ''
@@ -33,8 +33,8 @@ async function apiFetch(path: string, opts?: RequestInit) {
 }
 
 // Display prices in USD. Backend converts USD → NGN before charging via Paystack.
-const MONTHLY_USD = 5.99
-const YEARLY_USD  = 59.99
+const MONTHLY_USD = 9.99
+const YEARLY_USD  = 99.99
 const YEARLY_SAVINGS_PCT = Math.round((1 - YEARLY_USD / (MONTHLY_USD * 12)) * 100)
 
 function fmtUSD(amount: number) {
@@ -42,20 +42,21 @@ function fmtUSD(amount: number) {
 }
 
 const PRO_FEATURES = [
-  'Unlimited Gmail accounts',
-  'Unlimited receipts & subscriptions',
+  'Unlimited purchases & receipts',
+  'Unlimited subscriptions',
   'Unlimited warranties',
   'Unlimited reminders',
+  'Import Center access',
   'CSV & PDF export',
   'Spending reports & analytics',
   'Advanced filters & categories',
   'Priority support',
 ]
 const FREE_FEATURES = [
-  '1 Gmail account',
-  'Up to 100 receipts',
+  'Up to 50 purchases',
+  'Up to 5 subscriptions',
   'Up to 10 warranties',
-  'Up to 5 active subscriptions',
+  'Returns tracking',
   'Basic dashboard & reminders',
   'Search',
 ]
@@ -65,7 +66,6 @@ interface UsageData {
   receipts: { used: number; limit: number | null }
   subscriptions: { used: number; limit: number | null }
   warranties: { used: number; limit: number | null }
-  gmailAccounts: { used: number; limit: number | null }
 }
 
 function UsageBar({ label, used, limit, icon: Icon }: {
@@ -196,7 +196,7 @@ export default function BillingPage() {
               {loadingProfile ? <Skeleton className="h-10 w-32" /> : (
                 <>
                   <span className="text-4xl font-bold">
-                    {isPro ? fmtUSD(displayUSD) : '$0'}
+                    {isPro ? fmtUSD(displayUSD) : '$0.00'}
                   </span>
                   <span className="text-muted-foreground mb-1">{isPro ? displayLabel : '/ month'}</span>
                   {isPro && <Badge className="ml-2 mb-1">Active</Badge>}
@@ -225,10 +225,9 @@ export default function BillingPage() {
                   <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-6 w-full" />)}</div>
                 ) : (
                   <>
-                    <UsageBar label="Receipts"       used={usage?.receipts.used ?? 0}      limit={usage?.receipts.limit ?? 100}     icon={Receipt}    />
+                    <UsageBar label="Purchases"      used={usage?.receipts.used ?? 0}      limit={usage?.receipts.limit ?? 50}      icon={Receipt}    />
                     <UsageBar label="Subscriptions"  used={usage?.subscriptions.used ?? 0} limit={usage?.subscriptions.limit ?? 5}  icon={Repeat}     />
                     <UsageBar label="Warranties"     used={usage?.warranties.used ?? 0}    limit={usage?.warranties.limit ?? 10}    icon={ShieldCheck} />
-                    <UsageBar label="Gmail accounts" used={usage?.gmailAccounts.used ?? 0} limit={usage?.gmailAccounts.limit ?? 1}  icon={Mail}       />
                   </>
                 )}
               </div>

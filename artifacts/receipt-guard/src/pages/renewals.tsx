@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { CalendarDays, Bell, BellOff, Calendar } from "lucide-react"
-import { useListRenewals, useUpdateRenewal, useGetUserSettings } from "@workspace/api-client-react"
+import { useListRenewals, useUpdateRenewal, useGetUserSettings, type Renewal } from "@workspace/api-client-react"
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns"
 import { toast } from "sonner"
 import { formatCurrency } from "@/lib/currency"
@@ -76,7 +76,7 @@ export default function RenewalsPage() {
                </Card>
              ))
           ) : renewals?.length ? (
-            renewals.map((renewal) => (
+            renewals.map((renewal: Renewal) => (
               <Card key={renewal.id} className="border-border/50 hover:border-primary/30 transition-colors">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start mb-4">
