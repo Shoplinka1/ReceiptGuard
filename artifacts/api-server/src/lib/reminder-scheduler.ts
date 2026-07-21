@@ -226,11 +226,29 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
   if (!warranties?.length) return;
 
   for (const warranty of warranties) {
-    const { data: settings } = await supabaseAdmin
+    // days_before_90/60 were added in a later migration. If that migration
+    // hasn't been applied yet (e.g. not yet run on this environment's DB),
+    // selecting those columns returns a Postgres "column does not exist"
+    // error and the entire settings row would silently come back as
+    // undefined — bypassing ALL of the user's reminder/email toggles, not
+    // just the two new ones. Fall back to the pre-migration column set
+    // instead of losing every setting.
+    let { data: settings, error: settingsError } = await supabaseAdmin
       .from('settings')
-      .select('warranty_reminder, email_notifications, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
+      .select('warranty_reminder, email_notifications, days_before_90, days_before_60, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
       .eq('user_id', warranty.user_id)
       .maybeSingle();
+
+    if (settingsError) {
+      const fallback = await supabaseAdmin
+        .from('settings')
+        .select('warranty_reminder, email_notifications, days_before_30, days_before_14, days_before_7, days_before_3, days_before_1')
+        .eq('user_id', warranty.user_id)
+        .maybeSingle();
+      settings = fallback.data as typeof settings;
+      // Pre-migration: 90/60-day toggles don't exist yet, so those windows
+      // always fire (can't be disabled) until the migration is applied.
+    }
 
     if (settings?.warranty_reminder === false) continue;
 

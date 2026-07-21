@@ -1,0 +1,338 @@
+ReceiptGuard Final Production Launch (Railway)
+
+The remaining issues are production functionality bugs.
+
+Do not perform another repository audit.
+
+Do not spend time on refactoring unless it fixes one of the production bugs below.
+
+Railway is the production environment.
+
+Replit is only for development and testing.
+
+Every fix must work after deployment to Railway.
+
+Do not optimize specifically for Replit.
+
+Before any UPDATE, DELETE, or schema migration on the production database, show me the exact SQL first and wait for approval unless the change is purely additive and already approved.
+
+⸻
+
+CRITICAL BUG 1 — Gmail Receipt Scanning
+
+Receipt scanning is still unreliable.
+
+Examples:
+	•	Some receipts are completely missed.
+	•	Gmail scan reports 0 messages even though matching receipts exist.
+	•	Some receipts import with incorrect merchant names.
+	•	Some receipts import incorrect amounts.
+	•	Some receipts import the wrong currency.
+
+Audit the entire Gmail import pipeline.
+
+Verify:
+	•	Gmail search query
+	•	Gmail API pagination
+	•	search filters
+	•	MIME parsing
+	•	HTML parsing
+	•	plain-text parsing
+	•	multipart parsing
+	•	quoted-printable decoding
+	•	base64 decoding
+	•	attachment parsing
+	•	duplicate detection
+	•	merchant extraction
+	•	product extraction
+	•	amount extraction
+	•	currency extraction
+	•	purchase date extraction
+
+The parser must read the actual receipt contents instead of relying on weak regex matches.
+
+If confidence is low, reject the receipt instead of importing incorrect data.
+
+Impossible values must never reach the database.
+
+⸻
+
+CRITICAL BUG 2 — Currency Detection
+
+Currency detection is currently incorrect.
+
+Example:
+
+Flutterwave receipts from Nigeria are being imported as USD instead of NGN.
+
+The parser must correctly identify currencies from receipt content.
+
+Support at minimum:
+	•	USD
+	•	NGN
+	•	GBP
+	•	EUR
+	•	CAD
+	•	AUD
+	•	ZAR
+	•	GHS
+	•	KES
+	•	INR
+	•	AED
+	•	JPY
+
+Detect currency using:
+	•	ISO currency codes
+	•	symbols
+	•	merchant country
+	•	payment processor
+	•	receipt wording
+
+Never assume USD as the default if another currency is clearly indicated.
+
+Dashboard calculations must preserve the original currency.
+
+Never silently convert currencies.
+
+Never mix currencies.
+
+Group totals by currency.
+
+⸻
+
+CRITICAL BUG 3 — Gmail OAuth
+
+Investigate the Gmail connection failure.
+
+Current production activity log:
+
+Gmail scan failed:
+403 PERMISSION_DENIED
+
+Determine the exact root cause.
+
+Investigate:
+	•	refresh token
+	•	token encryption
+	•	token decryption
+	•	OAuth scopes
+	•	Gmail API enablement
+	•	redirect URI
+	•	stored refresh token
+	•	refresh logic
+	•	reconnect flow
+	•	API request headers
+	•	Google response body
+
+Verify the complete OAuth lifecycle:
+	•	first connect
+	•	refresh token saved
+	•	refresh token loaded
+	•	refresh token refreshed
+	•	Gmail API request succeeds
+	•	reconnect succeeds
+
+Do not mark Gmail PASS until a real Gmail account imports receipts successfully after reconnecting.
+
+⸻
+
+CRITICAL BUG 4 — Feedback Email
+
+Feedback currently saves.
+
+It does not deliver email.
+
+Investigate end-to-end.
+
+Verify:
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+	•	transporter.verify()
+	•	sendMail()
+	•	SMTP authentication
+	•	SMTP response
+	•	SMTP response code
+	•	messageId
+	•	recipient
+	•	Railway environment variables
+
+If delivery fails:
+
+Report:
+	•	exact SMTP response
+	•	SMTP error code
+	•	stack trace
+	•	transporter logs
+	•	exact failure point
+
+Do not report PASS until a real email arrives in the inbox.
+
+⸻
+
+Dashboard Verification
+
+Verify dashboard values directly against Supabase.
+
+Confirm:
+	•	Monthly Spending
+	•	Spending Trend
+	•	Receipt Count
+	•	Top Merchants
+	•	Active Subscriptions
+	•	Upcoming Renewals
+	•	Active Warranties
+
+Every value must exactly match the stored data.
+
+Currencies must never be mixed.
+
+⸻
+
+Subscription Detection
+
+Verify using real subscription receipts.
+
+Confirm:
+	•	recurring service detection
+	•	billing frequency
+	•	renewal date
+	•	amount
+	•	subscription status
+
+⸻
+
+Warranty Detection
+
+Verify:
+	•	automatic detection
+	•	product extraction
+	•	merchant extraction
+	•	warranty duration
+	•	estimated warranty labeling
+	•	editing
+	•	duplicate prevention
+
+⸻
+
+Reminder Scheduler
+
+Verify end-to-end.
+
+Warranty reminders:
+	•	90
+	•	60
+	•	30
+	•	14
+	•	7
+	•	3
+	•	1 day
+
+Subscription reminders:
+	•	30
+	•	14
+	•	7
+	•	3
+	•	1 day
+
+Verify:
+	•	scheduler
+	•	email delivery
+	•	in-app notifications
+	•	duplicate prevention
+
+⸻
+
+Paystack
+
+Run one complete test-mode payment.
+
+Verify:
+	•	checkout
+	•	webhook
+	•	payment history
+	•	upgrade
+	•	cancellation
+	•	renewal
+	•	automatic downgrade
+
+Cancelled payments must never create fake Pending rows.
+
+⸻
+
+Admin Dashboard
+
+Complete the production admin dashboard.
+
+Provide:
+	•	Admin URL
+	•	First admin SQL
+	•	Required Railway environment variables
+	•	Required database tables
+	•	Deployment instructions
+
+Include:
+	•	Total users
+	•	New users
+	•	Connected Gmail accounts
+	•	Gmail scan failures
+	•	Receipt imports
+	•	Active subscriptions
+	•	Warranties
+	•	Revenue
+	•	Paystack payments
+	•	Feedback submissions
+	•	Recent activity
+	•	Error logs
+	•	System health
+	•	Search users
+	•	View receipts
+	•	View subscriptions
+	•	View warranties
+	•	Disable user
+	•	Delete user (with confirmation)
+	•	Export statistics
+
+Everything must be protected by proper admin authorization.
+
+⸻
+
+Railway
+
+Everything must work after deployment to Railway.
+
+Document:
+	•	every Railway environment variable
+	•	migrations
+	•	cron jobs
+	•	reminder scheduler
+	•	Gmail OAuth redirect URI
+	•	Paystack webhook URL
+
+If anything behaves differently between Replit and Railway, explain exactly why and what must be configured on Railway.
+
+⸻
+
+Final Verification
+
+Do not mark ReceiptGuard as production-ready until:
+	•	Gmail scanning works
+	•	Gmail reconnect works
+	•	Receipt parsing is accurate
+	•	Currency detection is accurate
+	•	Flutterwave imports as NGN
+	•	Feedback emails are successfully delivered
+	•	Dashboard values match Supabase
+	•	Paystack is verified
+	•	Subscription detection works
+	•	Warranty detection works
+	•	Reminder emails work
+
+For every remaining FAIL provide:
+	1.	Root cause
+	2.	Files involved
+	3.	Production verification steps
+	4.	Remaining work
+	5.	Exact reason it cannot yet be marked PASS

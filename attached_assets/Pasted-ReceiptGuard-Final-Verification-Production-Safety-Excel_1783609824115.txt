@@ -1,0 +1,151 @@
+ReceiptGuard Final Verification & Production Safety
+
+Excellent progress. Before considering ReceiptGuard production-ready, I need a final verification with a strong focus on production safety.
+
+1. Production database safety
+
+Before making any further changes to my production Supabase database:
+	•	Show me the exact SQL statement(s) or migration that will be executed.
+	•	Explain why each change is necessary.
+	•	Tell me how many rows will be affected.
+	•	Wait for my approval before executing any DELETE or UPDATE.
+	•	Prefer read-only verification whenever possible.
+	•	If data cleanup is required, explain why each affected row is considered invalid.
+	•	Confirm whether the operation uses a transaction or backup strategy.
+
+Regarding the previous cleanup:
+
+Please provide:
+	•	the exact SQL statement(s) executed
+	•	how many rows were affected
+	•	why each deleted row qualified as invalid
+	•	whether a transaction or backup was used
+
+⸻
+
+2. Currency handling
+
+ReceiptGuard must fully support multiple currencies.
+
+Do not discard valid receipts simply because they are not in the user’s preferred currency.
+
+Verify and fix:
+	•	USD
+	•	NGN
+	•	CAD
+	•	AUD
+	•	EUR
+	•	GBP
+	•	JPY
+	•	INR
+	•	every other supported currency
+
+Requirements:
+	•	Preserve the original currency from the receipt.
+	•	Store the original currency in the database.
+	•	Dashboard totals must never mix currencies together.
+	•	If multiple currencies exist, either:
+	•	group totals by currency, or
+	•	convert them using a clearly documented exchange-rate system.
+	•	Never treat ₦100,000 as $100,000.
+	•	Merchant totals, spending trend, monthly spending, subscriptions, warranties, renewals, reports, and exports must all remain currency-safe.
+
+Verify this end-to-end using real receipt data.
+
+⸻
+
+3. Feedback email verification
+
+The following environment variables are now available:
+	•	EMAIL_HOST
+	•	EMAIL_PORT
+	•	EMAIL_USER
+	•	EMAIL_PASS
+	•	EMAIL_FROM
+
+Please perform a real SMTP verification.
+
+Verify:
+	•	transporter.verify()
+	•	sendMail()
+	•	SMTP authentication
+	•	actual email delivery
+
+If delivery fails:
+
+Report:
+	•	exact failure point
+	•	SMTP response
+	•	error code
+	•	root cause
+	•	required fix
+
+Do not mark feedback email complete until a real email has been delivered successfully.
+
+⸻
+
+4. Railway vs Replit
+
+Confirm exactly where changes are being made.
+
+I need confirmation that:
+	•	my production backend remains Railway
+	•	Replit is only being used as a development/testing environment
+	•	adding secrets to Replit does NOT migrate or replace my Railway deployment
+	•	users continue using Railway until I explicitly deploy new code there
+
+If any production data is modified from Replit, explain exactly what is being modified and why.
+
+⸻
+
+5. Final production verification
+
+Perform final verification of:
+	•	Gmail scanning
+	•	OAuth refresh
+	•	receipt parsing
+	•	merchant extraction
+	•	amount extraction
+	•	subscription detection
+	•	warranty detection
+	•	dashboard analytics
+	•	spending trend
+	•	top merchants
+	•	active subscriptions
+	•	upcoming renewals
+	•	payment history
+	•	Paystack billing
+	•	upgrades
+	•	cancellations
+	•	automatic downgrade
+	•	feedback emails
+	•	warranty reminder emails
+	•	subscription reminder emails
+	•	settings
+	•	logout
+	•	theme switching
+	•	mobile scrolling
+	•	admin dashboard
+
+For each item report:
+	•	PASS
+	•	FAIL
+	•	NOT VERIFIED
+
+For every FAIL or NOT VERIFIED provide:
+	•	root cause
+	•	files involved
+	•	remaining work
+	•	exact production verification procedure
+
+⸻
+
+6. Production readiness
+
+Do not mark ReceiptGuard as production-ready until every critical feature has either:
+	•	passed production verification, or
+	•	is clearly documented as requiring production-only testing.
+
+Be completely honest.
+
+Do not mark something as fixed based only on static code review.

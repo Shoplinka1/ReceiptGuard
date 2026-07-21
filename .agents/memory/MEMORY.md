@@ -28,6 +28,10 @@
 - [Gmail parsing & dashboard fixes](gmail-parsing-fixes.md) — rawBody must be on ParsedMessage; yearly subs need both yearly_price AND monthly_price; merchant normalization at parse+aggregation; warranty key = orderId/invoiceNumber or product+date.
 - [Subscription renewal_date backfill](subscription-renewal-date.md) — Gmail scan never set renewal_date; added calendar-safe calculation + a separate UPDATE to backfill null rows (ignoreDuplicates skips conflicts entirely).
 - [Dashboard metrics design](dashboard-metrics.md) — what each widget queries, the validAmount filter, and why "Money Saved" was renamed to "Monthly Subs".
+- [Dashboard currency mixing bug](dashboard-currency-mixing.md) — validAmount range guard alone doesn't stop NGN/other-currency receipts from being summed as USD; all money aggregates must filter by settings.currency.
+- [Currency detection scan window](currency-detection-window.md) — detect currency in a window around the matched amount, not the whole email body; fall back to sender-domain default (Flutterwave/Paystack→NGN) before USD.
+- [Promise.all destructure order](promise-all-destructure-order.md) — inserting a query into a Promise.all array without moving its destructured var to the same position silently swaps unrelated results; tsc won't catch it.
+- [Reminder scheduler column fallback](reminder-scheduler-column-fallback.md) — a missing new column in a settings SELECT can silently null out ALL toggles in that row, not just the new one; retry with a fallback column set.
 - [Admin access fix](admin-access-fix.md) — three root causes: single()→maybeSingle(), missing profile rows, PostgREST join FK gap. Phase 7 migration + is_admin must be set manually.
 - [Admin app architecture](admin-app-architecture.md) — separate artifact at /admin; own Supabase auth + direct apiFetch; VITE_API_URL="" for same-origin; /api/admin/* enforced server-side.
 - [receipt-guard admin removal](receipt-guard-app-cleanup.md) — /admin route + AdminPage import + nav link removed from customer app; queryKey fix for useGetUserProfile calls.

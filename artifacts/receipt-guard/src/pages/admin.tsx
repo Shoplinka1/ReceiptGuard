@@ -196,6 +196,10 @@ export default function AdminPage() {
     { label: 'Gmail Accounts',  value: stats?.connectedGmailAccounts,  icon: Mail },
     { label: 'Scan Success',    value: stats?.scanSuccessRate != null ? `${(stats.scanSuccessRate as number).toFixed(1)}%` : null, icon: CheckCircle2 },
     { label: 'Open Feedback',   value: stats?.openFeedbackCount, icon: RefreshCw },
+    // Warranties
+    { label: 'Total Warranties',    value: stats?.totalWarranties,        icon: Inbox },
+    { label: 'Active Warranties',   value: stats?.activeWarranties,       icon: CheckCircle2 },
+    { label: 'Expiring (30d)',      value: stats?.expiringWarranties30d,  icon: AlertTriangle },
   ]
 
   return (

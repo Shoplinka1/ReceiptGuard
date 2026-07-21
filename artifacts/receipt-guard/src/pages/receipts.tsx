@@ -1,135 +1,295 @@
-import React, { useState, useEffect } from "react"
-import { Link } from "wouter"
-import { AppShell } from "@/components/layout/app-shell"
-import { Card } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Receipt, Mail } from "lucide-react"
-import { useListReceipts } from "@workspace/api-client-react"
-import { format } from "date-fns"
-import { formatCurrency } from "@/lib/currency"
+import React, { useState, useEffect, useCallback } from 'react'
+import { AppShell } from '@/components/layout/app-shell'
+import { Card } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Search, ShoppingBag, Plus, MoreHorizontal, Pencil, Trash2,
+  AlertCircle, ChevronLeft, ChevronRight, RotateCcw, CalendarRange, X,
+} from 'lucide-react'
+import { useListReceipts } from '@workspace/api-client-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { customFetch } from '@workspace/api-client-react'
+import { format, differenceInDays } from 'date-fns'
+import { formatCurrency } from '@/lib/currency'
+import { toast } from 'sonner'
+import { PurchaseDialog, CATEGORIES, type PurchaseItem } from '@/components/purchases/purchase-dialog'
+import { PurchaseDetailDrawer } from '@/components/purchases/purchase-detail-drawer'
+
+const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(c => [c.value, c.label]))
+
+const STATUS_STYLES: Record<string, string> = {
+  verified: 'bg-emerald-500/15 text-emerald-600 border-0',
+  manual:   'bg-secondary text-secondary-foreground border-0',
+  pending:  'bg-amber-500/15 text-amber-600 border-0',
+  flagged:  'bg-destructive/15 text-destructive border-0',
+}
+
+function ReturnCountdown({ deadline }: { deadline: string | null | undefined }) {
+  if (!deadline) return null
+  const days = differenceInDays(new Date(deadline), new Date())
+  if (days < 0) return <span className="text-[10px] text-destructive/70">Return missed</span>
+  if (days <= 3) return <span className="text-[10px] text-amber-600 font-medium">{days}d to return</span>
+  if (days <= 7) return <span className="text-[10px] text-amber-500">{days}d to return</span>
+  return null
+}
+
+const PAGE_SIZE = 25
 
 export default function ReceiptsPage() {
-  const [search, setSearch] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const qc = useQueryClient()
+  const [search,          setSearch]          = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [category,        setCategory]        = useState('all')
+  const [dateFrom,        setDateFrom]        = useState('')
+  const [dateTo,          setDateTo]          = useState('')
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false)
+  const [page,            setPage]            = useState(1)
+  const [dialogOpen,      setDialogOpen]      = useState(false)
+  const [editingItem,     setEditingItem]     = useState<PurchaseItem | null>(null)
+  const [deleteTarget,    setDeleteTarget]    = useState<string | null>(null)
+  const [drawerOpen,      setDrawerOpen]      = useState(false)
+  const [drawerItem,      setDrawerItem]      = useState<PurchaseItem | null>(null)
 
-  // Debounce search: only fire the API query 300ms after the user stops typing
+  // Debounce search and reset page
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
     return () => clearTimeout(t)
   }, [search])
 
-  const { data, isLoading, error } = useListReceipts({ search: debouncedSearch })
-  const items = data?.items ?? []
+  useEffect(() => { setPage(1) }, [category, dateFrom, dateTo])
+
+  const params: Record<string, string> = { page: String(page), pageSize: String(PAGE_SIZE) }
+  if (debouncedSearch) params.search = debouncedSearch
+  if (category !== 'all') params.category = category
+  if (dateFrom) params.dateFrom = dateFrom
+  if (dateTo)   params.dateTo   = dateTo
+
+  const { data, isLoading, error } = useListReceipts(params as any)
+  const items: PurchaseItem[] = (data?.items ?? []) as any
+  const total: number = (data as any)?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => customFetch(`/api/receipts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/receipts'] })
+      qc.invalidateQueries({ queryKey: ['/api/dashboard/summary'] })
+      toast.success('Purchase deleted')
+      setDeleteTarget(null)
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to delete'),
+  })
+
+  const openCreate = useCallback(() => { setEditingItem(null); setDialogOpen(true) }, [])
+  const openEdit   = useCallback((item: PurchaseItem) => { setEditingItem(item); setDialogOpen(true) }, [])
+  const openDrawer = useCallback((item: PurchaseItem) => { setDrawerItem(item); setDrawerOpen(true) }, [])
+
+  const hasDateFilter = !!(dateFrom || dateTo)
+  const hasFilters    = !!(debouncedSearch || category !== 'all' || hasDateFilter)
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setCategory('all')
+    setDateFrom('')
+    setDateTo('')
+  }
+
+  const applyDates = () => setDatePopoverOpen(false)
+  const clearDates = () => { setDateFrom(''); setDateTo(''); setDatePopoverOpen(false) }
+
+  // ── Date range label for button
+  const dateLabel = hasDateFilter
+    ? [dateFrom && format(new Date(dateFrom), 'MMM d'), dateTo && format(new Date(dateTo), 'MMM d')]
+        .filter(Boolean).join(' – ') || 'Date range'
+    : 'Date range'
 
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Receipt Vault</h1>
-            <p className="text-sm text-muted-foreground">All receipts extracted from your Gmail inbox.</p>
+            <h1 className="text-2xl font-bold tracking-tight">My Purchases</h1>
+            <p className="text-sm text-muted-foreground">Your digital purchase vault — everything in one place.</p>
           </div>
-          <div className="relative w-full sm:w-64">
+          <Button onClick={openCreate} size="sm" className="shrink-0">
+            <Plus className="w-4 h-4 mr-1.5" /> Add Purchase
+          </Button>
+        </div>
+
+        {/* ── Filters ── */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search merchants…"
+              placeholder="Search by merchant, product, invoice, notes…"
               className="pl-9"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+
+          {/* Category */}
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {/* Date range popover */}
+          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={hasDateFilter ? 'default' : 'outline'}
+                size="sm"
+                className={`h-9 px-3 gap-1.5 shrink-0 ${hasDateFilter ? '' : 'text-muted-foreground'}`}
+              >
+                <CalendarRange className="w-4 h-4" />
+                <span className="hidden sm:inline text-sm">{dateLabel}</span>
+                {hasDateFilter && (
+                  <X
+                    className="w-3.5 h-3.5 ml-0.5 opacity-70 hover:opacity-100"
+                    onClick={e => { e.stopPropagation(); clearDates() }}
+                  />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-4 space-y-4" align="end">
+              <p className="text-sm font-semibold">Filter by date</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">From</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">To</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={applyDates}>Apply</Button>
+                <Button size="sm" variant="ghost" onClick={clearDates}>Clear</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        <Card className="overflow-hidden border-border/50">
+        {/* ── Table (md+) ── */}
+        <Card className="hidden md:block overflow-hidden border-border/60">
           <Table>
-            <TableHeader className="bg-secondary/50">
+            <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead className="w-[250px]">Merchant</TableHead>
+                <TableHead className="w-[260px]">Merchant & Product</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                [1,2,3,4,5].map(i => (
+                [1,2,3,4,5,6,7].map(i => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                    <TableCell><div className="flex items-center gap-3"><Skeleton className="h-9 w-9 rounded-lg" /><div><Skeleton className="h-4 w-28 mb-1" /><Skeleton className="h-3 w-20" /></div></div></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                    <TableCell />
                   </TableRow>
                 ))
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
+                  <TableCell colSpan={6} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Receipt className="w-8 h-8 opacity-20" />
-                      <p className="text-sm font-medium text-destructive">Failed to load receipts</p>
-                      <p className="text-xs">Check your connection and try refreshing.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : items.length === 0 && debouncedSearch ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Search className="w-8 h-8 opacity-20" />
-                      <p className="text-sm font-medium">No results for "{debouncedSearch}"</p>
-                      <p className="text-xs">Try a different merchant name or clear the search.</p>
+                      <AlertCircle className="w-8 h-8 opacity-30 text-destructive" />
+                      <p className="text-sm font-medium text-destructive">Failed to load purchases</p>
+                      <p className="text-xs">Check your connection and refresh.</p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-48 text-center">
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                      <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
-                        <Receipt className="w-7 h-7 opacity-40" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">No receipts yet</p>
-                        <p className="text-xs mt-1">Connect your Gmail to automatically import receipts, invoices, and order confirmations.</p>
-                      </div>
-                      <Link href="/connect-gmail">
-                        <Button size="sm" className="mt-1">
-                          <Mail className="w-4 h-4 mr-2" />
-                          Connect Gmail
-                        </Button>
-                      </Link>
-                    </div>
+                  <TableCell colSpan={6} className="h-64 text-center">
+                    <EmptyState hasFilters={hasFilters} onClear={clearAllFilters} onCreate={openCreate} />
                   </TableCell>
                 </TableRow>
               ) : (
-                items.map((receipt) => (
-                  <TableRow key={receipt.id} className="cursor-pointer hover:bg-muted/50">
+                items.map((r) => (
+                  <TableRow
+                    key={r.id}
+                    className="group hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => openDrawer(r)}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs font-bold shrink-0">
-                          {(receipt.merchantName ?? '?').substring(0, 2).toUpperCase()}
+                        <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-xs font-bold shrink-0 text-foreground/70 group-hover:bg-primary/10 transition-colors">
+                          {(r.merchantName ?? '?').substring(0, 2).toUpperCase()}
                         </div>
-                        <span className="truncate max-w-[180px]">{receipt.merchantName}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate max-w-[180px]">{r.merchantName}</p>
+                          {r.productName ? (
+                            <p className="text-xs text-muted-foreground truncate max-w-[180px]">{r.productName}</p>
+                          ) : (
+                            <ReturnCountdown deadline={r.returnDeadline} />
+                          )}
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {receipt.purchaseDate ? format(new Date(receipt.purchaseDate), "MMM dd, yyyy") : '—'}
+                    <TableCell className="text-muted-foreground text-sm">
+                      {r.purchaseDate ? format(new Date(r.purchaseDate), 'MMM d, yyyy') : '—'}
+                      {r.productName && <ReturnCountdown deadline={r.returnDeadline} />}
                     </TableCell>
                     <TableCell>
-                      <span className="text-xs text-muted-foreground capitalize">{receipt.category ?? '—'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {CATEGORY_MAP[r.category] ?? r.category ?? '—'}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={receipt.status === 'verified' ? 'success' : 'secondary'} className="capitalize text-[10px] px-2 py-0">
-                        {receipt.status}
+                      <Badge className={`text-[10px] capitalize px-2 py-0 ${STATUS_STYLES[(r as any).status] ?? STATUS_STYLES.manual}`}>
+                        {(r as any).status ?? 'manual'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatCurrency(receipt.amount ?? 0, (receipt as any).currency || 'USD')}
+                    <TableCell className="text-right font-semibold text-sm">
+                      {formatCurrency(r.amount ?? 0, r.currency || 'USD')}
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <ItemMenu item={r} onView={openDrawer} onEdit={openEdit} onDelete={id => setDeleteTarget(id)} />
                     </TableCell>
                   </TableRow>
                 ))
@@ -138,13 +298,221 @@ export default function ReceiptsPage() {
           </Table>
         </Card>
 
-        {/* Footer count */}
-        {!isLoading && items.length > 0 && (
-          <p className="text-xs text-muted-foreground text-right">
-            {items.length} receipt{items.length !== 1 ? 's' : ''}{debouncedSearch ? ` matching "${debouncedSearch}"` : ''}
-          </p>
+        {/* ── Card list (mobile) ── */}
+        <div className="md:hidden space-y-3">
+          {isLoading ? (
+            [1,2,3,4,5].map(i => (
+              <Card key={i} className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+              </Card>
+            ))
+          ) : error ? (
+            <Card className="p-8 flex flex-col items-center gap-2 text-muted-foreground">
+              <AlertCircle className="w-8 h-8 opacity-30 text-destructive" />
+              <p className="text-sm font-medium text-destructive">Failed to load purchases</p>
+            </Card>
+          ) : items.length === 0 ? (
+            <Card className="p-10">
+              <EmptyState hasFilters={hasFilters} onClear={clearAllFilters} onCreate={openCreate} />
+            </Card>
+          ) : (
+            items.map((r) => (
+              <Card
+                key={r.id}
+                className="p-4 flex items-center gap-3 cursor-pointer hover:bg-muted/30 transition-colors active:scale-[0.99]"
+                onClick={() => openDrawer(r)}
+              >
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-xs font-bold shrink-0 text-foreground/70">
+                  {(r.merchantName ?? '?').substring(0, 2).toUpperCase()}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{r.merchantName}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {r.productName || (CATEGORY_MAP[r.category] ?? r.category ?? '—')}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {r.purchaseDate && (
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {format(new Date(r.purchaseDate), 'MMM d, yyyy')}
+                      </span>
+                    )}
+                    <ReturnCountdown deadline={r.returnDeadline} />
+                  </div>
+                </div>
+
+                {/* Right side */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(r.amount ?? 0, r.currency || 'USD')}
+                  </span>
+                  <Badge className={`text-[10px] capitalize px-2 py-0 ${STATUS_STYLES[(r as any).status] ?? STATUS_STYLES.manual}`}>
+                    {(r as any).status ?? 'manual'}
+                  </Badge>
+                </div>
+
+                {/* Menu */}
+                <div onClick={e => e.stopPropagation()}>
+                  <ItemMenu item={r} onView={openDrawer} onEdit={openEdit} onDelete={id => setDeleteTarget(id)} />
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* ── Footer: count + pagination ── */}
+        {!isLoading && total > 0 && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {total} purchase{total !== 1 ? 's' : ''}
+              {debouncedSearch ? ` matching "${debouncedSearch}"` : ''}
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline" size="icon" className="h-7 w-7"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </Button>
+                <span>Page {page} of {totalPages}</span>
+                <Button
+                  variant="outline" size="icon" className="h-7 w-7"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
+
+      {/* ── Dialogs ── */}
+      <PurchaseDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        item={editingItem}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['/api/receipts'] })
+          // Refresh drawer if editing the open purchase
+          if (editingItem && drawerItem?.id === editingItem.id) {
+            setDrawerItem(null)
+            setDrawerOpen(false)
+          }
+        }}
+      />
+
+      <PurchaseDetailDrawer
+        purchase={drawerItem}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onEdit={(item) => { openEdit(item) }}
+        onDelete={(id) => setDeleteTarget(id)}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this purchase?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The purchase record and all linked data will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+  )
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────────
+
+function ItemMenu({
+  item,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  item: PurchaseItem
+  onView: (item: PurchaseItem) => void
+  onEdit: (item: PurchaseItem) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-60 hover:opacity-100 group-hover:opacity-100 transition-opacity">
+          <MoreHorizontal className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onView(item)}>
+          <ShoppingBag className="w-4 h-4 mr-2" /> View Details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit(item)}>
+          <Pencil className="w-4 h-4 mr-2" /> Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(item.id)}>
+          <Trash2 className="w-4 h-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function EmptyState({
+  hasFilters,
+  onClear,
+  onCreate,
+}: {
+  hasFilters: boolean
+  onClear: () => void
+  onCreate: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-muted-foreground py-8">
+      <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
+        <ShoppingBag className="w-8 h-8 text-primary/40" />
+      </div>
+      {hasFilters ? (
+        <>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">No results found</p>
+            <p className="text-xs mt-1">Try a different search term or clear the filters.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onClear}>
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Clear filters
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">No purchases yet</p>
+            <p className="text-xs mt-1 max-w-xs">Start building your digital purchase vault.<br />Add receipts, invoices, or any spend.</p>
+          </div>
+          <Button size="sm" onClick={onCreate}><Plus className="w-4 h-4 mr-1.5" />Add first purchase</Button>
+        </>
+      )}
+    </div>
   )
 }

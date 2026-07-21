@@ -1,0 +1,281 @@
+Receipt Guard 2.0 — Production Stabilization
+
+Stop building new features.
+
+The application is not production-ready.
+
+The priority is making every existing feature fully functional before adding anything else.
+
+⸻
+
+Phase 1 — Backend Integration Audit
+
+Audit every page.
+
+For each page verify:
+	•	Database connection
+	•	API route
+	•	Validation
+	•	CRUD operations
+	•	Authentication
+	•	Permissions
+	•	Error handling
+
+Nothing should rely on placeholder data.
+
+⸻
+
+Purchases
+
+The Purchases page currently displays:
+
+“Failed to load purchases”
+
+Fix it completely.
+
+Verify:
+	•	API exists
+	•	API returns purchases
+	•	Frontend calls the correct endpoint
+	•	Database query works
+	•	Create Purchase
+	•	Edit Purchase
+	•	Delete Purchase
+	•	Search
+	•	Filters
+	•	Pagination
+
+All must work.
+
+⸻
+
+Warranties
+
+Currently:
+
+“Failed to load warranties”
+
+Fix:
+	•	backend route
+	•	database query
+	•	frontend hook
+	•	CRUD
+	•	purchase linkage
+	•	grouping
+	•	expiring logic
+
+⸻
+
+Subscriptions
+
+Currently:
+
+“Failed to load subscriptions”
+
+Fix completely.
+
+Verify:
+	•	CRUD
+	•	renewals
+	•	monthly calculations
+	•	yearly calculations
+	•	dashboard integration
+
+⸻
+
+Returns
+
+Verify:
+	•	API
+	•	CRUD
+	•	reminder scheduling
+	•	countdowns
+	•	deadline calculations
+
+⸻
+
+Documents
+
+Verify:
+	•	upload
+	•	preview
+	•	delete
+	•	purchase linkage
+
+⸻
+
+Dashboard
+
+Remove all placeholder statistics.
+
+Dashboard must load real data.
+
+Widgets:
+	•	Total Purchases
+	•	Active Subscriptions
+	•	Active Warranties
+	•	Open Returns
+
+Sections:
+	•	Upcoming Renewals
+	•	Expiring Soon
+	•	Recent Purchases
+	•	Monthly Subscription Cost
+
+Everything should come from live backend APIs.
+
+⸻
+
+Billing
+
+Paystack is currently broken.
+
+Fix completely.
+
+Verify:
+	•	pricing page
+	•	billing page
+	•	upgrade flow
+	•	Paystack popup
+	•	callback
+	•	webhook
+	•	subscription activation
+	•	invoice creation
+	•	successful upgrade
+
+No fake buttons.
+
+No placeholder logic.
+
+⸻
+
+Pricing
+
+Synchronize pricing everywhere.
+
+Landing page
+
+Billing page
+
+Upgrade modal
+
+Dashboard
+
+Pricing API
+
+Must all match.
+
+Plans:
+
+Free
+
+Pro
+	•	Monthly
+	•	Yearly
+
+Family
+	•	Monthly
+	•	Yearly
+
+Do NOT leave Family as “Coming Soon.”
+
+⸻
+
+Landing Page
+
+Synchronize with billing.
+
+No conflicting prices.
+
+No Gmail references.
+
+⸻
+
+Import Center
+
+Keep placeholders.
+
+Do not connect integrations yet.
+
+⸻
+
+Vercel
+
+Fix every deployment issue.
+
+Run:
+
+vite build
+
+until there are zero errors.
+
+Deploy successfully.
+
+Verify production deployment works.
+
+⸻
+
+Code Quality
+
+Remove:
+	•	dead Gmail frontend code
+	•	unused imports
+	•	placeholder components
+	•	broken hooks
+	•	duplicate API clients
+
+Do NOT remove backend Gmail adapters yet.
+
+⸻
+
+Final Verification
+
+Before stopping:
+
+Verify every page manually.
+
+There should be no:
+	•	Failed to load purchases
+	•	Failed to load subscriptions
+	•	Failed to load warranties
+	•	Failed to load returns
+
+No broken buttons.
+
+No fake data.
+
+No placeholder APIs.
+
+⸻
+
+Git
+
+After every completed fix:
+	•	Commit
+	•	Push to GitHub
+
+⸻
+
+Stop
+
+Do not add any new features.
+
+Stop after the application is fully functional.
+
+Report:
+	•	APIs fixed
+	•	Pages fixed
+	•	Build status
+	•	Vercel status
+	•	Remaining production blockers
+
+⸻
+
+One more recommendation
+
+I would also change your development order from now on:
+	1.	✅ Make every current feature work.
+	2.	✅ Make payments work.
+	3.	✅ Make deployment stable.
+	4.	✅ Test the app like a real user.
+	5.	Only then start adding OCR, Amazon imports, AI, smart reminders, etc.

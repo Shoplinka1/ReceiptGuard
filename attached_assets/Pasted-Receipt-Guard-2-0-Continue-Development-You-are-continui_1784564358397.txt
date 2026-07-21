@@ -1,0 +1,167 @@
+Receipt Guard 2.0 — Continue Development
+
+You are continuing an existing project.
+
+Before writing any code:
+	1.	Read the entire codebase.
+	2.	Read the latest commits on the receiptguard-v2 branch.
+	3.	Understand the current Receipt Guard 2.0 architecture.
+	4.	Do NOT rewrite the project.
+	5.	Continue from the existing implementation.
+
+This is an evolution of Receipt Guard, not a new application.
+
+⸻
+
+Current Product Vision
+
+Receipt Guard is no longer a Gmail receipt scanner.
+
+It is now:
+
+The home for everything you buy.
+
+Users organize:
+	•	Purchases
+	•	Receipts
+	•	Invoices
+	•	Warranties
+	•	Return windows
+	•	Subscriptions
+	•	Manuals
+	•	Product documents
+
+Future import methods:
+	•	Amazon
+	•	Apple
+	•	Google Play
+	•	PayPal
+	•	Stripe
+	•	Email Forwarding
+	•	OCR
+	•	CSV
+
+These are import methods, not the product.
+
+⸻
+
+Already completed
+
+Review the repository and preserve everything already built.
+
+Continue from the latest commit.
+
+⸻
+
+Main Goal
+
+Transform Receipt Guard into a polished, production-ready SaaS.
+
+Everything should feel like a premium product.
+
+Professional UI.
+
+Excellent UX.
+
+Consistent design.
+
+No unfinished placeholders unless absolutely necessary.
+
+⸻
+
+Finish everything that is still incomplete
+
+Including:
+	•	Purchases
+	•	Documents
+	•	Returns
+	•	Warranties
+	•	Dashboard
+	•	Import Center
+	•	Insights
+	•	OCR pipeline
+	•	CRUD dialogs
+	•	API routes
+	•	Dashboard widgets
+	•	Empty states
+	•	Responsive design
+	•	Search
+	•	Filters
+	•	Validation
+	•	Polish
+
+⸻
+
+Import Center
+
+Create a beautiful Import Center.
+
+Sections:
+
+Retail
+	•	Amazon
+
+App Stores
+	•	Apple
+	•	Google Play
+
+Payments
+	•	PayPal
+	•	Stripe
+
+Documents
+	•	OCR Receipt Scan
+	•	CSV Import
+
+Email
+	•	Email Forwarding
+
+Every card includes:
+	•	icon
+	•	title
+	•	description
+	•	status badge
+	•	Coming Soon
+
+No connect buttons yet.
+
+⸻
+
+Code Quality
+
+Remove unused Gmail UI.
+
+Keep backend Gmail code only if required for future adapters.
+
+Do not introduce breaking changes.
+
+Reuse the current architecture.
+
+⸻
+
+Git Rules
+
+After every completed feature:
+
+Commit.
+
+Push to GitHub.
+
+Never leave hours of work uncommitted.
+
+⸻
+
+Stop Rule
+
+When one major feature is finished:
+
+Stop.
+
+Report:
+	•	Files changed
+	•	APIs changed
+	•	Components added
+	•	Remaining TODOs
+	•	Risks introduced
+
+Do not continue forever without checkpoints.

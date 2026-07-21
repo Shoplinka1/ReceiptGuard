@@ -22,7 +22,7 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co/"
+SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_qWXWU29TC9ys4HZG6MnZ1A_6jgpk5rf"
 VITE_SUPABASE_URL = "https://cegsppnvsovgnakjiwqd.supabase.co/"
 FRONTEND_URL = "https://a2bc39cc-df84-4827-8196-662088b2e82e-00-1tnveto1bql3y.picard.replit.dev"

@@ -37,6 +37,7 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const todayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const [
     { count: totalUsers },
@@ -63,6 +64,9 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
     { data: dauData },
     { data: wauData },
     { data: mauData },
+    { count: totalWarranties },
+    { count: activeWarranties },
+    { count: expiringWarranties30d },
   ] = await Promise.all([
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayStart),
@@ -96,6 +100,9 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
     supabaseAdmin.from('activity_logs').select('user_id').gte('created_at', sevenDaysAgo),
     // MAU — distinct users with activity in last 30 days
     supabaseAdmin.from('activity_logs').select('user_id').gte('created_at', thirtyDaysAgo),
+    supabaseAdmin.from('warranties').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('warranties').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabaseAdmin.from('warranties').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('warranty_end_date', thirtyDaysFromNow),
   ]);
 
   const mrr = (mrrPayments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
@@ -140,6 +147,10 @@ router.get('/api/admin/stats', ...adminGuard, async (_req, res): Promise<void> =
     failedScans30d: failedScanCount ?? 0,
     successfulScans30d: successfulScanCount ?? 0,
     scanSuccessRate,
+    // Warranties
+    totalWarranties: totalWarranties ?? 0,
+    activeWarranties: activeWarranties ?? 0,
+    expiringWarranties30d: expiringWarranties30d ?? 0,
     // Feedback
     openFeedbackCount: openFeedbackCount ?? 0,
     // Lists

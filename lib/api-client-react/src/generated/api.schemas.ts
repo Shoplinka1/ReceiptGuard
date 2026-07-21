@@ -17,6 +17,18 @@ export const DashboardSummaryPlan = {
   pro: 'pro',
 } as const;
 
+export type DashboardSummarySubscriptionCurrencyBreakdownItem = {
+  currency: string;
+  monthlyTotal: number;
+};
+
+export interface CurrencyBreakdownEntry {
+  currency: string;
+  monthlySpending: number;
+  totalSpending: number;
+  receiptCount: number;
+}
+
 export interface DashboardSummary {
   firstName: string;
   monthlySpending: number;
@@ -30,14 +42,28 @@ export interface DashboardSummary {
   subscriptionsMonthlyTotal: number;
   gmailConnected: boolean;
   plan: DashboardSummaryPlan;
+  /** The user's primary currency (settings.currency, default USD). All money fields above (monthlySpending, subscriptionsMonthlyTotal, etc.) are in this currency only. */
+  currency?: string;
+  /** Monthly/total spending and receipt count for every currency present in the user's receipts, including non-primary ones. No exchange rate is applied — each entry is the literal sum in that currency. Ensures non-primary-currency receipts are never silently dropped from the dashboard. */
+  currencyBreakdown?: CurrencyBreakdownEntry[];
+  /** Monthly subscription cost totals for every non-primary currency among active subscriptions — ensures non-primary-currency subscriptions are never silently dropped from the response. */
+  subscriptionCurrencyBreakdown?: DashboardSummarySubscriptionCurrencyBreakdownItem[];
 }
+
+export type SpendingMonthOtherCurrencyTotalsItem = {
+  currency: string;
+  total: number;
+};
 
 export interface SpendingMonth {
   month: number;
   year: number;
   label?: string;
+  /** Total spending in the user's primary currency for this month. */
   total: number;
   previousTotal: number;
+  /** Totals for this month in currencies other than the primary one — never merged into `total`. */
+  otherCurrencyTotals?: SpendingMonthOtherCurrencyTotalsItem[];
 }
 
 export interface MerchantSummary {
@@ -48,6 +74,9 @@ export interface MerchantSummary {
   totalSpent: number;
   purchaseCount: number;
   lastPurchaseDate: string;
+  currency?: string;
+  /** False when this merchant's totalSpent is in a currency other than the user's primary currency. Non-primary merchants are appended after the top 8 primary-currency merchants rather than discarded. */
+  isPrimary?: boolean;
 }
 
 export type ReceiptStatus = typeof ReceiptStatus[keyof typeof ReceiptStatus];
@@ -276,6 +305,8 @@ export interface Renewal {
   reminderEnabled: boolean;
   /** @nullable */
   reminderDaysBefore?: number | null;
+  /** The subscription's own currency — renewals are individual line items (not summed), so every renewal is returned regardless of the user's primary currency. */
+  currency?: string;
 }
 
 export interface RenewalUpdate {

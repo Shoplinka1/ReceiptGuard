@@ -1,0 +1,194 @@
+Receipt Guard 2.0 — Continue Development
+
+The merge is complete.
+
+Do not redesign the project.
+
+Do not rewrite the architecture.
+
+Do not rename database tables.
+
+Do not remove working APIs.
+
+Continue building on top of the existing Receipt Guard 2.0 codebase.
+
+This application must become a polished, production-ready SaaS.
+
+⸻
+
+Product Vision
+
+Receipt Guard is the digital home for everything people buy.
+
+Users should be able to manage their entire purchase life cycle from one place.
+
+Receipt Guard helps users organize:
+	•	Purchases
+	•	Receipts
+	•	Invoices
+	•	Product manuals
+	•	Warranties
+	•	Return windows
+	•	Subscriptions
+	•	Product documents
+
+The app should protect users from losing money by reminding them about:
+	•	subscription renewals
+	•	warranty expirations
+	•	return deadlines
+
+The experience should feel premium, modern and effortless.
+
+⸻
+
+Build ONE complete vertical
+
+Complete the Purchases ecosystem before moving to anything else.
+
+That includes:
+
+Purchases
+
+Implement:
+	•	Add Purchase dialog
+	•	Edit Purchase
+	•	Delete Purchase
+	•	Purchase detail drawer
+	•	Product fields
+	•	Merchant
+	•	Product name
+	•	Category
+	•	Amount
+	•	Purchase date
+	•	Payment method
+	•	Order ID
+	•	Invoice number
+	•	Serial number
+	•	Model number
+	•	Notes
+
+Support:
+	•	Search
+	•	Filters
+	•	Pagination
+	•	Responsive layout
+
+⸻
+
+Purchase Attachments
+
+Allow users to attach:
+	•	receipt
+	•	invoice
+	•	manual
+	•	warranty PDF
+
+Each purchase should display all linked files.
+
+⸻
+
+Warranty Linking
+
+Every purchase should optionally create or link a warranty.
+
+Warranty cards should appear inside Purchase Details.
+
+⸻
+
+Return Window
+
+Every purchase should support:
+	•	return deadline
+	•	countdown badge
+	•	days remaining
+
+Status:
+	•	Eligible
+	•	Initiated
+	•	Completed
+	•	Missed
+
+⸻
+
+Dashboard
+
+If purchase data exists:
+
+Dashboard should immediately reflect it.
+
+Widgets:
+	•	Total Purchases
+	•	Active Warranties
+	•	Active Subscriptions
+	•	Open Returns
+
+Sections:
+	•	Recent Purchases
+	•	Upcoming Renewals
+	•	Expiring Soon
+	•	Monthly Subscription Cost
+
+No Gmail references anywhere.
+
+⸻
+
+UI Quality
+
+Make every page feel like a premium SaaS.
+
+Use:
+	•	excellent spacing
+	•	polished cards
+	•	modern typography
+	•	subtle animations
+	•	responsive layouts
+	•	beautiful empty states
+
+Example empty state:
+
+“No purchases yet.
+
+Start building your digital purchase vault.”
+
+⸻
+
+API
+
+Finish CRUD only for Purchases.
+
+Reuse existing APIs whenever possible.
+
+Do not introduce unnecessary placeholder endpoints.
+
+⸻
+
+Database
+
+Reuse the existing schema.
+
+Do not rename tables.
+
+Only extend existing models when necessary.
+
+⸻
+
+Git Rules
+
+When this Purchases vertical is complete:
+	•	Commit
+	•	Push to GitHub
+	•	Stop
+
+⸻
+
+Report
+
+When finished, report:
+	•	Files changed
+	•	Components added
+	•	APIs added
+	•	Database changes
+	•	Remaining TODOs
+	•	Risks
+
+Do not continue to Documents, OCR, Import Center, Returns, or other milestones after finishing the Purchases vertical.

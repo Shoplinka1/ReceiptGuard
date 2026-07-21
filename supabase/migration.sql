@@ -215,26 +215,48 @@ alter table public.warranties add column if not exists reminder_enabled boolean 
 -- the UI can label them "Estimated" instead of presenting a guess as fact.
 alter table public.warranties add column if not exists is_estimated boolean not null default false;
 
--- ─── Phase 5: email_accounts — scan tracking columns ──────────────────────────
--- Consolidates the two previously-independent Gmail rescan loops
--- (gmail-scheduler.ts + reminder-scheduler.ts) into a single scheduler that
--- persists scan state per account instead of relying purely on in-process
--- timers, so status survives restarts and is visible to the admin app.
+-- ─── Phase 5a: settings — days_before_90 / days_before_60 ───────────────────────────
+alter table public.settings add column if not exists days_before_90 boolean not null default true;
+alter table public.settings add column if not exists days_before_60 boolean not null default true;
+
+-- ─── Phase 5b: email_accounts — scan tracking columns ──────────────────────────────
 alter table public.email_accounts add column if not exists last_scan timestamptz;
 alter table public.email_accounts add column if not exists next_scan timestamptz;
-alter table public.email_accounts add column if not exists scan_status text not null default 'idle'; -- idle | scanning | success | failed
+alter table public.email_accounts add column if not exists scan_status text not null default 'idle';
 alter table public.email_accounts add column if not exists scan_duration_ms integer;
 alter table public.email_accounts add column if not exists scan_error text;
 alter table public.email_accounts add column if not exists scan_retry_count integer not null default 0;
 
--- ─── Phase 6: settings — per-summary email opt-out columns ───────────────────
--- Absence of these columns is treated as "enabled" everywhere they're read
--- (summary-emails.ts), so this migration is not required for summaries to
--- start working — it just lets users opt out of one summary cadence
--- without disabling all email notifications.
+-- ─── Phase 6a: audit_logs table ─────────────────────────────────────────────────────────
+create table if not exists public.audit_logs (
+  id          uuid primary key default gen_random_uuid(),
+  actor_id    uuid references public.profiles(id) on delete set null,
+  action      text not null,
+  target_type text not null,
+  target_id   text,
+  metadata    jsonb,
+  created_at  timestamptz not null default now()
+);
+create index if not exists audit_logs_actor_idx on public.audit_logs(actor_id, created_at desc);
+alter table public.audit_logs enable row level security;
+drop policy if exists "Admins can view audit logs" on public.audit_logs;
+create policy "Admins can view audit logs" on public.audit_logs for select
+  using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
+-- ─── Phase 6b: settings — per-summary email opt-out columns ──────────────────────
 alter table public.settings add column if not exists weekly_summary boolean not null default true;
 alter table public.settings add column if not exists monthly_summary boolean not null default true;
 alter table public.settings add column if not exists yearly_summary boolean not null default true;
+
+-- ─── Phase 7: receipts — Purchases 2.0 extended fields ───────────────────────
+-- Adds the fields required by the Purchases vertical: product name, serial and
+-- model numbers for product identification, and a return_deadline for the
+-- in-app return-window countdown. order_id and payment_method already exist
+-- (schema.sql lines 123-124); this block is additive and fully idempotent.
+alter table public.receipts add column if not exists product_name   text;
+alter table public.receipts add column if not exists serial_number  text;
+alter table public.receipts add column if not exists model_number   text;
+alter table public.receipts add column if not exists return_deadline date;
 
 -- ─── Done ─────────────────────────────────────────────────────────────────────
 select 'Migration complete. All tables and columns are up to date.' as status;

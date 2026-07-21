@@ -24,6 +24,10 @@ import TermsPage from './pages/terms';
 // Protected pages (lazy-loaded)
 const DashboardPage = lazy(() => import('./pages/dashboard'));
 const ReceiptsPage = lazy(() => import('./pages/receipts'));
+const ReturnsPage = lazy(() => import('./pages/returns'));
+const DocumentsPage = lazy(() => import('./pages/documents'));
+const InsightsPage = lazy(() => import('./pages/insights'));
+const ImportCenterPage = lazy(() => import('./pages/import-center'));
 const SubscriptionsPage = lazy(() => import('./pages/subscriptions'));
 const WarrantiesPage = lazy(() => import('./pages/warranties'));
 const RenewalsPage = lazy(() => import('./pages/renewals'));
@@ -64,8 +68,24 @@ function Router() {
         <Route path="/dashboard">
           {() => <ProtectedRoute component={DashboardPage} />}
         </Route>
+        {/* /purchases is the 2.0 label for the receipts table */}
+        <Route path="/purchases">
+          {() => <ProtectedRoute component={ReceiptsPage} />}
+        </Route>
         <Route path="/receipts">
           {() => <ProtectedRoute component={ReceiptsPage} />}
+        </Route>
+        <Route path="/returns">
+          {() => <ProtectedRoute component={ReturnsPage} />}
+        </Route>
+        <Route path="/documents">
+          {() => <ProtectedRoute component={DocumentsPage} />}
+        </Route>
+        <Route path="/insights">
+          {() => <ProtectedRoute component={InsightsPage} />}
+        </Route>
+        <Route path="/import">
+          {() => <ProtectedRoute component={ImportCenterPage} />}
         </Route>
         <Route path="/subscriptions">
           {() => <ProtectedRoute component={SubscriptionsPage} />}

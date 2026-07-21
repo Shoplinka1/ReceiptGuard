@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import {
   Loader2, CheckCircle2, Trash2, Mail, AlertTriangle, RefreshCw,
   Sparkles, CreditCard, ChevronDown, ChevronUp, ExternalLink, LogOut,
-  User, Globe, Palette, Shield, HelpCircle, MessageSquare,
+  User, Globe, Palette, Shield, HelpCircle, MessageSquare, FolderInput,
 } from 'lucide-react'
 import { useLocation, Link } from 'wouter'
 
@@ -180,10 +180,11 @@ function GmailTab() {
 // ─── Billing Tab ─────────────────────────────────────────────────────────────
 
 const PRO_FEATURES = [
-  'Unlimited Gmail accounts', 'Unlimited receipts & subscriptions',
-  'Unlimited reminders', 'Warranty & return tracking',
-  'CSV & PDF export', 'Spending reports & analytics',
-  'Advanced filters & categories', 'Priority support',
+  'Unlimited purchases', 'Unlimited subscriptions',
+  'Unlimited warranties & returns', 'Document storage (10 GB)',
+  'OCR receipt scan', 'CSV & PDF export',
+  'Spending reports & analytics', 'All import sources',
+  'Advanced reminders', 'Priority support',
 ]
 
 const MONTHLY_USD = 5.99
@@ -629,8 +630,8 @@ const feedbackTypes: { value: FeedbackType; label: string; placeholder: string }
 ]
 
 const faqItems = [
-  { q: 'How does ReceiptGuard scan my Gmail?', a: 'We use read-only Gmail access to search for receipts, invoices, and order confirmations. We never read personal emails or modify your inbox.' },
-  { q: 'Is my data secure?', a: 'Yes. All data is encrypted at rest and in transit. Gmail tokens are stored securely and never shared. We use Supabase with row-level security.' },
+  { q: 'How do I import my purchases?', a: 'You can add purchases manually from the Purchases page. The Import Center supports additional sources — Amazon, PayPal, OCR, CSV, and more — coming soon.' },
+  { q: 'Is my data secure?', a: 'Yes. All data is encrypted at rest and in transit. Your credentials are stored securely and never shared. We use Supabase with row-level security.' },
   { q: 'What happens when my Pro subscription expires?', a: 'Your account is automatically downgraded to the Free plan. You retain access to your existing data, but premium features become unavailable until you renew.' },
   { q: 'Can I cancel my subscription at any time?', a: 'Yes. Cancel anytime from Settings → Billing. You keep Pro access until the end of your current billing period.' },
   { q: 'How do I upgrade from Free to Pro?', a: 'Go to Settings → Billing and click Upgrade to Pro. We accept payment via Paystack. Pro is $5.99/month or $59.99/year.' },
@@ -758,6 +759,46 @@ function SupportTab() {
   )
 }
 
+// ─── Import Center Tab ───────────────────────────────────────────────────────
+
+function ImportsTab() {
+  return (
+    <div className="space-y-6 mt-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Center</CardTitle>
+          <CardDescription>
+            Connect accounts and import purchases from external sources. All sources are coming soon — add purchases manually in the meantime.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { name: 'Amazon',             desc: 'Import order history' },
+              { name: 'PayPal',             desc: 'Pull transaction history' },
+              { name: 'Apple App Store',    desc: 'Sync in-app purchases' },
+              { name: 'Google Play',        desc: 'Import app purchases' },
+              { name: 'OCR Receipt Scan',   desc: 'Snap a photo of any receipt' },
+              { name: 'CSV Import',         desc: 'Upload a spreadsheet of transactions' },
+            ].map(s => (
+              <div key={s.name} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{s.name}</p>
+                  <p className="text-xs text-muted-foreground">{s.desc}</p>
+                </div>
+                <span className="text-[10px] bg-secondary text-muted-foreground px-2 py-0.5 rounded-full shrink-0 font-medium">Coming Soon</span>
+              </div>
+            ))}
+          </div>
+          <div className="pt-2 border-t border-border">
+            <a href="/import" className="text-sm text-primary hover:underline">Open full Import Center →</a>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab() {
@@ -826,13 +867,13 @@ function ProfileTab() {
 // ─── Main Settings Page ───────────────────────────────────────────────────────
 
 const TABS = [
-  { value: 'profile', label: 'Profile', icon: User },
-  { value: 'gmail', label: 'Gmail', icon: Mail },
-  { value: 'billing', label: 'Billing', icon: CreditCard },
-  { value: 'general', label: 'General', icon: Globe },
-  { value: 'appearance', label: 'Appearance', icon: Palette },
-  { value: 'security', label: 'Security', icon: Shield },
-  { value: 'support', label: 'Help & Support', icon: HelpCircle },
+  { value: 'profile',    label: 'Profile',        icon: User },
+  { value: 'imports',    label: 'Import Center',  icon: FolderInput },
+  { value: 'billing',    label: 'Billing',        icon: CreditCard },
+  { value: 'general',    label: 'General',        icon: Globe },
+  { value: 'appearance', label: 'Appearance',     icon: Palette },
+  { value: 'security',   label: 'Security',       icon: Shield },
+  { value: 'support',    label: 'Help & Support', icon: HelpCircle },
 ]
 
 export default function SettingsPage() {
@@ -859,7 +900,7 @@ export default function SettingsPage() {
           </TabsList>
 
           <TabsContent value="profile"><ProfileTab /></TabsContent>
-          <TabsContent value="gmail"><GmailTab /></TabsContent>
+          <TabsContent value="imports"><ImportsTab /></TabsContent>
           <TabsContent value="billing"><BillingTab /></TabsContent>
           <TabsContent value="general"><GeneralTab /></TabsContent>
           <TabsContent value="appearance"><AppearanceTab /></TabsContent>

@@ -14,6 +14,8 @@ import adminRouter from './admin';
 import feedbackRouter from './feedback';
 import notificationsRouter from './notifications';
 import debugRouter from './debug';
+import returnsRouter from './returns';
+import documentsRouter from './documents';
 
 const router = Router();
 
@@ -37,6 +39,8 @@ router.use(merchantsRouter);
 router.use(userRouter);
 router.use(feedbackRouter);
 router.use(notificationsRouter);
+router.use(returnsRouter);
+router.use(documentsRouter);
 router.use(adminRouter);
 router.use(debugRouter);
 
