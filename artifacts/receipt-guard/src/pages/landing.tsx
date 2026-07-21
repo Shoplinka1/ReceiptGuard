@@ -461,9 +461,6 @@ export default function LandingPage() {
 
             {/* Family */}
             <div className="p-7 rounded-2xl bg-background border border-border relative">
-              <div className="absolute -top-3 right-6">
-                <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-              </div>
               <h3 className="text-xl font-bold mb-1">Family</h3>
               <p className="text-muted-foreground text-sm mb-5">Shared vault for households</p>
               <div className="text-4xl font-bold mb-6">$19.99<span className="text-lg text-muted-foreground font-normal">/mo</span></div>
@@ -474,7 +471,9 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Button variant="outline" className="w-full" disabled>Coming Soon</Button>
+              <Link href="/signup">
+                <Button variant="outline" className="w-full">Get Family</Button>
+              </Link>
             </div>
           </div>
 

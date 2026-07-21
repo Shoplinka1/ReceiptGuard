@@ -57,8 +57,8 @@ const FAQ = [
     a: 'The Free plan is permanently free with no time limit. Pro pricing starts at $9.99/month with no credit card required to get started.',
   },
   {
-    q: 'When will the Family plan be available?',
-    a: 'The Family plan is in active development. Sign up for Pro now and you\'ll be notified when Family launches — with a discounted migration offer for existing Pro subscribers.',
+    q: 'What does the Family plan include?',
+    a: 'Family gives everything in Pro plus shared vaults for up to 5 household members — shared purchases, warranties, subscriptions view, 50 GB document storage, family spending analytics, and admin member controls. Billed at $19.99/month or $199.99/year.',
   },
   {
     q: 'How do I import my purchases?',
@@ -220,9 +220,6 @@ export default function PricingPage() {
 
           {/* Family */}
           <Card className="flex flex-col border-border relative overflow-hidden">
-            <div className="absolute top-4 right-4">
-              <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-            </div>
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Users className="w-4 h-4" /> Family
@@ -249,12 +246,11 @@ export default function PricingPage() {
                 ))}
               </ul>
               <div className="mt-auto">
-                <Button className="w-full" variant="outline" disabled>
-                  Coming Soon
-                </Button>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Pro subscribers get early access + a discounted migration offer.
-                </p>
+                <Link href={user ? '/settings?tab=billing' : '/signup'}>
+                  <Button className="w-full" variant="outline">
+                    {user ? 'Upgrade to Family' : 'Get Family'}
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
