@@ -277,6 +277,8 @@ create table if not exists public.returns (
   resolved_date    date,
   tracking_number  text,
   notes            text,
+  window_days      integer not null default 30,   -- return window length in days (14 | 30 | 60 | 90)
+  return_deadline  date,                           -- computed: initiated_date + window_days (set on insert/update)
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -284,6 +286,11 @@ create table if not exists public.returns (
 create index if not exists returns_user_id_idx     on public.returns(user_id, initiated_date desc);
 create index if not exists returns_receipt_id_idx  on public.returns(receipt_id);
 create index if not exists returns_status_idx      on public.returns(user_id, status);
+create index if not exists returns_deadline_idx    on public.returns(user_id, return_deadline) where status in ('open', 'in_progress');
+
+-- Idempotent ALTER for instances where the table already existed without these columns
+alter table public.returns add column if not exists window_days     integer not null default 30;
+alter table public.returns add column if not exists return_deadline date;
 
 alter table public.returns enable row level security;
 drop policy if exists "Users can manage their own returns" on public.returns;

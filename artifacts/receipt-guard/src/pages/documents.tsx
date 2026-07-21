@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   FileText, FileImage, File, Upload, Search, Plus, MoreHorizontal,
-  Trash2, Download, AlertCircle, FolderOpen, Loader2,
+  Trash2, Download, AlertCircle, FolderOpen, Loader2, Pencil,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customFetch } from '@workspace/api-client-react'
@@ -75,6 +76,10 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [editTarget, setEditTarget] = useState<any>(null)
+  const [editName, setEditName] = useState('')
+  const [editCategory, setEditCategory] = useState('other')
+  const [editNotes, setEditNotes] = useState('')
 
   const { data: documents = [], isLoading, error } = useQuery({
     queryKey: ['/api/documents', category, search],
@@ -101,6 +106,19 @@ export default function DocumentsPage() {
       setDeleteTarget(null)
     },
     onError: (e: any) => toast.error(e.message || 'Failed to delete'),
+  })
+
+  const editMutation = useMutation({
+    mutationFn: (doc: any) => customFetch<any>(`/api/documents/${doc.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: editName.trim(), category: editCategory, notes: editNotes.trim() || null }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/documents'] })
+      toast.success('Document updated')
+      setEditTarget(null)
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update'),
   })
 
   const handleFileSelect = (file: File) => {
@@ -267,6 +285,9 @@ export default function DocumentsPage() {
                             <Download className="w-4 h-4 mr-2" />Download
                           </a>
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setEditTarget(doc); setEditName(doc.name); setEditCategory(doc.category || 'other'); setEditNotes(doc.notes || '') }}>
+                          <Pencil className="w-4 h-4 mr-2" />Edit
+                        </DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(doc)}>
                           <Trash2 className="w-4 h-4 mr-2" />Delete
                         </DropdownMenuItem>
@@ -328,6 +349,44 @@ export default function DocumentsPage() {
             <Button onClick={handleUpload} disabled={uploading || !uploadName.trim()}>
               {uploading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Upload
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editTarget} onOpenChange={o => { if (!editMutation.isPending && !o) setEditTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Document</DialogTitle>
+            <DialogDescription>Update the name, category, or notes for this document.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-1.5">
+              <Label>Document Name <span className="text-destructive">*</span></Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="e.g. Apple MacBook Receipt 2024" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Category</Label>
+              <Select value={editCategory} onValueChange={setEditCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(['receipt', 'warranty', 'return', 'invoice', 'manual', 'other'] as const).map(c => (
+                    <SelectItem key={c} value={c} className="capitalize">{CATEGORY_LABELS[c]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Textarea placeholder="Any notes about this document" value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} className="resize-none" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={editMutation.isPending}>Cancel</Button>
+            <Button onClick={() => editTarget && editMutation.mutate(editTarget)} disabled={editMutation.isPending || !editName.trim()}>
+              {editMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

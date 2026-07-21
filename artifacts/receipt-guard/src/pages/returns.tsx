@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customFetch } from '@workspace/api-client-react'
-import { format } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 import { formatCurrency } from '@/lib/currency'
 import { toast } from 'sonner'
 import { ReturnDialog } from '@/components/returns/return-dialog'
@@ -208,6 +208,17 @@ export default function ReturnsPage() {
                             <span>Initiated {format(new Date(r.initiatedDate), 'MMM d, yyyy')}</span>
                             {r.trackingNumber && <span>Tracking: <span className="font-mono text-foreground">{r.trackingNumber}</span></span>}
                             {r.resolvedDate && <span>Resolved {format(new Date(r.resolvedDate), 'MMM d, yyyy')}</span>}
+                            {r.returnDeadline && (r.status === 'open' || r.status === 'in_progress') && (() => {
+                              const dl = new Date(r.returnDeadline)
+                              const daysLeft = differenceInDays(dl, new Date())
+                              if (daysLeft < 0) return <span className="text-destructive font-semibold">Return window closed</span>
+                              if (daysLeft === 0) return <span className="text-destructive font-semibold">⚠ Deadline today</span>
+                              return (
+                                <span className={daysLeft <= 3 ? 'text-destructive font-semibold' : daysLeft <= 7 ? 'text-amber-600 font-medium' : ''}>
+                                  {daysLeft}d until deadline ({format(dl, 'MMM d')})
+                                </span>
+                              )
+                            })()}
                           </div>
                         </div>
                       </div>

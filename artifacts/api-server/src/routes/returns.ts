@@ -4,7 +4,16 @@ import { supabaseAdmin } from '../lib/supabase';
 
 const router: IRouter = Router();
 
+function computeDeadline(initiatedDate: string | null, windowDays: number): string | null {
+  if (!initiatedDate) return null;
+  const d = new Date(initiatedDate);
+  d.setDate(d.getDate() + windowDays);
+  return d.toISOString().split('T')[0];
+}
+
 function mapReturn(r: any) {
+  const windowDays = r.window_days ?? 30;
+  const returnDeadline = r.return_deadline ?? computeDeadline(r.initiated_date, windowDays);
   return {
     id: r.id,
     receiptId: r.receipt_id ?? null,
@@ -17,6 +26,8 @@ function mapReturn(r: any) {
     resolvedDate: r.resolved_date ?? null,
     trackingNumber: r.tracking_number ?? null,
     notes: r.notes ?? null,
+    windowDays,
+    returnDeadline,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -48,12 +59,16 @@ router.get('/api/returns', requireAuth, async (req, res): Promise<void> => {
 
 // Create
 router.post('/api/returns', requireAuth, async (req, res): Promise<void> => {
-  const { merchantName, receiptId, amount, currency, reason, status, initiatedDate, trackingNumber, notes } = req.body;
+  const { merchantName, receiptId, amount, currency, reason, status, initiatedDate, trackingNumber, notes, windowDays } = req.body;
 
   if (!merchantName) {
     res.status(400).json({ error: 'merchantName is required' });
     return;
   }
+
+  const wDays = windowDays ?? 30;
+  const iDate = initiatedDate ?? new Date().toISOString().split('T')[0];
+  const returnDeadline = computeDeadline(iDate, wDays);
 
   const { data, error } = await supabaseAdmin.from('returns').insert({
     user_id: req.userId,
@@ -63,9 +78,11 @@ router.post('/api/returns', requireAuth, async (req, res): Promise<void> => {
     currency: currency ?? 'USD',
     reason: reason ?? null,
     status: status ?? 'open',
-    initiated_date: initiatedDate ?? new Date().toISOString().split('T')[0],
+    initiated_date: iDate,
     tracking_number: trackingNumber ?? null,
     notes: notes ?? null,
+    window_days: wDays,
+    return_deadline: returnDeadline,
   }).select().single();
 
   if (error) { res.status(500).json({ error: 'Failed to create return.' }); return; }
@@ -83,7 +100,7 @@ router.get('/api/returns/:id', requireAuth, async (req, res): Promise<void> => {
 
 // Update
 router.patch('/api/returns/:id', requireAuth, async (req, res): Promise<void> => {
-  const { merchantName, amount, currency, reason, status, initiatedDate, resolvedDate, trackingNumber, notes } = req.body;
+  const { merchantName, amount, currency, reason, status, initiatedDate, resolvedDate, trackingNumber, notes, windowDays } = req.body;
 
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   if (merchantName !== undefined) updates.merchant_name = merchantName;
@@ -95,6 +112,13 @@ router.patch('/api/returns/:id', requireAuth, async (req, res): Promise<void> =>
   if (resolvedDate !== undefined) updates.resolved_date = resolvedDate;
   if (trackingNumber !== undefined) updates.tracking_number = trackingNumber;
   if (notes !== undefined) updates.notes = notes;
+  if (windowDays !== undefined) updates.window_days = windowDays;
+  // Recompute return_deadline whenever initiatedDate or windowDays changes
+  if (initiatedDate !== undefined || windowDays !== undefined) {
+    const newDate = initiatedDate ?? null;
+    const newDays = windowDays ?? 30;
+    if (newDate) updates.return_deadline = computeDeadline(newDate, newDays);
+  }
 
   const { data, error } = await supabaseAdmin
     .from('returns').update(updates)

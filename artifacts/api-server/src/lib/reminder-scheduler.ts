@@ -48,6 +48,14 @@ const WARRANTY_REMINDER_WINDOWS: { days: number; settingKey: string }[] = [
   { days: 1,  settingKey: 'days_before_1' },
 ];
 
+// Return window reminders fire at 7/3/1 days before the deadline.
+// All three windows use the same 'return_window_reminder' toggle in settings.
+const RETURN_REMINDER_WINDOWS: { days: number }[] = [
+  { days: 7 },
+  { days: 3 },
+  { days: 1 },
+];
+
 // ─── Email templates ──────────────────────────────────────────────────────────
 
 export function reminderEmailHtml(opts: {
@@ -303,6 +311,93 @@ async function runWarrantyRemindersForWindow(daysAway: number, appUrl: string): 
   }
 }
 
+// ─── Return window reminders ──────────────────────────────────────────────────
+
+async function runReturnRemindersForWindow(daysAway: number, appUrl: string): Promise<void> {
+  const target = new Date();
+  target.setDate(target.getDate() + daysAway);
+  const targetDate = target.toISOString().split('T')[0];
+
+  const { data: returns, error } = await supabaseAdmin
+    .from('returns')
+    .select('id, user_id, merchant_name, return_deadline, amount, currency')
+    .in('status', ['open', 'in_progress'])
+    .eq('return_deadline', targetDate);
+
+  if (error) { logger.error({ error, daysAway }, '[reminders] returns fetch failed'); return; }
+  if (!returns?.length) return;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  for (const ret of returns) {
+    // Respect user's return_window_reminder toggle
+    const { data: settings } = await supabaseAdmin
+      .from('settings')
+      .select('email_notifications, return_window_reminder')
+      .eq('user_id', ret.user_id)
+      .maybeSingle();
+    if (settings?.return_window_reminder === false) continue;
+
+    // Deduplicate: skip if a notification for this return+window already went out today
+    const { data: existing } = await supabaseAdmin
+      .from('notifications')
+      .select('id')
+      .eq('user_id', ret.user_id)
+      .eq('type', 'return_reminder')
+      .contains('metadata', { refId: ret.id, daysAway })
+      .gte('created_at', `${today}T00:00:00Z`)
+      .maybeSingle();
+    if (existing) continue;
+
+    const daysLabel = daysAway === 1 ? 'tomorrow' : `in ${daysAway} days`;
+    const deadlineFormatted = ret.return_deadline
+      ? new Date(ret.return_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'soon';
+
+    // In-app notification
+    await supabaseAdmin.from('notifications').insert({
+      user_id: ret.user_id,
+      type: 'return_reminder',
+      title: `Return window closes ${daysLabel} — ${ret.merchant_name}`,
+      body: `Your return window for ${ret.merchant_name} closes on ${deadlineFormatted}. Submit your return before the deadline.`,
+      is_read: false,
+      metadata: { refId: ret.id, daysAway, merchantName: ret.merchant_name, returnDeadline: ret.return_deadline },
+    });
+
+    // Email notification
+    if (settings?.email_notifications !== false) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', ret.user_id)
+        .maybeSingle();
+      if (profile?.email) {
+        const { sent } = await sendEmail({
+          to: profile.email,
+          from: EMAIL_SENDERS.reminders,
+          subject: `⏰ Return window closes ${daysLabel}: ${ret.merchant_name}`,
+          html: `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+  <p>Hi ${profile.full_name || 'there'},</p>
+  <p>Your return window for <strong>${ret.merchant_name}</strong> closes on <strong>${deadlineFormatted}</strong> (${daysLabel}).</p>
+  <p>Submit your return before the deadline to secure your refund.</p>
+  <p style="margin-top:24px">
+    <a href="${appUrl}/returns" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+      Manage Returns →
+    </a>
+  </p>
+</div>`,
+        });
+        if (!sent) {
+          logger.warn({ userId: ret.user_id, returnId: ret.id }, '[reminders] Email delivery failed for return reminder');
+        }
+      }
+    }
+
+    logger.info({ userId: ret.user_id, returnId: ret.id, daysAway }, '[reminders] return window reminder sent');
+  }
+}
+
 // ─── Expiry downgrade ─────────────────────────────────────────────────────────
 
 async function runExpiryDowngrade(): Promise<void> {
@@ -378,6 +473,7 @@ async function runAllReminders(): Promise<void> {
     await Promise.all([
       ...RENEWAL_REMINDER_WINDOWS.map(w => runRenewalRemindersForWindow(w.days, appUrl)),
       ...WARRANTY_REMINDER_WINDOWS.map(w => runWarrantyRemindersForWindow(w.days, appUrl)),
+      ...RETURN_REMINDER_WINDOWS.map(w => runReturnRemindersForWindow(w.days, appUrl)),
     ]);
     logger.debug('[reminders] Reminder check complete');
   } catch (err) {

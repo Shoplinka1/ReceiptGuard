@@ -55,6 +55,14 @@ async function fetchWarranties() {
   return Array.isArray(data) ? data : (data?.items ?? data?.warranties ?? [])
 }
 
+async function fetchOpenReturns() {
+  const token = await getAuthToken()
+  const res = await fetch(`${API_BASE}/api/returns?status=open`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return []
+  const data = await res.json()
+  return Array.isArray(data) ? data : []
+}
+
 function toSafeArray<T>(value: unknown, fieldName: string): T[] {
   if (value === null || value === undefined) return []
   if (Array.isArray(value)) return value as T[]
@@ -76,6 +84,7 @@ export default function Dashboard() {
   const { data: recentPurchasesData, isLoading: loadingPurchases } = useListReceipts({ search: '' })
   const { data: subscription, isLoading: loadingSubscription } = useQuery({ queryKey: ['paystack', 'subscription'], queryFn: fetchSubscription, retry: false })
   const { data: warrantiesData } = useQuery({ queryKey: ['warranties-dashboard'], queryFn: fetchWarranties, retry: false })
+  const { data: openReturnsData } = useQuery({ queryKey: ['returns-dashboard'], queryFn: fetchOpenReturns, retry: false })
   const { data: userSettings } = useGetUserSettings()
   const { data: fxData } = useQuery({
     queryKey: ['exchange-rates'],
@@ -100,8 +109,18 @@ export default function Dashboard() {
   const safeTrends      = toSafeArray<any>(trends, 'trends')
   const recentPurchases = (recentPurchasesData?.items ?? []).slice(0, 5)
 
-  // Warranties expiring in next 60 days
+  // Returns with deadline within 7 days
   const today = new Date()
+  const urgentReturns = (openReturnsData as any[] ?? [])
+    .filter((r: any) => {
+      if (!r.returnDeadline) return false
+      const dl = new Date(r.returnDeadline)
+      const daysLeft = differenceInDays(dl, today)
+      return daysLeft >= 0 && daysLeft <= 7
+    })
+    .slice(0, 4)
+
+  // Warranties expiring in next 60 days
   const expiringWarranties = (warrantiesData as any[] ?? [])
     .filter((w: any) => {
       if (!w.warranty_end_date && !w.warrantyEndDate) return false
@@ -310,6 +329,43 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Return Windows Closing */}
+        {urgentReturns.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-blue-500" /> Return Windows Closing Soon
+                </CardTitle>
+                <Link href="/returns">
+                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground">
+                    View all <ArrowRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {urgentReturns.map((r: any, i: number) => {
+                  const dl = new Date(r.returnDeadline)
+                  const daysLeft = differenceInDays(dl, today)
+                  return (
+                    <div key={i} className={`flex items-center justify-between p-3 rounded-lg text-sm border ${daysLeft <= 3 ? 'bg-destructive/5 border-destructive/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
+                      <div>
+                        <p className="font-medium text-foreground">{r.merchantName}</p>
+                        <p className="text-xs text-muted-foreground">Deadline {format(dl, 'MMM d, yyyy')}</p>
+                      </div>
+                      <Badge variant="outline" className={`text-xs shrink-0 ${daysLeft <= 3 ? 'text-destructive border-destructive/40' : 'text-blue-600 border-blue-500/40'}`}>
+                        {daysLeft === 0 ? 'Today' : `${daysLeft}d left`}
+                      </Badge>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Expiring Soon */}
         {expiringWarranties.length > 0 && (

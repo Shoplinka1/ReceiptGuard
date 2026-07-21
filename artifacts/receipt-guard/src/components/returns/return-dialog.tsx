@@ -19,6 +19,13 @@ const RETURN_STATUSES = [
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD', 'JPY', 'INR', 'BRL', 'ZAR']
 
+const WINDOW_DAY_OPTIONS = [
+  { value: 14,  label: '14 days' },
+  { value: 30,  label: '30 days (standard)' },
+  { value: 60,  label: '60 days' },
+  { value: 90,  label: '90 days' },
+]
+
 interface ReturnItem {
   id: string
   merchantName: string
@@ -30,6 +37,8 @@ interface ReturnItem {
   resolvedDate?: string | null
   trackingNumber?: string | null
   notes?: string | null
+  windowDays?: number | null
+  returnDeadline?: string | null
 }
 
 interface Props {
@@ -52,6 +61,7 @@ export function ReturnDialog({ open, onOpenChange, item, onSuccess }: Props) {
   const [resolvedDate, setResolvedDate] = useState('')
   const [trackingNumber, setTrackingNumber] = useState('')
   const [notes, setNotes] = useState('')
+  const [windowDays, setWindowDays] = useState(30)
 
   useEffect(() => {
     if (open) {
@@ -65,10 +75,11 @@ export function ReturnDialog({ open, onOpenChange, item, onSuccess }: Props) {
         setResolvedDate(item.resolvedDate || '')
         setTrackingNumber(item.trackingNumber || '')
         setNotes(item.notes || '')
+        setWindowDays(item.windowDays ?? 30)
       } else {
         setMerchantName(''); setAmount(''); setCurrency('USD'); setReason('')
         setStatus('open'); setInitiatedDate(new Date().toISOString().split('T')[0])
-        setResolvedDate(''); setTrackingNumber(''); setNotes('')
+        setResolvedDate(''); setTrackingNumber(''); setNotes(''); setWindowDays(30)
       }
     }
   }, [open, item])
@@ -108,6 +119,7 @@ export function ReturnDialog({ open, onOpenChange, item, onSuccess }: Props) {
       resolvedDate: resolvedDate || null,
       trackingNumber: trackingNumber.trim() || null,
       notes: notes.trim() || null,
+      windowDays,
     }
     if (isEdit) updateMutation.mutate(data)
     else createMutation.mutate(data)
@@ -175,6 +187,17 @@ export function ReturnDialog({ open, onOpenChange, item, onSuccess }: Props) {
           <div className="grid gap-1.5">
             <Label>Tracking Number <span className="text-muted-foreground text-xs">(optional)</span></Label>
             <Input placeholder="e.g. 1Z999AA10123456784" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Return Window</Label>
+            <Select value={String(windowDays)} onValueChange={v => setWindowDays(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {WINDOW_DAY_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">Deadline: {(() => { const d = new Date(initiatedDate || new Date()); d.setDate(d.getDate() + windowDays); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) })()}</p>
           </div>
 
           <div className="grid gap-1.5">
