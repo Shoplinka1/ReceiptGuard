@@ -14,6 +14,8 @@ export interface Warranty {
   merchantName?: string | null;
   purchaseDate: string;
   warrantyEndDate: string;
+  /** @nullable */
+  warrantyLengthMonths?: number | null;
   daysRemaining: number;
   status: WarrantyStatus;
   /** @nullable */
@@ -23,5 +25,9 @@ export interface Warranty {
   reminderEnabled?: boolean;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  purchaseId?: number | null;
+  /** @nullable */
+  receiptId?: number | null;
   createdAt: string;
 }

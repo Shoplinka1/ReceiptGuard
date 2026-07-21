@@ -1,0 +1,235 @@
+Receipt Guard 2.0 — Continue Implementation (DO NOT VERIFY YET)
+
+Start from the latest main branch.
+
+Do NOT redesign the architecture.
+
+Do NOT rebuild completed features.
+
+Inspect the latest codebase and continue from where the previous agent stopped.
+
+IMPORTANT
+
+I manually tested the deployed application.
+
+The following production features are still missing or incomplete.
+
+They must be BUILT before any production verification.
+
+⸻
+
+1. Purchases
+
+Complete the Purchases module.
+
+The user must be able to:
+	•	Add Purchase
+	•	Edit Purchase
+	•	Delete Purchase
+	•	Attach receipt
+	•	Upload images
+	•	Upload PDFs
+	•	View uploaded receipt
+	•	Link documents to purchases
+	•	Search
+	•	Filter
+	•	Pagination
+
+Nothing should be placeholder.
+
+⸻
+
+2. Documents
+
+The Document Vault is still missing.
+
+Build:
+	•	Upload
+	•	Image preview
+	•	PDF preview
+	•	Delete
+	•	Purchase linkage
+	•	Storage integration
+	•	Supabase Storage support
+
+The user should be able to upload receipts directly.
+
+⸻
+
+3. Subscriptions
+
+The page still lacks full CRUD.
+
+Implement:
+	•	Add Subscription
+	•	Edit
+	•	Delete
+	•	Renewal date
+	•	Billing cycle
+	•	Monthly
+	•	Yearly
+	•	Provider
+	•	Notes
+
+Verify everything saves to Supabase.
+
+⸻
+
+4. Warranties
+
+Complete:
+	•	Add Warranty
+	•	Edit
+	•	Delete
+	•	Purchase linkage
+	•	Expiration
+	•	Warranty length
+	•	Active
+	•	Expired
+	•	Expiring Soon
+
+⸻
+
+5. Returns
+
+Complete:
+	•	Add Return
+	•	Edit
+	•	Delete
+	•	Countdown timer
+	•	Deadline badges
+	•	Eligible
+	•	Initiated
+	•	Completed
+	•	Missed
+
+Dashboard integration.
+
+Reminder integration.
+
+⸻
+
+6. Paystack
+
+This is still incomplete.
+
+Fix:
+	•	Landing page pricing
+	•	Billing page pricing
+	•	Upgrade modal pricing
+	•	Monthly plans
+	•	Yearly plans
+	•	Family plan
+	•	Popup
+	•	Callback
+	•	Webhook
+	•	Subscription activation
+	•	Invoice creation
+
+All pricing must match everywhere.
+
+⸻
+
+7. Dashboard
+
+Make it intelligent.
+
+Automatically calculate:
+	•	Monthly spending
+	•	Yearly spending
+	•	Active subscriptions
+	•	Active warranties
+	•	Open returns
+	•	Upcoming renewals
+	•	Warranty countdown
+	•	Return countdown
+
+Add insight cards like:
+	•	Return expires tomorrow
+	•	Netflix renews in 3 days
+	•	Warranty expires next week
+	•	Upcoming renewals this month
+	•	Monthly spending
+
+⸻
+
+8. Reminder Engine
+
+Complete reminder scheduling.
+
+Subscription reminders:
+	•	30 days
+	•	14 days
+	•	7 days
+	•	3 days
+	•	Tomorrow
+	•	Today
+
+Warranty reminders:
+	•	90 days
+	•	30 days
+	•	14 days
+	•	7 days
+	•	Tomorrow
+
+Return reminders:
+	•	14 days
+	•	7 days
+	•	3 days
+	•	Tomorrow
+	•	Last day
+
+Support:
+	•	Email
+	•	In-app notifications
+
+⸻
+
+9. Smart Foundation
+
+Prepare the OCR architecture.
+
+When OCR is connected later it should automatically create:
+	•	Purchase
+	•	Warranty
+	•	Return
+	•	Reminder schedule
+	•	Dashboard entries
+
+No duplicate work later.
+
+⸻
+
+10. UI Polish
+
+Make the application feel like a premium SaaS.
+
+Improve:
+	•	Animations
+	•	Forms
+	•	Mobile layout
+	•	Empty states
+	•	Loading states
+	•	Cards
+	•	Typography
+	•	Responsive spacing
+
+Comparable to:
+	•	Linear
+	•	Notion
+	•	Stripe Dashboard
+	•	Ramp
+
+⸻
+
+Git Rules
+
+After every completed feature:
+	•	Build
+	•	Fix errors
+	•	Commit
+	•	Push to GitHub
+
+Do not stop until the application is feature-complete.
+
+Only after every feature above exists should you begin the production verification phase.

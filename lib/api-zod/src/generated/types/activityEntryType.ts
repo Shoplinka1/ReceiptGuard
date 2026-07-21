@@ -17,4 +17,7 @@ export const ActivityEntryType = {
   reminder_created: 'reminder_created',
   warranty_added: 'warranty_added',
   export_completed: 'export_completed',
+  purchase_added: 'purchase_added',
+  return_added: 'return_added',
+  document_uploaded: 'document_uploaded',
 } as const;

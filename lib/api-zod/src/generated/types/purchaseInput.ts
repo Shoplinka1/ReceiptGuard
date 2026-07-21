@@ -6,14 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface WarrantyInput {
-  productName: string;
-  merchantName?: string;
+export interface PurchaseInput {
+  merchantName: string;
+  amount: number;
+  currency?: string;
   purchaseDate: string;
-  warrantyEndDate: string;
-  warrantyLengthMonths?: number;
-  reminderEnabled?: boolean;
+  category: string;
   notes?: string;
-  purchaseId?: number;
   receiptId?: number;
 }

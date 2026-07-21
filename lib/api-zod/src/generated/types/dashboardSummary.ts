@@ -12,12 +12,15 @@ import type { DashboardSummarySubscriptionCurrencyBreakdownItem } from './dashbo
 export interface DashboardSummary {
   firstName: string;
   monthlySpending: number;
+  yearlySpending: number;
   totalReceipts: number;
   /** Receipts with a plausible amount ($0.50-$50,000) — the same filter used by Monthly Spending, Spending Trend, and Top Merchants. Use this for "how many receipts do I actually have" rather than totalReceipts, which includes malformed/rejected rows still stored for audit purposes. */
   validReceiptCount?: number;
   activeSubscriptions: number;
   upcomingRenewalsCount: number;
   activeWarranties: number;
+  expiringWarranties: number;
+  openReturns: number;
   moneySaved: number;
   subscriptionsMonthlyTotal: number;
   gmailConnected: boolean;
