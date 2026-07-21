@@ -16,8 +16,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Search, ShoppingBag, Plus, MoreHorizontal, Pencil, Trash2,
-  AlertCircle, ChevronLeft, ChevronRight, RotateCcw,
+  AlertCircle, ChevronLeft, ChevronRight, RotateCcw, CalendarRange, X,
 } from 'lucide-react'
 import { useListReceipts } from '@workspace/api-client-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -50,15 +53,18 @@ const PAGE_SIZE = 25
 
 export default function ReceiptsPage() {
   const qc = useQueryClient()
-  const [search,         setSearch]         = useState('')
+  const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category,       setCategory]       = useState('all')
-  const [page,           setPage]           = useState(1)
-  const [dialogOpen,     setDialogOpen]     = useState(false)
-  const [editingItem,    setEditingItem]    = useState<PurchaseItem | null>(null)
-  const [deleteTarget,   setDeleteTarget]   = useState<string | null>(null)
-  const [drawerOpen,     setDrawerOpen]     = useState(false)
-  const [drawerItem,     setDrawerItem]     = useState<PurchaseItem | null>(null)
+  const [category,        setCategory]        = useState('all')
+  const [dateFrom,        setDateFrom]        = useState('')
+  const [dateTo,          setDateTo]          = useState('')
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false)
+  const [page,            setPage]            = useState(1)
+  const [dialogOpen,      setDialogOpen]      = useState(false)
+  const [editingItem,     setEditingItem]     = useState<PurchaseItem | null>(null)
+  const [deleteTarget,    setDeleteTarget]    = useState<string | null>(null)
+  const [drawerOpen,      setDrawerOpen]      = useState(false)
+  const [drawerItem,      setDrawerItem]      = useState<PurchaseItem | null>(null)
 
   // Debounce search and reset page
   useEffect(() => {
@@ -66,11 +72,13 @@ export default function ReceiptsPage() {
     return () => clearTimeout(t)
   }, [search])
 
-  useEffect(() => { setPage(1) }, [category])
+  useEffect(() => { setPage(1) }, [category, dateFrom, dateTo])
 
   const params: Record<string, string> = { page: String(page), pageSize: String(PAGE_SIZE) }
   if (debouncedSearch) params.search = debouncedSearch
   if (category !== 'all') params.category = category
+  if (dateFrom) params.dateFrom = dateFrom
+  if (dateTo)   params.dateTo   = dateTo
 
   const { data, isLoading, error } = useListReceipts(params as any)
   const items: PurchaseItem[] = (data?.items ?? []) as any
@@ -92,7 +100,24 @@ export default function ReceiptsPage() {
   const openEdit   = useCallback((item: PurchaseItem) => { setEditingItem(item); setDialogOpen(true) }, [])
   const openDrawer = useCallback((item: PurchaseItem) => { setDrawerItem(item); setDrawerOpen(true) }, [])
 
-  const hasFilters = debouncedSearch || category !== 'all'
+  const hasDateFilter = !!(dateFrom || dateTo)
+  const hasFilters    = !!(debouncedSearch || category !== 'all' || hasDateFilter)
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setCategory('all')
+    setDateFrom('')
+    setDateTo('')
+  }
+
+  const applyDates = () => setDatePopoverOpen(false)
+  const clearDates = () => { setDateFrom(''); setDateTo(''); setDatePopoverOpen(false) }
+
+  // ── Date range label for button
+  const dateLabel = hasDateFilter
+    ? [dateFrom && format(new Date(dateFrom), 'MMM d'), dateTo && format(new Date(dateTo), 'MMM d')]
+        .filter(Boolean).join(' – ') || 'Date range'
+    : 'Date range'
 
   return (
     <AppShell>
@@ -111,6 +136,7 @@ export default function ReceiptsPage() {
 
         {/* ── Filters ── */}
         <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -120,8 +146,10 @@ export default function ReceiptsPage() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+
+          {/* Category */}
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -129,10 +157,59 @@ export default function ReceiptsPage() {
               {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
+
+          {/* Date range popover */}
+          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={hasDateFilter ? 'default' : 'outline'}
+                size="sm"
+                className={`h-9 px-3 gap-1.5 shrink-0 ${hasDateFilter ? '' : 'text-muted-foreground'}`}
+              >
+                <CalendarRange className="w-4 h-4" />
+                <span className="hidden sm:inline text-sm">{dateLabel}</span>
+                {hasDateFilter && (
+                  <X
+                    className="w-3.5 h-3.5 ml-0.5 opacity-70 hover:opacity-100"
+                    onClick={e => { e.stopPropagation(); clearDates() }}
+                  />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-4 space-y-4" align="end">
+              <p className="text-sm font-semibold">Filter by date</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">From</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">To</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={applyDates}>Apply</Button>
+                <Button size="sm" variant="ghost" onClick={clearDates}>Clear</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        {/* ── Table ── */}
-        <Card className="overflow-hidden border-border/60">
+        {/* ── Table (md+) ── */}
+        <Card className="hidden md:block overflow-hidden border-border/60">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
@@ -169,28 +246,7 @@ export default function ReceiptsPage() {
               ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-64 text-center">
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground py-8">
-                      <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
-                        <ShoppingBag className="w-8 h-8 text-primary/40" />
-                      </div>
-                      {hasFilters ? (
-                        <>
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">No results found</p>
-                            <p className="text-xs mt-1">Try a different search term or clear the filters.</p>
-                          </div>
-                          <Button size="sm" variant="outline" onClick={() => { setSearch(''); setCategory('all') }}>Clear filters</Button>
-                        </>
-                      ) : (
-                        <>
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">No purchases yet</p>
-                            <p className="text-xs mt-1 max-w-xs">Start building your digital purchase vault.<br />Add receipts, invoices, or any spend.</p>
-                          </div>
-                          <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1.5" />Add first purchase</Button>
-                        </>
-                      )}
-                    </div>
+                    <EmptyState hasFilters={hasFilters} onClear={clearAllFilters} onCreate={openCreate} />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -233,24 +289,7 @@ export default function ReceiptsPage() {
                       {formatCurrency(r.amount ?? 0, r.currency || 'USD')}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openDrawer(r)}>
-                            <ShoppingBag className="w-4 h-4 mr-2" /> View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(r)}>
-                            <Pencil className="w-4 h-4 mr-2" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(r.id)}>
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <ItemMenu item={r} onView={openDrawer} onEdit={openEdit} onDelete={id => setDeleteTarget(id)} />
                     </TableCell>
                   </TableRow>
                 ))
@@ -258,6 +297,77 @@ export default function ReceiptsPage() {
             </TableBody>
           </Table>
         </Card>
+
+        {/* ── Card list (mobile) ── */}
+        <div className="md:hidden space-y-3">
+          {isLoading ? (
+            [1,2,3,4,5].map(i => (
+              <Card key={i} className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+              </Card>
+            ))
+          ) : error ? (
+            <Card className="p-8 flex flex-col items-center gap-2 text-muted-foreground">
+              <AlertCircle className="w-8 h-8 opacity-30 text-destructive" />
+              <p className="text-sm font-medium text-destructive">Failed to load purchases</p>
+            </Card>
+          ) : items.length === 0 ? (
+            <Card className="p-10">
+              <EmptyState hasFilters={hasFilters} onClear={clearAllFilters} onCreate={openCreate} />
+            </Card>
+          ) : (
+            items.map((r) => (
+              <Card
+                key={r.id}
+                className="p-4 flex items-center gap-3 cursor-pointer hover:bg-muted/30 transition-colors active:scale-[0.99]"
+                onClick={() => openDrawer(r)}
+              >
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-xs font-bold shrink-0 text-foreground/70">
+                  {(r.merchantName ?? '?').substring(0, 2).toUpperCase()}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{r.merchantName}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {r.productName || (CATEGORY_MAP[r.category] ?? r.category ?? '—')}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {r.purchaseDate && (
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {format(new Date(r.purchaseDate), 'MMM d, yyyy')}
+                      </span>
+                    )}
+                    <ReturnCountdown deadline={r.returnDeadline} />
+                  </div>
+                </div>
+
+                {/* Right side */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(r.amount ?? 0, r.currency || 'USD')}
+                  </span>
+                  <Badge className={`text-[10px] capitalize px-2 py-0 ${STATUS_STYLES[(r as any).status] ?? STATUS_STYLES.manual}`}>
+                    {(r as any).status ?? 'manual'}
+                  </Badge>
+                </div>
+
+                {/* Menu */}
+                <div onClick={e => e.stopPropagation()}>
+                  <ItemMenu item={r} onView={openDrawer} onEdit={openEdit} onDelete={id => setDeleteTarget(id)} />
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
 
         {/* ── Footer: count + pagination ── */}
         {!isLoading && total > 0 && (
@@ -332,5 +442,77 @@ export default function ReceiptsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
+  )
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────────
+
+function ItemMenu({
+  item,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  item: PurchaseItem
+  onView: (item: PurchaseItem) => void
+  onEdit: (item: PurchaseItem) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-60 hover:opacity-100 group-hover:opacity-100 transition-opacity">
+          <MoreHorizontal className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onView(item)}>
+          <ShoppingBag className="w-4 h-4 mr-2" /> View Details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit(item)}>
+          <Pencil className="w-4 h-4 mr-2" /> Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(item.id)}>
+          <Trash2 className="w-4 h-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function EmptyState({
+  hasFilters,
+  onClear,
+  onCreate,
+}: {
+  hasFilters: boolean
+  onClear: () => void
+  onCreate: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-muted-foreground py-8">
+      <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
+        <ShoppingBag className="w-8 h-8 text-primary/40" />
+      </div>
+      {hasFilters ? (
+        <>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">No results found</p>
+            <p className="text-xs mt-1">Try a different search term or clear the filters.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onClear}>
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Clear filters
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">No purchases yet</p>
+            <p className="text-xs mt-1 max-w-xs">Start building your digital purchase vault.<br />Add receipts, invoices, or any spend.</p>
+          </div>
+          <Button size="sm" onClick={onCreate}><Plus className="w-4 h-4 mr-1.5" />Add first purchase</Button>
+        </>
+      )}
+    </div>
   )
 }

@@ -55,6 +55,7 @@ export interface PurchaseItem {
   serialNumber?: string | null
   modelNumber?: string | null
   warrantyMonths?: number | null
+  warrantyEndDate?: string | null
   returnDeadline?: string | null
   notes?: string | null
 }
